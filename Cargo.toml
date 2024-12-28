@@ -1,7 +1,15 @@
 [package]
-name = "fbsim-box-score-gen"
-version = "0.1.0"
+name = "fbsim-core"
+version = "1.0.0"
+authors = ["whatsacomputertho"]
 edition = "2021"
+description = "A library for american football simulation"
+readme = "README.md"
+homepage = "https://doc.rs/fbsim-core"
+repository = "https://github.com/whatsacomputertho/fbsim-core"
+license-file = "LICENSE"
+keywords = ["football","simulation","model","library","fbsim"]
+categories = ["football","simulation"]
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 

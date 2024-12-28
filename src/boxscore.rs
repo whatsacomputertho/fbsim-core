@@ -21,7 +21,7 @@ const A_STD_COEF_2: f64 = -5.589282_f64;
 /// given the normalized skill differential (in range [0, 1]) of the
 /// home offense and the away defense, and vice versa, the away
 /// offense and the home defense.
-#[derive(Debug, PartialEq)]
+#[derive(Copy, Clone, PartialEq, PartialOrd, Debug, Default)]
 pub struct BoxScoreGenerator {
     home_off_away_def_norm_diff: f64,
     away_off_home_def_norm_diff: f64
@@ -33,7 +33,7 @@ impl BoxScoreGenerator {
     ///
     /// ### Example
     /// ```
-    /// use fbsim_box_score_gen::boxscore::BoxScoreGenerator;
+    /// use fbsim_core::boxscore::BoxScoreGenerator;
     ///
     /// let my_box_score_gen = BoxScoreGenerator::new();
     /// ```
@@ -53,7 +53,7 @@ impl BoxScoreGenerator {
     ///
     /// ### Example
     /// ```
-    /// use fbsim_box_score_gen::boxscore::BoxScoreGenerator;
+    /// use fbsim_core::boxscore::BoxScoreGenerator;
     ///
     /// let my_home_off_away_def_norm_diff = 0.75_f64;
     /// let my_away_off_home_def_norm_diff = 0.33_f64;
@@ -95,7 +95,7 @@ impl BoxScoreGenerator {
     ///
     /// ### Example
     /// ```
-    /// use fbsim_box_score_gen::boxscore::BoxScoreGenerator;
+    /// use fbsim_core::boxscore::BoxScoreGenerator;
     /// 
     /// let mut my_box_score_gen = BoxScoreGenerator::new();
     /// my_box_score_gen.set_home_off_away_def_norm_diff(0.75_f64).unwrap();
@@ -121,7 +121,7 @@ impl BoxScoreGenerator {
     ///
     /// ### Example
     /// ```
-    /// use fbsim_box_score_gen::boxscore::BoxScoreGenerator;
+    /// use fbsim_core::boxscore::BoxScoreGenerator;
     /// 
     /// let mut my_box_score_gen = BoxScoreGenerator::new();
     /// my_box_score_gen.set_away_off_home_def_norm_diff(0.25_f64).unwrap();
@@ -204,7 +204,7 @@ impl BoxScoreGenerator {
     ///
     /// ### Example
     /// ```
-    /// use fbsim_box_score_gen::boxscore::BoxScoreGenerator;
+    /// use fbsim_core::boxscore::BoxScoreGenerator;
     /// 
     /// let mut rng = rand::thread_rng();
     /// let my_box_score_gen = BoxScoreGenerator::new();

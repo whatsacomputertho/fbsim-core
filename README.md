@@ -1,23 +1,23 @@
-# FBSim Box Score Gen
+# FBSim Core
 
-> An american football box score generator model
+> A library for american football simulation
 
 ## Overview
 
-This crate provides the `BoxScoreGenerator` struct which will generate an american football box score given the normalized skill differential between the home offense and the away defense, and vice versa, the away offense and the home defense.  It is based on the four regression models trained [in this repository](https://github.com/whatsacomputertho/fbdb-boxscore-eda).
+In its initial iteration, this crate provides utilities for simulating american football leagues at the box score level.  The `BoxScoreGenerator` struct which will generate an american football box score given the normalized skill differential between the home offense and the away defense, and vice versa, the away offense and the home defense.  It is based on the four regression models derived [in this repository](https://github.com/whatsacomputertho/fbdb-boxscore-eda).
 
 ## Usage
 
-Below usage 
+Below, usage is given for the `BoxScoreGenerator` 
 
 ### Adding via Cargo
 
 To add the package to your project, run the following from your project directory.
 ```sh
-cargo add fbsim_box_score_gen
+cargo add fbsim_core
 ```
 
-### BoxScoreGenerator instantiation
+### Box score generator
 
 One can instantiate the generator with normalized differentials defaulted to `0.5_f64` respectively using the `BoxScoreGenerator::new()` method.  It is recommended in this case to instantiate it as mutable so that the setters can be used to set the normalized differentials later.
 
@@ -37,8 +37,6 @@ let my_box_score_gen = BoxScoreGenerator::from_properties(
     0.25_f64
 );
 ```
-
-### Box score generation
 
 Once the generator is instantiated, one can simply call the `gen()` method on it, passing a mutable [`rand::Rng`](https://docs.rs/rand/latest/rand/trait.Rng.html) instance as an argument.
 
