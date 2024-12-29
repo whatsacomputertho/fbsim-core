@@ -4,11 +4,9 @@
 
 ## Overview
 
-In its initial iteration, this crate provides utilities for simulating american football leagues at the box score level.  The `BoxScoreGenerator` struct which will generate an american football box score given the normalized skill differential between the home offense and the away defense, and vice versa, the away offense and the home defense.  It is based on the four regression models derived [in this repository](https://github.com/whatsacomputertho/fbdb-boxscore-eda).
+In its initial iteration, this crate provides utilities for simulating american football leagues at the box score level.  It is based on the four regression models derived [in this repository](https://github.com/whatsacomputertho/fbdb-boxscore-eda).
 
 ## Usage
-
-Below, usage is given for the `BoxScoreGenerator` 
 
 ### Adding via Cargo
 
@@ -17,31 +15,37 @@ To add the package to your project, run the following from your project director
 cargo add fbsim_core
 ```
 
-### Box score generator
+### Box score simulator
 
-One can instantiate the generator with normalized differentials defaulted to `0.5_f64` respectively using the `BoxScoreGenerator::new()` method.  It is recommended in this case to instantiate it as mutable so that the setters can be used to set the normalized differentials later.
+To simulate a game using the box score simulator, one might replicate the following example.  Note that `FootballTeam` and `BoxScore` both derive the serde `Serialize` and `Deserialize` traits and thus may be instantiated from JSON.
 
 ```rust
-// Instantiate the BoxScoreGenerator with default normalized differentials
-let mut my_box_score_gen = BoxScoreGenerator::new();
+use rand::Rng;
+use fbsim_core::boxscore::BoxScore;
+use fbsim_core::sim::BoxScoreSimulator;
+use fbsim_core::team::FootballTeam;
 
-// Then set the normalized differentials later
-my_box_score_gen.set_home_off_away_def_norm_diff(0.75_f64).unwrap();
-my_box_score_gen.set_away_off_home_def_norm_diff(0.25_f64).unwrap();
-```
+// Instantiate the simulator
+let my_box_score_sim = BoxScoreSimulator::new();
 
-Or one can instantiate the generator with values explicitly given at instantiation time.
-```rust
-let my_box_score_gen = BoxScoreGenerator::from_properties(
-    0.75_f64,
-    0.25_f64
+// Instantiate the home and away team
+let home_team = FootballTeam::from_properties(
+    "Home Team",
+    75,
+    67
 );
-```
+let away_team = FootballTeam::from_properties(
+    "Away Team",
+    88,
+    95
+);
 
-Once the generator is instantiated, one can simply call the `gen()` method on it, passing a mutable [`rand::Rng`](https://docs.rs/rand/latest/rand/trait.Rng.html) instance as an argument.
-
-```rust
+// Instantiate an RNG and simulate
 let mut rng = rand::thread_rng();
-let my_box_score_gen = BoxScoreGenerator::new();
-let (home_score, away_score): (i32, i32) = my_box_score_gen.gen(&mut rng);
+let my_box_score = my_box_score_sim.sim(
+    &home_team,
+    &away_team,
+    &mut rng
+);
+println!("{}", my_box_score);
 ```
