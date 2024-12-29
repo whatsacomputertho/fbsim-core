@@ -20,8 +20,6 @@ cargo add fbsim_core
 To simulate a game using the box score simulator, one might replicate the following example.  Note that `FootballTeam` and `BoxScore` both derive the serde `Serialize` and `Deserialize` traits and thus may be instantiated from JSON.
 
 ```rust
-use rand::Rng;
-use fbsim_core::boxscore::BoxScore;
 use fbsim_core::sim::BoxScoreSimulator;
 use fbsim_core::team::FootballTeam;
 
@@ -33,12 +31,12 @@ let home_team = FootballTeam::from_properties(
     "Home Team",
     75,
     67
-);
+).unwrap();
 let away_team = FootballTeam::from_properties(
     "Away Team",
     88,
     95
-);
+).unwrap();
 
 // Instantiate an RNG and simulate
 let mut rng = rand::thread_rng();
