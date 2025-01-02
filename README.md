@@ -12,7 +12,7 @@ In its initial iteration, this crate provides utilities for simulating american 
 
 To add the package to your project, run the following from your project directory.
 ```sh
-cargo add fbsim_core
+cargo add fbsim-core
 ```
 
 ### Box score simulator
