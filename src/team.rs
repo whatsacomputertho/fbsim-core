@@ -1,3 +1,7 @@
+#[cfg(feature = "rocket_okapi")]
+use rocket_okapi::okapi::schemars;
+#[cfg(feature = "rocket_okapi")]
+use rocket_okapi::okapi::schemars::JsonSchema;
 use serde::{Serialize, Deserialize};
 
 pub const DEFAULT_TEAM_NAME: &str = "Null Island Defaults";
@@ -5,6 +9,7 @@ pub const DEFAULT_TEAM_NAME: &str = "Null Island Defaults";
 /// # `FootballTeam` struct
 ///
 /// A `FootballTeam` represents a football team
+#[cfg_attr(feature = "rocket_okapi", derive(JsonSchema))]
 #[derive(Clone, Eq, PartialEq, Ord, PartialOrd, Debug, Default, Serialize, Deserialize)]
 pub struct FootballTeam {
     name: String,
