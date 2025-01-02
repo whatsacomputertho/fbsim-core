@@ -1,9 +1,14 @@
+#[cfg(feature = "rocket_okapi")]
+use rocket_okapi::okapi::schemars;
+#[cfg(feature = "rocket_okapi")]
+use rocket_okapi::okapi::schemars::JsonSchema;
 use serde::{Serialize, Deserialize};
 use crate::team::{DEFAULT_TEAM_NAME};
 
 /// # `BoxScore` struct
 ///
 /// A `BoxScore` represents the result of a football game
+#[cfg_attr(feature = "rocket_okapi", derive(JsonSchema))]
 #[derive(Clone, Eq, PartialEq, Ord, PartialOrd, Debug, Default, Serialize, Deserialize)]
 pub struct BoxScore {
     home_team: String,
