@@ -40,8 +40,8 @@ impl BoxScoreSimulator {
     /// ```
     pub fn sim(&self, home_team: &FootballTeam, away_team: &FootballTeam, rng: &mut impl Rng) -> BoxScore {
         // Calculate the normalized skill differentials
-        let ha_norm_diff: f64 = ((home_team.offense_overall() - away_team.defense_overall() + 100) / 200) as f64;
-        let ah_norm_diff: f64 = ((away_team.offense_overall() - home_team.defense_overall() + 100) / 200) as f64;
+        let ha_norm_diff: f64 = (home_team.offense_overall() - away_team.defense_overall() + 100) as f64 / 200_f64;
+        let ah_norm_diff: f64 = (away_team.offense_overall() - home_team.defense_overall() + 100) as f64 / 200_f64;
 
         // Generate the box score
         let box_score_gen: BoxScoreGenerator = BoxScoreGenerator::from_properties(
