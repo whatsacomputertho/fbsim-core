@@ -44,6 +44,6 @@ let my_box_score = my_box_score_sim.sim(
     &home_team,
     &away_team,
     &mut rng
-);
+).unwrap();
 println!("{}", my_box_score);
 ```

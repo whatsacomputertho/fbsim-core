@@ -78,6 +78,44 @@ impl BoxScore {
             }
         )
     }
+
+    /// Getter for the home score property
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::boxscore::BoxScore;
+    ///
+    /// let my_score = BoxScore::from_properties(
+    ///     "My Team A",
+    ///     24_i32,
+    ///     "My Team B",
+    ///     17_i32
+    /// ).unwrap();
+    /// let home_score = my_score.home_score();
+    /// println!("{}", home_score); // 24
+    /// ```
+    pub fn home_score(&self) -> i32 {
+        self.home_score
+    }
+
+    /// Getter for the away score property
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::boxscore::BoxScore;
+    ///
+    /// let my_score = BoxScore::from_properties(
+    ///     "My Team A",
+    ///     24_i32,
+    ///     "My Team B",
+    ///     17_i32
+    /// ).unwrap();
+    /// let away_score = my_score.away_score();
+    /// println!("{}", away_score); // 17
+    /// ```
+    pub fn away_score(&self) -> i32 {
+        self.away_score
+    }
 }
 
 impl std::fmt::Display for BoxScore {
