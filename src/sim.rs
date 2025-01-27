@@ -1,8 +1,10 @@
 use rand::Rng;
 use rand_distr::{Normal, Distribution};
+use statrs::distribution::Categorical;
 
 use crate::boxscore::BoxScore;
 use crate::team::FootballTeam;
+use crate::freq::ScoreFrequencyLookup;
 
 // Home score simulator model weights
 const H_MEAN_INTERCEPT: f64 = 23.14578315_f64;
@@ -125,6 +127,33 @@ impl BoxScoreSimulator {
         Ok((self.gen_home_score(ha_norm_diff, rng), self.gen_away_score(ah_norm_diff, rng)))
     }
 
+    /// Filters the box score by score frequency.  The score's nearest
+    /// neighbors and their frequency are retrieved to construct a probability
+    /// mass function for a categorical distribution.  That distribution is
+    /// then sampled for the real score.
+    fn filter_score(&self, score: i32, rng: &mut impl Rng) -> i32 {
+        // If the score is 0, just return 0 as 1 is impossible
+        if score == 0 {
+            return 0
+        }
+
+        // Create a score frequency lookup table
+        let mut freq_lut = ScoreFrequencyLookup::new();
+        freq_lut.create();
+
+        // Get the nearest neighbors of the score
+        let low = freq_lut.frequency(score - 1).unwrap();
+        let mid = freq_lut.frequency(score).unwrap();
+        let high = freq_lut.frequency(score + 1).unwrap();
+        
+        // Construct a categorical distribution
+        let dist = Categorical::new(&[low as f64, mid as f64, high as f64]).unwrap();
+        let score_adjustment_r: f64 = dist.sample(rng);
+        let score_adjustment = (score_adjustment_r as i32) - 1_i32;
+        let adj_score = score + score_adjustment;
+        adj_score
+    }
+
     /// Simulates a game by generating a box score result
     ///
     /// ### Example
@@ -151,12 +180,16 @@ impl BoxScoreSimulator {
             Err(e) => return Err(e)
         };
 
+        // Filter the box score by score frequency
+        let adj_home_score = self.filter_score(home_score, rng);
+        let adj_away_score = self.filter_score(away_score, rng);
+
         // Instantiate as a BoxScore and return
         let box_score: BoxScore = BoxScore::from_properties(
             home_team.name(),
-            home_score,
+            adj_home_score,
             away_team.name(),
-            away_score
+            adj_away_score
         ).unwrap();
         Ok(box_score)
     }
