@@ -1,5 +1,5 @@
 use rand::Rng;
-use rand_distr::{Normal, Distribution};
+use rand_distr::{Normal, Distribution, Bernoulli};
 use statrs::distribution::Categorical;
 
 use crate::boxscore::BoxScore;
@@ -19,6 +19,11 @@ const A_MEAN_COEF: f64 = 8.92113289_f64;
 const A_STD_INTERCEPT: f64 = 6.47638621_f64;
 const A_STD_COEF_1: f64 = 8.00861267_f64;
 const A_STD_COEF_2: f64 = -5.589282_f64;
+
+// Tie probability model weights
+const P_TIE_COEF: f64 = -0.00752297_f64;
+const P_TIE_INTERCEPT: f64 = 0.01055039_f64;
+const P_TIE_BASE: f64 = 0.042_f64;
 
 /// # `BoxScoreSimulator` struct
 ///
@@ -67,6 +72,17 @@ impl BoxScoreSimulator {
     fn get_normal_params(&self, norm_diff: f64, home: bool) -> (f64, f64) {
         // Get the normal distribution parameters
         (self.get_mean_score(norm_diff, home), self.get_std_score(norm_diff, home))
+    }
+
+    /// Gets the probability of a tie for the given skill differential
+    fn get_p_tie(&self, norm_diff: f64) -> f64 {
+        return P_TIE_INTERCEPT + (P_TIE_COEF * norm_diff)
+    }
+
+    /// Gets the probability of a re-sim in the event of a tie in order to
+    /// achieve the desired tie probability in the end
+    fn get_p_resim(&self, p_tie: f64) -> f64 {
+        return (p_tie - P_TIE_BASE) / (P_TIE_BASE.powi(2) - P_TIE_BASE)
     }
 
     /// Generates the away score only
@@ -184,14 +200,57 @@ impl BoxScoreSimulator {
         let adj_home_score = self.filter_score(home_score, rng);
         let adj_away_score = self.filter_score(away_score, rng);
 
-        // Instantiate as a BoxScore and return
+        // Instantiate as a BoxScore
         let box_score: BoxScore = BoxScore::from_properties(
             home_team.name(),
             adj_home_score,
             away_team.name(),
             adj_away_score
         ).unwrap();
-        Ok(box_score)
+
+        // If not a tie, then return as-is
+        if adj_home_score != adj_away_score {
+            return Ok(box_score)
+        }
+
+        // If a tie is achieved after filtering, re-sim based on the skill
+        // differentials and their associated tie probability.  Start by
+        // calculating the average of the two skill differentials
+        let avg_norm_diff: f64 = (ha_norm_diff + ah_norm_diff) / 2_f64;
+
+        // Get the probability of a tie for the average skill differential.
+        // Use it to get the required probability of a re-sim to achieve the
+        // observed tie probability in the end
+        let p_tie: f64 = self.get_p_tie(avg_norm_diff);
+        let p_res: f64 = self.get_p_resim(p_tie);
+
+        // Sample a bernoulli distribution of p_res to determine whether
+        // to re-sim or not
+        let dst_res: Bernoulli = Bernoulli::new(p_res).unwrap();
+        let res: bool = dst_res.sample(rng);
+
+        // Re-sim and re-filter if needed
+        if res {
+            // Generate the box score, return error if error is encountered
+            let (home_score_2, away_score_2): (i32, i32) = match self.gen_score(ha_norm_diff, ah_norm_diff, rng) {
+                Ok(v) => v,
+                Err(e) => return Err(e)
+            };
+
+            // Filter the box score by score frequency
+            let adj_home_score_2 = self.filter_score(home_score_2, rng);
+            let adj_away_score_2 = self.filter_score(away_score_2, rng);
+
+            // Instantiate as a BoxScore and return
+            let box_score_2: BoxScore = BoxScore::from_properties(
+                home_team.name(),
+                adj_home_score_2,
+                away_team.name(),
+                adj_away_score_2
+            ).unwrap();
+            return Ok(box_score_2)
+        }
+        return Ok(box_score)
     }
 }
 
