@@ -213,10 +213,15 @@ impl BoxScoreSimulator {
             return Ok(box_score)
         }
 
-        // Get the probability of a tie for the home/away skill differential.
+        // If a tie is achieved after filtering, re-sim based on the skill
+        // differentials and their associated tie probability.  Start by
+        // calculating the average of the two skill differentials
+        let avg_norm_diff: f64 = (ha_norm_diff + ah_norm_diff) / 2_f64;
+
+        // Get the probability of a tie for the average skill differential.
         // Use it to get the required probability of a re-sim to achieve the
         // observed tie probability in the end
-        let p_tie: f64 = self.get_p_tie(ha_norm_diff);
+        let p_tie: f64 = self.get_p_tie(avg_norm_diff);
         let p_res: f64 = self.get_p_resim(p_tie);
 
         // Sample a bernoulli distribution of p_res to determine whether
