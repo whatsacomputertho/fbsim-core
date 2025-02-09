@@ -1,6 +1,6 @@
 [package]
 name = "fbsim-core"
-version = "1.0.0-alpha.6"
+version = "1.0.0-alpha.7"
 authors = ["whatsacomputertho"]
 edition = "2021"
 description = "A library for american football simulation"
