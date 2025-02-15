@@ -7,15 +7,15 @@ use crate::team::FootballTeam;
 use crate::freq::ScoreFrequencyLookup;
 
 // Home score simulator model weights
-const H_MEAN_INTERCEPT: f64 = 23.14578315_f64;
-const H_MEAN_COEF: f64 = 10.9716991_f64;
+const H_MEAN_COEF: f64 = 23.14578315_f64;
+const H_MEAN_INTERCEPT: f64 = 10.9716991_f64;
 const H_STD_INTERCEPT: f64 = 7.64006156_f64;
 const H_STD_COEF_1: f64 = 5.72612946_f64;
 const H_STD_COEF_2: f64 = -4.29283414_f64;
 
 // Away score simulator model weights
-const A_MEAN_INTERCEPT: f64 = 22.14952374_f64;
-const A_MEAN_COEF: f64 = 8.92113289_f64;
+const A_MEAN_COEF: f64 = 22.14952374_f64;
+const A_MEAN_INTERCEPT: f64 = 8.92113289_f64;
 const A_STD_INTERCEPT: f64 = 6.47638621_f64;
 const A_STD_COEF_1: f64 = 8.00861267_f64;
 const A_STD_COEF_2: f64 = -5.589282_f64;
