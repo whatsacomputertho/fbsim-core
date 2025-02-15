@@ -1,5 +1,5 @@
 use rand::Rng;
-use rand_distr::{Normal, Distribution, Bernoulli};
+use rand_distr::{Normal, Distribution};
 use statrs::distribution::Categorical;
 
 use crate::boxscore::BoxScore;
@@ -19,12 +19,12 @@ const A_MEAN_INTERCEPT: f64 = 8.92113289_f64;
 const A_STD_INTERCEPT: f64 = 6.47638621_f64;
 const A_STD_COEF_1: f64 = 8.00861267_f64;
 const A_STD_COEF_2: f64 = -5.589282_f64;
-
+/*
 // Tie probability model weights
 const P_TIE_COEF: f64 = -0.00752297_f64;
 const P_TIE_INTERCEPT: f64 = 0.01055039_f64;
 const P_TIE_BASE: f64 = 0.042_f64;
-
+*/
 /// # `BoxScoreSimulator` struct
 ///
 /// A `BoxScoreSimulator` generates an american football box score
@@ -73,7 +73,7 @@ impl BoxScoreSimulator {
         // Get the normal distribution parameters
         (self.get_mean_score(norm_diff, home), self.get_std_score(norm_diff, home))
     }
-
+/*
     /// Gets the probability of a tie for the given skill differential
     fn get_p_tie(&self, norm_diff: f64) -> f64 {
         return P_TIE_INTERCEPT + (P_TIE_COEF * norm_diff)
@@ -84,7 +84,7 @@ impl BoxScoreSimulator {
     fn get_p_resim(&self, p_tie: f64) -> f64 {
         return (p_tie - P_TIE_BASE) / (P_TIE_BASE.powi(2) - P_TIE_BASE)
     }
-
+*/
     /// Generates the away score only
     fn gen_away_score(&self, norm_diff: f64, rng: &mut impl Rng) -> i32 {
         // Create and sample a normal distribution for the score
@@ -207,7 +207,7 @@ impl BoxScoreSimulator {
             away_team.name(),
             adj_away_score
         ).unwrap();
-
+/*
         // If not a tie, then return as-is
         if adj_home_score != adj_away_score {
             return Ok(box_score)
@@ -250,6 +250,7 @@ impl BoxScoreSimulator {
             ).unwrap();
             return Ok(box_score_2)
         }
+*/
         return Ok(box_score)
     }
 }
