@@ -1,14 +1,14 @@
-use std::collections::BTreeMap;
+use std::collections::HashMap;
 
 pub struct ScoreFrequencyLookup {
-    freq_lookup: BTreeMap<i32, i32>,
+    freq_lookup: HashMap<i32, i32>,
 }
 
 impl ScoreFrequencyLookup {
     /// Constructor for the ScoreFrequencyLookup struct
     pub fn new() -> ScoreFrequencyLookup {
         ScoreFrequencyLookup{
-            freq_lookup: BTreeMap::new()
+            freq_lookup: HashMap::new()
         }
     }
 

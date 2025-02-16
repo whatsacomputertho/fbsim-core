@@ -1,3 +1,4 @@
+use lazy_static::lazy_static;
 use rand::Rng;
 use rand_distr::{Normal, Distribution, Bernoulli};
 use statrs::distribution::Categorical;
@@ -24,6 +25,15 @@ const A_STD_COEF_2: f64 = -5.589282_f64;
 const P_TIE_COEF: f64 = -0.00752297_f64;
 const P_TIE_INTERCEPT: f64 = 0.01055039_f64;
 const P_TIE_BASE: f64 = 0.036_f64;
+
+// Score frequency distribution
+lazy_static!{
+    static ref SCORE_FREQ_LUT: ScoreFrequencyLookup = {
+        let mut tmp_lut = ScoreFrequencyLookup::new();
+        tmp_lut.create();
+        tmp_lut
+    };
+}
 
 /// # `BoxScoreSimulator` struct
 ///
@@ -153,14 +163,10 @@ impl BoxScoreSimulator {
             return 0
         }
 
-        // Create a score frequency lookup table
-        let mut freq_lut = ScoreFrequencyLookup::new();
-        freq_lut.create();
-
         // Get the nearest neighbors of the score
-        let low = freq_lut.frequency(score - 1).unwrap();
-        let mid = freq_lut.frequency(score).unwrap();
-        let high = freq_lut.frequency(score + 1).unwrap();
+        let low = SCORE_FREQ_LUT.frequency(score - 1).unwrap();
+        let mid = SCORE_FREQ_LUT.frequency(score).unwrap();
+        let high = SCORE_FREQ_LUT.frequency(score + 1).unwrap();
         
         // Construct a categorical distribution
         let dist = Categorical::new(&[low as f64, mid as f64, high as f64]).unwrap();
