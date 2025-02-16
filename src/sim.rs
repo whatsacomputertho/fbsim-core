@@ -23,7 +23,7 @@ const A_STD_COEF_2: f64 = -5.589282_f64;
 // Tie probability model weights
 const P_TIE_COEF: f64 = -0.00752297_f64;
 const P_TIE_INTERCEPT: f64 = 0.01055039_f64;
-const P_TIE_BASE: f64 = 0.06_f64;
+const P_TIE_BASE: f64 = 0.036_f64;
 
 /// # `BoxScoreSimulator` struct
 ///
