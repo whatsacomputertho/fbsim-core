@@ -303,6 +303,36 @@ impl League {
         self.teams.get_mut(&id)
     }
 
+    /// Borrows a season from a `League` identified by its year
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::league::League;
+    ///
+    /// // Instantiate a new League and create a season
+    /// let mut my_league = League::new();
+    /// let _ = my_league.create_season();
+    ///
+    /// // Borrow the past seasons from the League
+    /// let my_season = my_league.season(2025);
+    /// ```
+    pub fn season(&self, year: usize) -> Option<&LeagueSeason> {
+        // If the year corresponds to the current season, return it
+        if let Some(season) = self.current_season() {
+            if *season.year() == year {
+                return Some(season);
+            }
+        }
+
+        // Otherwise search for it in the past seasons
+        for season in self.seasons().iter() {
+            if *season.year() == year {
+                return Some(season);
+            }
+        }
+        return None
+    }
+
     /// Borrows the past seasons from a `League`
     ///
     /// ### Example
