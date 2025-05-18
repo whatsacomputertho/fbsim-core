@@ -123,7 +123,7 @@ impl League {
         // Get the last item in the BTreeMap, which is auto-sorted by ID
         if let Some((&max_id, _)) = self.teams.iter().next_back() {
             // The list is non-empty and has a max ID
-            self.teams.insert(max_id, LeagueTeam::new());
+            self.teams.insert(max_id + 1, LeagueTeam::new());
         } else {
             // The list is empty
             self.teams.insert(0, LeagueTeam::new());
