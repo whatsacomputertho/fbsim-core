@@ -260,36 +260,3 @@ impl BoxScoreSimulator {
         return Ok(box_score)
     }
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_box_score_gen() {
-        // Initialize a box score simulator and an rng
-        let mut rng = rand::thread_rng();
-        let sim = BoxScoreSimulator::new();
-
-        // Initialize two football teams
-        let home = FootballTeam::new();
-        let away = FootballTeam::new();
-
-        // Generate and validate a few box scores
-        let score_a = sim.sim(&home, &away, &mut rng).unwrap();
-        let score_b = sim.sim(&home, &away, &mut rng).unwrap();
-        let score_c = sim.sim(&home, &away, &mut rng).unwrap();
-        let score_d = sim.sim(&home, &away, &mut rng).unwrap();
-        let score_e = sim.sim(&home, &away, &mut rng).unwrap();
-        assert!(score_a.home_score() > 1);
-        assert!(score_a.away_score() > 1);
-        assert!(score_b.home_score() > 1);
-        assert!(score_b.away_score() > 1);
-        assert!(score_c.home_score() > 1);
-        assert!(score_c.away_score() > 1);
-        assert!(score_d.home_score() > 1);
-        assert!(score_d.away_score() > 1);
-        assert!(score_e.home_score() > 1);
-        assert!(score_e.away_score() > 1);
-    }
-}

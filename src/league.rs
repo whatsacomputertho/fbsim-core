@@ -1,20 +1,22 @@
-use crate::team::FootballTeam;
+use std::collections::BTreeMap;
+
+use serde::{Serialize, Deserialize};
 
 /// # `LeagueTeam` struct
 ///
 /// A `LeagueTeam` represents a football team in a football league.
-/// In addition to a team's attributes, the team's wins and losses
-/// are also tracked.
+/// Since a team's properties (skill levels, team name, etc.) can change
+/// over the course of many seasons, this struct is mainly just used
+/// as a unique ID for a given team
+#[derive(Clone, Eq, PartialEq, Ord, PartialOrd, Debug, Default, Serialize, Deserialize)]
 pub struct LeagueTeam {
-    team: FootballTeam,
     wins: i32,
     losses: i32
 }
 
 impl LeagueTeam {
-    /// Constructor for the `LeagueTeam` struct in which the underlying
-    /// FootballTeam is instantiated as the default team, and the wins
-    /// and losses are zeroed.
+    /// Constructor for the `LeagueTeam` struct in which the team ID is
+    /// supplied by the caller, and the wins and losses are zeroed.
     ///
     /// ### Example
     /// ```
@@ -24,36 +26,9 @@ impl LeagueTeam {
     /// ```
     pub fn new() -> LeagueTeam {
         LeagueTeam{
-            team: FootballTeam::new(),
             wins: 0,
             losses: 0
         }
-    }
-
-    /// Getter for the league team's underlying `FootballTeam`
-    ///
-    /// ### Example
-    /// ```
-    /// use fbsim_core::league::LeagueTeam;
-    ///
-    /// let my_league_team = LeagueTeam::new();
-    /// let my_football_team = my_league_team.team();
-    /// ```
-    pub fn team(&self) -> &FootballTeam {
-        &self.team
-    }
-
-    /// Mutable getter for the league team's underlying `FootballTeam`
-    ///
-    /// ### Example
-    /// ```
-    /// use fbsim_core::league::LeagueTeam;
-    ///
-    /// let mut my_league_team = LeagueTeam::new();
-    /// let mut my_football_team = my_league_team.team_mut();
-    /// ```
-    pub fn team_mut(&mut self) -> &mut FootballTeam {
-        &mut self.team
     }
 
     /// Getter for the league team's wins
@@ -109,242 +84,138 @@ impl LeagueTeam {
     }
 }
 
-/// # `LeagueMatchup` struct
-///
-/// A `LeagueMatchup` represents a football matchup in a football league.
-/// It contains references to the home and away league teams, and tracks
-/// whether the matchup was completed, and whether the home team won.
-pub struct LeagueMatchup<'a> {
-    home_team: &'a LeagueTeam,
-    away_team: &'a LeagueTeam,
-    complete: bool,
-    home_win: bool
-}
-
-impl<'a> LeagueMatchup<'a> {
-    /// Constructor for the `LeagueMatchup` struct in which home and away
-    /// team references are given. The matchup is set as not complete by
-    /// default.
-    ///
-    /// ### Example
-    /// ```
-    /// use fbsim_core::league::{LeagueTeam, LeagueMatchup};
-    ///
-    /// let my_league_team_1 = LeagueTeam::new();
-    /// let my_league_team_2 = LeagueTeam::new();
-    /// let my_league_matchup = LeagueMatchup::new(&my_league_team_1, &my_league_team_2);
-    /// ```
-    pub fn new(home_team: &'a LeagueTeam, away_team: &'a LeagueTeam) -> LeagueMatchup<'a> {
-        LeagueMatchup{
-            home_team: home_team,
-            away_team: away_team,
-            complete: false,
-            home_win: false
-        }
-    }
-
-    /// Getter for the matchup's home team
-    ///
-    /// ### Example
-    /// ```
-    /// use fbsim_core::league::{LeagueTeam, LeagueMatchup};
-    ///
-    /// let my_league_team_1 = LeagueTeam::new();
-    /// let my_league_team_2 = LeagueTeam::new();
-    /// let my_league_matchup = LeagueMatchup::new(&my_league_team_1, &my_league_team_2);
-    /// let my_home_team_ref = my_league_matchup.home_team();
-    /// ```
-    pub fn home_team(&self) -> &'a LeagueTeam {
-        &self.home_team
-    }
-
-    /// Getter for the matchup's away team
-    ///
-    /// ### Example
-    /// ```
-    /// use fbsim_core::league::{LeagueTeam, LeagueMatchup};
-    ///
-    /// let my_league_team_1 = LeagueTeam::new();
-    /// let my_league_team_2 = LeagueTeam::new();
-    /// let my_league_matchup = LeagueMatchup::new(&my_league_team_1, &my_league_team_2);
-    /// let my_away_team_ref = my_league_matchup.away_team();
-    /// ```
-    pub fn away_team(&self) -> &'a LeagueTeam {
-        &self.away_team
-    }
-
-    /// Getter for the matchup's complete property
-    ///
-    /// ### Example
-    /// ```
-    /// use fbsim_core::league::{LeagueTeam, LeagueMatchup};
-    ///
-    /// let my_league_team_1 = LeagueTeam::new();
-    /// let my_league_team_2 = LeagueTeam::new();
-    /// let my_league_matchup = LeagueMatchup::new(&my_league_team_1, &my_league_team_2);
-    /// let my_matchup_complete = my_league_matchup.complete();
-    /// ```
-    pub fn complete(&self) -> &bool {
-        &self.complete
-    }
-
-    /// Mutable getter for the matchup's complete property
-    ///
-    /// ### Example
-    /// ```
-    /// use fbsim_core::league::{LeagueTeam, LeagueMatchup};
-    ///
-    /// let my_league_team_1 = LeagueTeam::new();
-    /// let my_league_team_2 = LeagueTeam::new();
-    /// let mut my_league_matchup = LeagueMatchup::new(&my_league_team_1, &my_league_team_2);
-    /// let mut my_matchup_complete = my_league_matchup.complete_mut();
-    /// ```
-    pub fn complete_mut(&mut self) -> &mut bool {
-        &mut self.complete
-    }
-
-    /// Getter for the matchup's home win property
-    ///
-    /// ### Example
-    /// ```
-    /// use fbsim_core::league::{LeagueTeam, LeagueMatchup};
-    ///
-    /// let my_league_team_1 = LeagueTeam::new();
-    /// let my_league_team_2 = LeagueTeam::new();
-    /// let my_league_matchup = LeagueMatchup::new(&my_league_team_1, &my_league_team_2);
-    /// let my_matchup_home_win = my_league_matchup.home_win();
-    /// ```
-    pub fn home_win(&self) -> &bool {
-        &self.home_win
-    }
-
-    /// Mutable getter for the matchup's home win property
-    ///
-    /// ### Example
-    /// ```
-    /// use fbsim_core::league::{LeagueTeam, LeagueMatchup};
-    ///
-    /// let my_league_team_1 = LeagueTeam::new();
-    /// let my_league_team_2 = LeagueTeam::new();
-    /// let mut my_league_matchup = LeagueMatchup::new(&my_league_team_1, &my_league_team_2);
-    /// let mut my_matchup_home_win = my_league_matchup.home_win_mut();
-    /// ```
-    pub fn home_win_mut(&mut self) -> &mut bool {
-        &mut self.home_win
-    }
-}
-
-/// # `LeagueMatchupWeek` struct
-///
-/// A `LeagueMatchupWeek` represents a week's worth of football matchups in a
-/// football league. It contains a vector of `LeagueMatchup` structs.
-pub struct LeagueMatchupWeek<'a> {
-    matchups: Vec<LeagueMatchup<'a>>
-}
-
-impl<'a> LeagueMatchupWeek<'a> {
-    /// Getter for the vector of league matchups
-    ///
-    /// ### Example
-    /// ```
-    /// use fbsim_core::league::{LeagueTeam, LeagueMatchup, LeagueMatchupWeek};
-    ///
-    /// // Instantiate the league teams
-    /// let my_league_team_1 = LeagueTeam::new();
-    /// let my_league_team_2 = LeagueTeam::new();
-    /// let my_league_team_3 = LeagueTeam::new();
-    /// let my_league_team_4 = LeagueTeam::new();
-    ///
-    /// // Instantiate a week of league matchups
-    /// let my_league_matchup_1 = LeagueMatchup::new(&my_league_team_1, &my_league_team_2);
-    /// let my_league_matchup_2 = LeagueMatchup::new(&my_league_team_3, &my_league_team_4);
-    ///
-    /// // Add to a vector of league matchups
-    /// let mut my_league_matchups: Vec<LeagueMatchup> = Vec::new();
-    /// my_league_matchups.push(my_league_matchup_1);
-    /// my_league_matchups.push(my_league_matchup_2);
-    /// 
-    /// // Instantiate the week of matchups from the vector
-    /// let my_league_matchup_week = LeagueMatchupWeek::from(my_league_matchups);
-    ///
-    /// // Borrow the matchups vector
-    /// let my_borrowed_matchups = my_league_matchup_week.matchups();
-    /// ```
-    pub fn matchups(&self) -> &Vec<LeagueMatchup<'a>> {
-        &self.matchups
-    }
-
-    /// Mutable getter for the vector of league matchups
-    ///
-    /// ### Example
-    /// ```
-    /// use fbsim_core::league::{LeagueTeam, LeagueMatchup, LeagueMatchupWeek};
-    ///
-    /// // Instantiate the league teams
-    /// let my_league_team_1 = LeagueTeam::new();
-    /// let my_league_team_2 = LeagueTeam::new();
-    /// let my_league_team_3 = LeagueTeam::new();
-    /// let my_league_team_4 = LeagueTeam::new();
-    ///
-    /// // Instantiate a week of league matchups
-    /// let my_league_matchup_1 = LeagueMatchup::new(&my_league_team_1, &my_league_team_2);
-    /// let my_league_matchup_2 = LeagueMatchup::new(&my_league_team_3, &my_league_team_4);
-    ///
-    /// // Add to a vector of league matchups
-    /// let mut my_league_matchups: Vec<LeagueMatchup> = Vec::new();
-    /// my_league_matchups.push(my_league_matchup_1);
-    /// my_league_matchups.push(my_league_matchup_2);
-    /// 
-    /// // Instantiate the week of matchups from the vector
-    /// let mut my_league_matchup_week = LeagueMatchupWeek::from(my_league_matchups);
-    ///
-    /// // Borrow the matchups vector
-    /// let mut my_borrowed_matchups = my_league_matchup_week.matchups_mut();
-    /// ```
-    pub fn matchups_mut(&mut self) -> &mut Vec<LeagueMatchup<'a>> {
-        &mut self.matchups
-    }
-}
-
-impl<'a> From<Vec<LeagueMatchup<'a>>> for LeagueMatchupWeek<'a> {
-    /// From trait implementation for instantiating a league matchup week
-    /// from a vector of league matchups
-    ///
-    /// ### Example
-    /// ```
-    /// use fbsim_core::league::{LeagueTeam, LeagueMatchup, LeagueMatchupWeek};
-    ///
-    /// // Instantiate the league teams
-    /// let my_league_team_1 = LeagueTeam::new();
-    /// let my_league_team_2 = LeagueTeam::new();
-    /// let my_league_team_3 = LeagueTeam::new();
-    /// let my_league_team_4 = LeagueTeam::new();
-    ///
-    /// // Instantiate a week of league matchups
-    /// let my_league_matchup_1 = LeagueMatchup::new(&my_league_team_1, &my_league_team_2);
-    /// let my_league_matchup_2 = LeagueMatchup::new(&my_league_team_3, &my_league_team_4);
-    ///
-    /// // Add to a vector of league matchups
-    /// let mut my_league_matchups: Vec<LeagueMatchup> = Vec::new();
-    /// my_league_matchups.push(my_league_matchup_1);
-    /// my_league_matchups.push(my_league_matchup_2);
-    /// 
-    /// // Instantiate the week of matchups from the vector
-    /// let my_league_matchup_week = LeagueMatchupWeek::from(my_league_matchups);
-    /// ```
-    fn from(matchups: Vec<LeagueMatchup<'a>>) -> Self {
-        LeagueMatchupWeek{
-            matchups: matchups
-        }
-    }
-}
-
 /// # `League` struct
 ///
 /// A `League` represents a football league. It contains a vector of teams in
-/// the league as `LeagueTeam` objects. It also contains a vector of weeks of
-/// games as `LeagueMatchupWeek` objects.
-pub struct League<'a> {
-    teams: Vec<LeagueTeam>,
-    schedule: Vec<LeagueMatchupWeek<'a>>
+/// the league as `LeagueTeam` objects. It also contains the season that is
+/// currently in-progress, and it contains a vector of past seasons
+#[derive(Clone, Eq, PartialEq, Ord, PartialOrd, Debug, Default, Serialize, Deserialize)]
+pub struct League {
+    teams: BTreeMap<usize, LeagueTeam>
+}
+
+impl League {
+    /// Constructor for the `League` struct in which the vec of league
+    /// teams is empty
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::league::League;
+    ///
+    /// let my_league = League::new();
+    /// ```
+    pub fn new() -> League {
+        League{
+            teams: BTreeMap::new()
+        }
+    }
+
+    /// Adds a `LeagueTeam` to a `League`
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::league::League;
+    ///
+    /// let mut my_league = League::new();
+    /// my_league.add_team();
+    /// ```
+    pub fn add_team(&mut self) -> () {
+        // Get the last item in the BTreeMap, which is auto-sorted by ID
+        if let Some((&max_id, _)) = self.teams.iter().next_back() {
+            // The list is non-empty and has a max ID
+            self.teams.insert(max_id, LeagueTeam::new());
+        } else {
+            // The list is empty
+            self.teams.insert(0, LeagueTeam::new());
+        }
+    }
+
+    /// Borrows the BTreeMap of teams immutably
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::league::League;
+    ///
+    /// // Instantiate a new League
+    /// let mut my_league = League::new();
+    ///
+    /// // Add a few LeagueTeams to the League
+    /// my_league.add_team();
+    /// my_league.add_team();
+    /// my_league.add_team();
+    /// my_league.add_team();
+    ///
+    /// // Get the BTreeMap of LeagueTeams
+    /// let my_teams = my_league.teams();
+    /// ```
+    pub fn teams(&self) -> &BTreeMap<usize, LeagueTeam> {
+        &self.teams
+    }
+
+
+    /// Borrows the BTreeMap of teams immutably
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::league::League;
+    ///
+    /// // Instantiate a new League
+    /// let mut my_league = League::new();
+    ///
+    /// // Add a few LeagueTeams to the League
+    /// my_league.add_team();
+    /// my_league.add_team();
+    /// my_league.add_team();
+    /// my_league.add_team();
+    ///
+    /// // Get the BTreeMap of LeagueTeams
+    /// let mut my_teams = my_league.teams_mut();
+    /// ```
+    pub fn teams_mut(&mut self) -> &mut BTreeMap<usize, LeagueTeam> {
+        &mut self.teams
+    }
+
+    /// Borrows an immutable `LeagueTeam` from a `League` given the team ID
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::league::League;
+    ///
+    /// // Instantiate a new League
+    /// let mut my_league = League::new();
+    ///
+    /// // Add a few LeagueTeams to the League
+    /// my_league.add_team();
+    /// my_league.add_team();
+    /// my_league.add_team();
+    /// my_league.add_team();
+    ///
+    /// // Get the LeagueTeam with ID 2
+    /// let my_team = my_league.team(2);
+    /// ```
+    pub fn team(&self, id: usize) -> Option<&LeagueTeam> {
+        self.teams.get(&id)
+    }
+
+    /// Borrows a mutable `LeagueTeam` from a `League` given the team ID
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::league::League;
+    ///
+    /// // Instantiate a new League
+    /// let mut my_league = League::new();
+    ///
+    /// // Add a few LeagueTeams to the League
+    /// my_league.add_team();
+    /// my_league.add_team();
+    /// my_league.add_team();
+    /// my_league.add_team();
+    ///
+    /// // Get the LeagueTeam with ID 1
+    /// let mut my_team = my_league.team_mut(1);
+    /// ```
+    pub fn team_mut(&mut self, id: usize) -> Option<&mut LeagueTeam> {
+        self.teams.get_mut(&id)
+    }
 }
