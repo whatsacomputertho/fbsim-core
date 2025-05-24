@@ -9,7 +9,7 @@ use serde::{Serialize, Deserialize};
 /// Since a team's properties (skill levels, team name, etc.) can change
 /// over the course of many seasons, this struct is mainly just used
 /// as a unique ID for a given team
-#[derive(Clone, Eq, PartialEq, Ord, PartialOrd, Debug, Default, Serialize, Deserialize)]
+#[derive(Clone, Eq, PartialEq, Ord, PartialOrd, Debug, Serialize, Deserialize)]
 pub struct LeagueTeam {
     wins: i32,
     losses: i32
@@ -85,16 +85,55 @@ impl LeagueTeam {
     }
 }
 
+/// # `LeagueSeasonTeam` struct
+///
+/// A `LeagueSeasonTeam` represents a team during a season of a football leauge
+#[derive(Clone, Eq, PartialEq, Ord, PartialOrd, Debug, Serialize, Deserialize)]
+pub struct LeagueSeasonTeam<'a> {
+    id: usize,
+    name: String,
+    logo: String,
+    offense_overall: i32,
+    defense_overall: i32,
+
+    #[serde(skip_serializing,skip_deserializing)]
+    team: Option<&'a LeagueTeam>
+}
+
+impl<'a> LeagueSeasonTeam<'a> {
+    /// Constructor for the `LeagueSeasonTeam` struct in which the league team
+    /// reference is given.
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::league::{LeagueTeam, LeagueSeasonTeam};
+    ///
+    /// let my_league_team = LeagueTeam::new();
+    /// let my_season_team = LeagueSeasonTeam::new(0, "My Team".to_string(), "".to_string(), 50, 50, &my_league_team);
+    /// ```
+    pub fn new(id: usize, name: String, logo: String, offense_overall: i32, defense_overall: i32, team: &'a LeagueTeam) -> LeagueSeasonTeam<'a> {
+        LeagueSeasonTeam{
+            id: id,
+            name: name, 
+            logo: logo,
+            offense_overall: offense_overall,
+            defense_overall: defense_overall,
+            team: Some(team)
+        }
+    }
+}
+
 /// # `LeagueSeason` struct
 ///
 /// A `LeagueSeason` represents a season of a football league.
-#[derive(Clone, Eq, PartialEq, Ord, PartialOrd, Debug, Default, Serialize, Deserialize)]
-pub struct LeagueSeason {
+#[derive(Clone, Eq, PartialEq, Ord, PartialOrd, Debug, Serialize, Deserialize)]
+pub struct LeagueSeason<'a> {
     year: usize,
+    teams: Vec<LeagueSeasonTeam<'a>>,
     complete: bool
 }
 
-impl LeagueSeason {
+impl<'a> LeagueSeason<'a> {
     /// Constructor for the `LeagueSeason` struct, with the year
     /// defaulting to the current year
     ///
@@ -104,9 +143,10 @@ impl LeagueSeason {
     ///
     /// let my_league_season = LeagueSeason::new();
     /// ```
-    pub fn new() -> LeagueSeason {
+    pub fn new() -> LeagueSeason<'a> {
         LeagueSeason{
             year: chrono::Utc::now().year() as usize,
+            teams: Vec::new(),
             complete: false
         }
     }
@@ -135,6 +175,32 @@ impl LeagueSeason {
     /// ```
     pub fn year_mut(&mut self) -> &mut usize {
         &mut self.year
+    }
+
+    /// Borrow the teams which competed in the season
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::league::LeagueSeason;
+    ///
+    /// let my_league_season = LeagueSeason::new();
+    /// let my_season_teams = my_league_season.teams();
+    /// ```
+    pub fn teams(&self) -> &Vec<LeagueSeasonTeam<'a>> {
+        &self.teams
+    }
+
+    /// Mutably borrow the year the season took place
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::league::LeagueSeason;
+    ///
+    /// let mut my_league_season = LeagueSeason::new();
+    /// let mut my_season_teams = my_league_season.teams_mut();
+    /// ```
+    pub fn teams_mut(&mut self) -> &mut Vec<LeagueSeasonTeam<'a>> {
+        &mut self.teams
     }
 
     /// Borrow the value indicating whether the season is complete
@@ -169,14 +235,14 @@ impl LeagueSeason {
 /// A `League` represents a football league. It contains a vector of teams in
 /// the league as `LeagueTeam` objects. It also contains the season that is
 /// currently in-progress, and it contains a vector of past seasons
-#[derive(Clone, Eq, PartialEq, Ord, PartialOrd, Debug, Default, Serialize, Deserialize)]
-pub struct League {
+#[derive(Clone, Eq, PartialEq, Ord, PartialOrd, Debug, Serialize, Deserialize)]
+pub struct League<'a> {
     teams: BTreeMap<usize, LeagueTeam>,
-    current_season: Option<LeagueSeason>,
-    seasons: Vec<LeagueSeason>
+    current_season: Option<LeagueSeason<'a>>,
+    seasons: Vec<LeagueSeason<'a>>
 }
 
-impl League {
+impl<'a> League<'a> {
     /// Constructor for the `League` struct in which the vec of league
     /// teams is empty
     ///
@@ -186,7 +252,7 @@ impl League {
     ///
     /// let my_league = League::new();
     /// ```
-    pub fn new() -> League {
+    pub fn new() -> League<'a> {
         League{
             teams: BTreeMap::new(),
             current_season: None,
@@ -235,7 +301,6 @@ impl League {
     pub fn teams(&self) -> &BTreeMap<usize, LeagueTeam> {
         &self.teams
     }
-
 
     /// Borrows the BTreeMap of teams immutably
     ///
@@ -307,16 +372,38 @@ impl League {
     ///
     /// ### Example
     /// ```
-    /// use fbsim_core::league::League;
+    /// use fbsim_core::league::{League, LeagueSeasonTeam};
     ///
-    /// // Instantiate a new League and create a season
+    /// // Instantiate a new League
     /// let mut my_league = League::new();
-    /// let _ = my_league.create_season();
+    ///
+    /// // Add some teams to the new League
+    /// my_league.add_team();
+    /// my_league.add_team();
+    /// my_league.add_team();
+    /// my_league.add_team();
+    /// my_league.add_team();
+    ///
+    /// // Create a vec of LeagueSeasonTeams corresponding to league teams
+    /// let mut my_season_teams = Vec::new();
+    ///
+    /// // Add some LeagueSeasonTeams to the vec
+    /// let season_team_0 = my_league.team(0).unwrap().clone();
+    /// let season_team_1 = my_league.team(1).unwrap().clone();
+    /// let season_team_3 = my_league.team(3).unwrap().clone();
+    /// let season_team_4 = my_league.team(4).unwrap().clone();
+    /// my_season_teams.push(LeagueSeasonTeam::new(0, "My Team 0".to_string(), "".to_string(), 50, 50, &season_team_0));
+    /// my_season_teams.push(LeagueSeasonTeam::new(1, "My Team 1".to_string(), "".to_string(), 50, 50, &season_team_1));
+    /// my_season_teams.push(LeagueSeasonTeam::new(3, "My Team 3".to_string(), "".to_string(), 50, 50, &season_team_3));
+    /// my_season_teams.push(LeagueSeasonTeam::new(4, "My Team 4".to_string(), "".to_string(), 50, 50, &season_team_4));
+    ///
+    /// // Create a new season in the league
+    /// let _ = my_league.create_season(my_season_teams);
     ///
     /// // Borrow the past seasons from the League
     /// let my_season = my_league.season(2025);
     /// ```
-    pub fn season(&self, year: usize) -> Option<&LeagueSeason> {
+    pub fn season(&self, year: usize) -> Option<&LeagueSeason<'a>> {
         // If the year corresponds to the current season, return it
         if let Some(season) = self.current_season() {
             if *season.year() == year {
@@ -345,7 +432,7 @@ impl League {
     /// // Borrow the past seasons from the League
     /// let past_seasons = my_league.seasons();
     /// ```
-    pub fn seasons(&self) -> &Vec<LeagueSeason> {
+    pub fn seasons(&self) -> &Vec<LeagueSeason<'a>> {
         &self.seasons
     }
 
@@ -361,7 +448,7 @@ impl League {
     /// // Borrow the past seasons from the League
     /// let mut past_seasons = my_league.seasons_mut();
     /// ```
-    pub fn seasons_mut(&mut self) -> &mut Vec<LeagueSeason> {
+    pub fn seasons_mut(&mut self) -> &mut Vec<LeagueSeason<'a>> {
         &mut self.seasons
     }
 
@@ -377,7 +464,7 @@ impl League {
     /// // Borrow the current season from the League
     /// let my_season: &Option<LeagueSeason> = my_league.current_season();
     /// ```
-    pub fn current_season(&self) -> &Option<LeagueSeason> {
+    pub fn current_season(&self) -> &Option<LeagueSeason<'a>> {
         &self.current_season
     }
 
@@ -393,7 +480,7 @@ impl League {
     /// // Borrow the current season from the `League`
     /// let mut my_season: &mut Option<LeagueSeason> = my_league.current_season_mut();
     /// ```
-    pub fn current_season_mut(&mut self) -> &mut Option<LeagueSeason> {
+    pub fn current_season_mut(&mut self) -> &mut Option<LeagueSeason<'a>> {
         &mut self.current_season
     }
 
@@ -415,15 +502,69 @@ impl League {
     ///
     /// ### Example
     /// ```
-    /// use fbsim_core::league::League;
+    /// use fbsim_core::league::{League, LeagueSeasonTeam};
     ///
     /// // Instantiate a new League
     /// let mut my_league = League::new();
     ///
+    /// // Add some teams to the new League
+    /// my_league.add_team();
+    /// my_league.add_team();
+    /// my_league.add_team();
+    /// my_league.add_team();
+    /// my_league.add_team();
+    ///
+    /// // Create a vec of LeagueSeasonTeams corresponding to league teams
+    /// let mut my_season_teams = Vec::new();
+    ///
+    /// // Add some LeagueSeasonTeams to the vec
+    /// let season_team_0 = my_league.team(0).unwrap().clone();
+    /// let season_team_1 = my_league.team(1).unwrap().clone();
+    /// let season_team_3 = my_league.team(3).unwrap().clone();
+    /// let season_team_4 = my_league.team(4).unwrap().clone();
+    /// my_season_teams.push(LeagueSeasonTeam::new(0, "My Team 0".to_string(), "".to_string(), 50, 50, &season_team_0));
+    /// my_season_teams.push(LeagueSeasonTeam::new(1, "My Team 1".to_string(), "".to_string(), 50, 50, &season_team_1));
+    /// my_season_teams.push(LeagueSeasonTeam::new(3, "My Team 3".to_string(), "".to_string(), 50, 50, &season_team_3));
+    /// my_season_teams.push(LeagueSeasonTeam::new(4, "My Team 4".to_string(), "".to_string(), 50, 50, &season_team_4));
+    ///
     /// // Create a new season for the new League
-    /// let res = my_league.create_season();
+    /// let res = my_league.create_season(my_season_teams);
     /// ```
-    pub fn create_season(&mut self) -> Result<(), String> {
+    pub fn create_season(&mut self, teams: Vec<LeagueSeasonTeam<'a>>) -> Result<(), String> {
+        // Check if the given list of teams is valid
+        let num_teams = teams.len();
+        if num_teams < 4 {
+            return Err(
+                format!(
+                    "A league must have at least 4 teams, found {}",
+                    num_teams
+                )
+            )
+        }
+        if num_teams % 2 != 0 {
+            return Err(
+                format!(
+                    "A league must have an even number of teams, found {}",
+                    num_teams
+                )
+            )
+        }
+        for (i, team_i) in teams.iter().enumerate() {
+            for (j, team_j) in teams.iter().enumerate() {
+                if i == j {
+                    continue
+                }
+                if team_i.id == team_j.id {
+                    return Err(
+                        format!(
+                            "All league teams must have unique IDs, but IDs match for team {} and {}: {}",
+                            i, j, team_i.id
+                        )
+                    )
+                }
+            }
+        }
+
         // Check if the current season exists
         if let Some(season) = self.current_season_mut() {
             // If so, then check if the season is complete
@@ -433,6 +574,10 @@ impl League {
                 let mut new_season = LeagueSeason::new();
                 let new_year = new_season.year_mut();
                 *new_year = most_recent_year + 1;
+                let season_teams = new_season.teams_mut();
+                for team in teams.iter() {
+                    season_teams.push(team.clone());
+                }
                 let old_season = season.clone();
                 *season = new_season;
                 self.seasons.push(old_season);
@@ -461,6 +606,10 @@ impl League {
         let most_recent_year = self.most_recent_year();
         let new_year = new_season.year_mut();
         *new_year = most_recent_year + 1;
+        let season_teams = new_season.teams_mut();
+        for team in teams.iter() {
+            season_teams.push(team.clone());
+        }
         self.current_season = Some(new_season);
         return Ok(());
     }
