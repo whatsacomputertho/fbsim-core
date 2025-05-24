@@ -550,6 +550,11 @@ impl<'a> League<'a> {
             )
         }
         for (i, team_i) in teams.iter().enumerate() {
+            let league_team_i = self.team(team_i.id);
+            match league_team_i {
+                Some(_league_team) => (),
+                None => return Err(format!("No team exists with ID {}", team_i.id)),
+            }
             for (j, team_j) in teams.iter().enumerate() {
                 if i == j {
                     continue
@@ -593,8 +598,12 @@ impl<'a> League<'a> {
             );
         }
 
-        // Create a new league season
+        // Create a new league season and add the teams to the season
         let mut new_season = LeagueSeason::new();
+        let season_teams = new_season.teams_mut();
+        for team in teams.iter() {
+            season_teams.push(team.clone());
+        }
 
         // If the past seasons list is empty then stick with the default year
         if self.seasons.len() == 0 {
@@ -606,10 +615,6 @@ impl<'a> League<'a> {
         let most_recent_year = self.most_recent_year();
         let new_year = new_season.year_mut();
         *new_year = most_recent_year + 1;
-        let season_teams = new_season.teams_mut();
-        for team in teams.iter() {
-            season_teams.push(team.clone());
-        }
         self.current_season = Some(new_season);
         return Ok(());
     }
