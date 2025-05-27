@@ -2,7 +2,8 @@ pub mod season;
 pub mod team;
 
 use crate::league::team::LeagueTeam;
-use crate::league::season::{LeagueSeason, LeagueSeasonTeam};
+use crate::league::season::LeagueSeason;
+use crate::league::season::team::LeagueSeasonTeam;
 
 use std::collections::BTreeMap;
 
@@ -431,7 +432,7 @@ impl League {
     /// ```
     /// use std::collections::BTreeMap;
     /// use fbsim_core::league::League;
-    /// use fbsim_core::league::season::LeagueSeasonTeam;
+    /// use fbsim_core::league::season::team::LeagueSeasonTeam;
     ///
     /// // Instantiate a new League
     /// let mut my_league = League::new();
