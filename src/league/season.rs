@@ -372,6 +372,11 @@ impl LeagueSeason {
             )
         }
 
+        // If the schedule is already non-empty then empty it before re-gen
+        if self.weeks.len() > 0 {
+            self.weeks.clear()
+        }
+
         // TODO: Generate a random permutation of the season team IDs
         // TODO: Optionally accept a seed to control the schedule permutation
         let mut team_ids: Vec<usize> = self.teams.keys().cloned().collect();
@@ -415,6 +420,9 @@ impl LeagueSeason {
                 let matchup = LeagueSeasonMatchup::new(*home_id, *away_id);
                 week.matchups_mut().push(matchup);
             }
+
+            // Add the week to the season
+            self.weeks.push(week);
 
             // Rotate all but the first ID
             team_ids.rotate_right(1);
