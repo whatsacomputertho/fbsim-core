@@ -4,6 +4,8 @@ use rocket_okapi::okapi::schemars;
 use rocket_okapi::okapi::schemars::JsonSchema;
 use serde::{Serialize, Deserialize};
 
+use crate::league::season::team::LeagueSeasonTeam;
+
 pub const DEFAULT_TEAM_NAME: &str = "Null Island Defaults";
 
 /// # `FootballTeam` struct
@@ -15,6 +17,16 @@ pub struct FootballTeam {
     name: String,
     offense_overall: i32,
     defense_overall: i32
+}
+
+impl From<LeagueSeasonTeam> for FootballTeam {
+    fn from(value: LeagueSeasonTeam) -> Self {
+        FootballTeam{
+            name: value.name().clone(),
+            offense_overall: value.offense_overall().clone() as i32,
+            defense_overall: value.defense_overall().clone() as i32
+        }
+    }
 }
 
 impl FootballTeam {

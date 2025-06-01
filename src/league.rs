@@ -387,7 +387,7 @@ impl League {
         // Check if the current season exists
         if let Some(season) = self.current_season_mut() {
             // If so, then check if the season is complete
-            if *season.complete() {
+            if season.complete() {
                 // If the season is complete, archive and create new season
                 let most_recent_year = season.year();
                 let mut new_season = LeagueSeason::new();
@@ -443,11 +443,8 @@ impl League {
     /// // Create a new season for the new League
     /// let res = my_league.add_season();
     ///
-    /// // Create a new season team
-    /// let my_season_team = LeagueSeasonTeam::new("My Team".to_string(), "".to_string(), 50, 50);
-    ///
-    /// // Add the new season team to the new season corresponding to the new team
-    /// my_league.add_season_team(0, my_season_team);
+    /// // Add a new season team to the new season corresponding to the new team
+    /// my_league.add_season_team(0, LeagueSeasonTeam::new());
     /// ```
     pub fn add_season_team(&mut self, id: usize, team: LeagueSeasonTeam) -> Result<(), String> {
         // Ensure the given team ID exists in the league

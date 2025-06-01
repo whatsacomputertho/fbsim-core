@@ -7,8 +7,11 @@ use std::collections::BTreeMap;
 use crate::league::season::team::LeagueSeasonTeam;
 use crate::league::season::week::LeagueSeasonWeek;
 use crate::league::season::matchup::LeagueSeasonMatchup;
+use crate::sim::BoxScoreSimulator;
+use crate::team::FootballTeam;
 
 use chrono::Datelike;
+use rand::Rng;
 use serde::{Serialize, Deserialize, Deserializer};
 
 /// # `LeagueSeasonRaw` struct
@@ -19,32 +22,188 @@ use serde::{Serialize, Deserialize, Deserializer};
 pub struct LeagueSeasonRaw {
     pub year: usize,
     pub teams: BTreeMap<usize, LeagueSeasonTeam>,
-    pub weeks: Vec<LeagueSeasonWeek>,
-    pub started: bool,
-    pub complete: bool
+    pub weeks: Vec<LeagueSeasonWeek>
 }
 
 impl LeagueSeasonRaw {
-    pub fn validate(&self) -> Result<(), String> {
-        // Ensure the season is not both complete and not started
-        if !self.started && self.complete {
-            return Err("The season is both complete and not started".to_string());
+    /// Constructor for the `LeagueSeasonRaw` struct
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::league::season::LeagueSeasonRaw;
+    ///
+    /// let raw_league_season = LeagueSeasonRaw::new();
+    /// ```
+    pub fn new() -> LeagueSeasonRaw {
+        LeagueSeasonRaw{
+            year: chrono::Utc::now().year() as usize,
+            teams: BTreeMap::new(),
+            weeks: Vec::new()
+        }
+    }
+
+    /// Determine based on the matchups whether the season has started
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::league::season::LeagueSeasonRaw;
+    ///
+    /// let raw_league_season = LeagueSeasonRaw::new();
+    /// let started = raw_league_season.started();
+    /// ```
+    pub fn started(&self) -> bool {
+        // If no season weeks, then the season hasn't started
+        if self.weeks.len() == 0 {
+            return false;
         }
 
+        // Loop through the season weeks and check if any are started
+        for week in self.weeks.iter() {
+            if week.started() {
+                return true;
+            }
+        }
+        false
+    }
+
+    /// Determine based on the matchups whether the season has completed
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::league::season::LeagueSeasonRaw;
+    ///
+    /// let raw_league_season = LeagueSeasonRaw::new();
+    /// let started = raw_league_season.complete();
+    /// ```
+    pub fn complete(&self) -> bool {
+        // If no season weeks, then the season isn't complete
+        if self.weeks.len() == 0 {
+            return false;
+        }
+
+        // Loop through the season weeks and check if any are not complete
+        for week in self.weeks.iter() {
+            if !week.complete() {
+                return false;
+            }
+        }
+        true
+    }
+
+    /// Validates a LeagueSeasonRaw before deserializing it
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::league::season::LeagueSeasonRaw;
+    ///
+    /// let raw_league_season = LeagueSeasonRaw::new();
+    /// let valid_res = raw_league_season.validate();
+    /// ```
+    pub fn validate(&self) -> Result<(), String> {
         // Ensure if the season is started or complete that there are an even
         // number of teams greater than 4
-        if self.started || self.complete {
+        if self.started() {
             let num_teams = self.teams.len();
             if num_teams < 4 {
-                return Err(format!("The season has started, but has fewer than 4 team(s): {}", num_teams));
+                return Err(
+                    format!(
+                        "Season {} has started, but has fewer than 4 team(s): {}",
+                        self.year,
+                        num_teams
+                    )
+                );
             }
             if num_teams % 2 != 0 {
-                return Err(format!("The season has started, but has an odd number of teams: {}", num_teams));
+                return Err(
+                    format!(
+                        "Season {} has started, but has an odd number of teams: {}",
+                        self.year,
+                        num_teams
+                    )
+                );
             }
         }
 
-        // TODO: Validation for weeks
+        // Validate the season weeks
+        // TODO: Add validation checking whether later weeks have been simulated before earlier weeks
+        let mut prev_started: bool = false;
+        let mut prev_completed: bool = false;
+        for (i, week) in self.weeks.iter().enumerate() {
+            let mut found_ids: Vec<usize> = Vec::new();
 
+            // Ensure later weeks are not simulated before earlier weeks
+            let week_started = week.started();
+            let week_complete = week.complete();
+            if i > 0 && !prev_started && week_started {
+                return Err(
+                    format!(
+                        "Season {} week {} is started but a previous week is not",
+                        self.year, i
+                    )
+                );
+            }
+            if i > 0 && !prev_completed && week_complete {
+                return Err(
+                    format!(
+                        "Season {} week {} is complete but a previous week is not",
+                        self.year, i
+                    )
+                );
+            }
+            prev_started = week_started;
+            prev_completed = week_complete;
+
+            for (j, matchup) in week.matchups().iter().enumerate() {
+                let home_id = matchup.home_team();
+                let away_id = matchup.away_team();
+
+                // Ensure all matchups map to valid season team IDs
+                if !self.teams.contains_key(home_id) {
+                    return Err(
+                        format!(
+                            "Season {} week {} matchup {} contains nonexistent home team ID: {}",
+                            self.year,
+                            i, j,
+                            home_id
+                        )
+                    );
+                }
+                if !self.teams.contains_key(away_id) {
+                    return Err(
+                        format!(
+                            "Season {} week {} matchup {} contains nonexistent away team ID: {}",
+                            self.year,
+                            i, j,
+                            away_id
+                        )
+                    )
+                }
+
+                // Ensure each team plays at most once per week
+                if found_ids.contains(home_id) {
+                    return Err(
+                        format!(
+                            "Team {} plays multiple times in season {} week {}, detected in matchup {}",
+                            home_id,
+                            self.year,
+                            i, j
+                        )
+                    )
+                }
+                if found_ids.contains(away_id) {
+                    return Err(
+                        format!(
+                            "Team {} plays multiple times in season {} week {}, detected in matchup {}",
+                            away_id,
+                            self.year,
+                            i, j
+                        )
+                    )
+                }
+                found_ids.push(home_id.clone());
+                found_ids.push(away_id.clone());
+            }
+        }
         Ok(())
     }
 }
@@ -56,9 +215,7 @@ impl LeagueSeasonRaw {
 pub struct LeagueSeason {
     year: usize,
     teams: BTreeMap<usize, LeagueSeasonTeam>,
-    weeks: Vec<LeagueSeasonWeek>,
-    started: bool,
-    complete: bool
+    weeks: Vec<LeagueSeasonWeek>
 }
 
 impl TryFrom<LeagueSeasonRaw> for LeagueSeason {
@@ -76,9 +233,7 @@ impl TryFrom<LeagueSeasonRaw> for LeagueSeason {
             LeagueSeason{
                 year: item.year,
                 teams: item.teams,
-                weeks: item.weeks,
-                started: item.started,
-                complete: item.complete
+                weeks: item.weeks
             }
         )
     }
@@ -109,9 +264,7 @@ impl LeagueSeason {
         LeagueSeason{
             year: chrono::Utc::now().year() as usize,
             teams: BTreeMap::new(),
-            weeks: Vec::new(),
-            started: false,
-            complete: false
+            weeks: Vec::new()
         }
     }
 
@@ -175,12 +328,12 @@ impl LeagueSeason {
     /// use fbsim_core::league::season::team::LeagueSeasonTeam;
     ///
     /// let mut my_league_season = LeagueSeason::new();
-    /// let my_season_team = LeagueSeasonTeam::new("My Team".to_string(), "".to_string(), 50, 50);
+    /// let my_season_team = LeagueSeasonTeam::new();
     /// my_league_season.add_team(0, my_season_team);
     /// ```
     pub fn add_team(&mut self, id: usize, team: LeagueSeasonTeam) -> Result<(), String> {
         // Ensure the season has not already started
-        if self.started || self.complete {
+        if self.started() {
             return Err("Season has already started, cannot add new team".to_string());
         }
 
@@ -206,7 +359,7 @@ impl LeagueSeason {
     /// let mut my_league_season = LeagueSeason::new();
     ///
     /// // Instantiate a new LeagueSeasonTeam
-    /// let my_season_team = LeagueSeasonTeam::new("My Team".to_string(), "".to_string(), 50, 50);
+    /// let my_season_team = LeagueSeasonTeam::new();
     ///
     /// // Add the team with ID 2
     /// let my_season_teams = my_league_season.teams_mut();
@@ -231,7 +384,7 @@ impl LeagueSeason {
     /// let mut my_league_season = LeagueSeason::new();
     ///
     /// // Instantiate a new LeagueSeasonTeam
-    /// let mut my_season_team = LeagueSeasonTeam::new("My Team".to_string(), "".to_string(), 50, 50);
+    /// let mut my_season_team = LeagueSeasonTeam::new();
     ///
     /// // Add the team with ID 2
     /// let my_season_teams = my_league_season.teams_mut();
@@ -270,7 +423,7 @@ impl LeagueSeason {
         &mut self.weeks
     }
 
-    /// Borrow the value indicating whether the season has started
+    /// Determine based on the matchups whether the season has started
     ///
     /// ### Example
     /// ```
@@ -279,24 +432,22 @@ impl LeagueSeason {
     /// let my_league_season = LeagueSeason::new();
     /// let started = my_league_season.started();
     /// ```
-    pub fn started(&self) -> &bool {
-        &self.started
+    pub fn started(&self) -> bool {
+        // If no season weeks, then the season hasn't started
+        if self.weeks.len() == 0 {
+            return false;
+        }
+
+        // Loop through the season weeks and check if any are started
+        for week in self.weeks.iter() {
+            if week.started() {
+                return true;
+            }
+        }
+        false
     }
 
-    /// Mutably borrow the value indicating whether the season has started
-    ///
-    /// ### Example
-    /// ```
-    /// use fbsim_core::league::season::LeagueSeason;
-    ///
-    /// let mut my_league_season = LeagueSeason::new();
-    /// let mut complete = my_league_season.started_mut();
-    /// ```
-    pub fn started_mut(&mut self) -> &mut bool {
-        &mut self.started
-    }
-
-    /// Borrow the value indicating whether the season is complete
+    /// Determine based on the matchups whether the season has completed
     ///
     /// ### Example
     /// ```
@@ -305,24 +456,24 @@ impl LeagueSeason {
     /// let my_league_season = LeagueSeason::new();
     /// let complete = my_league_season.complete();
     /// ```
-    pub fn complete(&self) -> &bool {
-        &self.complete
+    pub fn complete(&self) -> bool {
+        // If no season weeks, then the season isn't complete
+        if self.weeks.len() == 0 {
+            return false;
+        }
+
+        // Loop through the season weeks and check if any are not complete
+        for week in self.weeks.iter() {
+            if !week.complete() {
+                return false;
+            }
+        }
+        true
     }
 
-    /// Mutably borrow the value indicating whether the season is complete
-    ///
-    /// ### Example
-    /// ```
-    /// use fbsim_core::league::season::LeagueSeason;
-    ///
-    /// let mut my_league_season = LeagueSeason::new();
-    /// let mut complete = my_league_season.complete_mut();
-    /// ```
-    pub fn complete_mut(&mut self) -> &mut bool {
-        &mut self.complete
-    }
-
-    /// Generate a schedule for the season
+    /// Generate a schedule for the season.  The generated schedule is a round
+    /// robin schedule in which each team plays an equal number of home and
+    /// away games, and in which each team plays each other twice.
     ///
     /// ### Example
     /// ```
@@ -333,14 +484,10 @@ impl LeagueSeason {
     /// let mut my_league_season = LeagueSeason::new();
     ///
     /// // Add 4 teams to the season
-    /// let season_team_0 = LeagueSeasonTeam::new("My Team 0".to_string(), "".to_string(), 50, 50);
-    /// my_league_season.add_team(0, season_team_0);
-    /// let season_team_1 = LeagueSeasonTeam::new("My Team 1".to_string(), "".to_string(), 50, 50);
-    /// my_league_season.add_team(1, season_team_1);
-    /// let season_team_2 = LeagueSeasonTeam::new("My Team 2".to_string(), "".to_string(), 50, 50);
-    /// my_league_season.add_team(2, season_team_2);
-    /// let season_team_3 = LeagueSeasonTeam::new("My Team 3".to_string(), "".to_string(), 50, 50);
-    /// my_league_season.add_team(3, season_team_3);
+    /// my_league_season.add_team(0, LeagueSeasonTeam::new());
+    /// my_league_season.add_team(1, LeagueSeasonTeam::new());
+    /// my_league_season.add_team(2, LeagueSeasonTeam::new());
+    /// my_league_season.add_team(3, LeagueSeasonTeam::new());
     ///
     /// // Generate the season schedule
     /// my_league_season.generate_schedule();
@@ -365,8 +512,8 @@ impl LeagueSeason {
             )
         }
 
-        // Check to make sure the season has not already started or completed
-        if self.started || self.complete {
+        // Check to make sure the season has not already started
+        if self.started() {
             return Err(
                 "Season has already started, cannot re-generate schedule".to_string()
             )
@@ -424,9 +571,230 @@ impl LeagueSeason {
             // Add the week to the season
             self.weeks.push(week);
 
-            // Rotate all but the first ID
-            team_ids.rotate_right(1);
-            team_ids.swap(0, 1);
+            // Round robin the team IDs vec for the next week of matchups
+            // Alternate home & away each week, "adjusted round robin"
+            // Guarantees each team plays equal number of home and away games
+            team_ids.rotate_right(1); // Round robin, rotate all
+            if week_index % 2 == 0 {
+                team_ids.swap(0, 1); // Round robin, fix 
+            } else {
+                team_ids.swap(num_matchups, num_matchups + 1);
+            }
+            team_ids.rotate_right(num_matchups);
+        }
+        Ok(())
+    }
+
+    /// Simulate a season matchup
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::league::season::LeagueSeason;
+    /// use fbsim_core::league::season::team::LeagueSeasonTeam;
+    ///
+    /// // Create a new season
+    /// let mut my_league_season = LeagueSeason::new();
+    ///
+    /// // Add 4 teams to the season
+    /// my_league_season.add_team(0, LeagueSeasonTeam::new());
+    /// my_league_season.add_team(1, LeagueSeasonTeam::new());
+    /// my_league_season.add_team(2, LeagueSeasonTeam::new());
+    /// my_league_season.add_team(3, LeagueSeasonTeam::new());
+    ///
+    /// // Generate the season schedule
+    /// my_league_season.generate_schedule();
+    ///
+    /// // Simulate the first game of the first week
+    /// let mut rng = rand::thread_rng();
+    /// my_league_season.sim_matchup(0, 0, &mut rng);
+    /// ```
+    pub fn sim_matchup(&mut self, week: usize, matchup: usize, rng: &mut impl Rng) -> Result<(), String> {
+        // Try to get the given week
+        let mut _week_to_sim = match self.weeks.get_mut(week) {
+            Some(w) => w,
+            None => return Err(format!("No such week for season {}: {}", self.year, week)),
+        };
+
+        // Try to get the given matchup
+        let mut _matchup_to_sim = match _week_to_sim.matchups_mut().get_mut(matchup) {
+            Some(m) => m,
+            None => return Err(format!("No such matchup in season {} week {}: {}", self.year, week, matchup)),
+        };
+
+        // Ensure the matchup is not already complete
+        if !_matchup_to_sim.complete() {
+            return Err(format!("Season {} week {} matchup {} is already complete", self.year, week, matchup));
+        }
+
+        // Try to get the home team for the matchup
+        let home_id = _matchup_to_sim.home_team();
+        let home_team = match self.teams.get(home_id) {
+            Some(t) => t,
+            None => return Err(
+                format!(
+                    "Season {} week {} matchup {} references nonexistent home team ID: {}",
+                    self.year, week, matchup, home_id
+                )
+            )
+        };
+
+        // Try to get the away team for the matchup
+        let away_id = _matchup_to_sim.away_team();
+        let away_team = match self.teams.get(away_id) {
+            Some(t) => t,
+            None => return Err(
+                format!(
+                    "Season {} week {} matchup {} references nonexistent away team ID: {}",
+                    self.year, week, matchup, away_id
+                )
+            )
+        };
+
+        // Simulate the matchup
+        let home_sim_team = FootballTeam::from(home_team.clone());
+        let away_sim_team = FootballTeam::from(away_team.clone());
+        let simulator = BoxScoreSimulator::new();
+        let box_score = match simulator.sim(&home_sim_team, &away_sim_team, rng) {
+            Ok(score) => score,
+            Err(error) => return Err(
+                format!(
+                    "Error while simulating matchup: {}",
+                    error
+                )
+            )
+        };
+
+        // Update the status of the matchup
+        let mut _home_score = *_matchup_to_sim.home_score_mut();
+        let mut _away_score = *_matchup_to_sim.away_score_mut();
+        let mut _complete = *_matchup_to_sim.complete_mut();
+        _home_score = box_score.home_score() as usize;
+        _away_score = box_score.away_score() as usize;
+        _complete = true;
+        Ok(())
+    }
+
+    /// Simulate a full week of season matchups
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::league::season::LeagueSeason;
+    /// use fbsim_core::league::season::team::LeagueSeasonTeam;
+    ///
+    /// // Create a new season
+    /// let mut my_league_season = LeagueSeason::new();
+    ///
+    /// // Add 4 teams to the season
+    /// my_league_season.add_team(0, LeagueSeasonTeam::new());
+    /// my_league_season.add_team(1, LeagueSeasonTeam::new());
+    /// my_league_season.add_team(2, LeagueSeasonTeam::new());
+    /// my_league_season.add_team(3, LeagueSeasonTeam::new());
+    ///
+    /// // Generate the season schedule
+    /// my_league_season.generate_schedule();
+    ///
+    /// // Simulate the first week of the season
+    /// let mut rng = rand::thread_rng();
+    /// my_league_season.sim_week(0, &mut rng);
+    /// ```
+    pub fn sim_week(&mut self, week: usize, rng: &mut impl Rng) -> Result<(), String> {
+        // Try to get the given week
+        let mut _week_to_sim = match self.weeks.get_mut(week) {
+            Some(w) => w,
+            None => return Err(format!("No such week for season {}: {}", self.year, week)),
+        };
+
+        // Loop through the week's matchups mutably
+        for (i, matchup) in _week_to_sim.matchups_mut().iter_mut().enumerate() {
+            // Ensure the matchup is not already complete
+            if !matchup.complete() {
+                return Err(format!("Season {} week {} matchup {} is already complete", self.year, week, i));
+            }
+
+            // Try to get the home team for the matchup
+            let home_id = matchup.home_team();
+            let home_team = match self.teams.get(home_id) {
+                Some(t) => t,
+                None => return Err(
+                    format!(
+                        "Season {} week {} matchup {} references nonexistent home team ID: {}",
+                        self.year, week, i, home_id
+                    )
+                )
+            };
+
+            // Try to get the away team for the matchup
+            let away_id = matchup.away_team();
+            let away_team = match self.teams.get(away_id) {
+                Some(t) => t,
+                None => return Err(
+                    format!(
+                        "Season {} week {} matchup {} references nonexistent away team ID: {}",
+                        self.year, week, i, away_id
+                    )
+                )
+            };
+
+            // Simulate the matchup
+            let home_sim_team = FootballTeam::from(home_team.clone());
+            let away_sim_team = FootballTeam::from(away_team.clone());
+            let simulator = BoxScoreSimulator::new();
+            let box_score = match simulator.sim(&home_sim_team, &away_sim_team, rng) {
+                Ok(score) => score,
+                Err(error) => return Err(
+                    format!(
+                        "Error while simulating matchup: {}",
+                        error
+                    )
+                )
+            };
+
+            // Update the status of the matchup
+            let mut _home_score = *matchup.home_score_mut();
+            let mut _away_score = *matchup.away_score_mut();
+            let mut _complete = *matchup.complete_mut();
+            _home_score = box_score.home_score() as usize;
+            _away_score = box_score.away_score() as usize;
+            _complete = true;
+        }
+        Ok(())
+    }
+
+    /// Simulate a full season of matchups
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::league::season::LeagueSeason;
+    /// use fbsim_core::league::season::team::LeagueSeasonTeam;
+    ///
+    /// // Create a new season
+    /// let mut my_league_season = LeagueSeason::new();
+    ///
+    /// // Add 4 teams to the season
+    /// my_league_season.add_team(0, LeagueSeasonTeam::new());
+    /// my_league_season.add_team(1, LeagueSeasonTeam::new());
+    /// my_league_season.add_team(2, LeagueSeasonTeam::new());
+    /// my_league_season.add_team(3, LeagueSeasonTeam::new());
+    ///
+    /// // Generate the season schedule
+    /// my_league_season.generate_schedule();
+    ///
+    /// // Simulate the entire season
+    /// let mut rng = rand::thread_rng();
+    /// my_league_season.sim(&mut rng);
+    /// ```
+    pub fn sim(&mut self, rng: &mut impl Rng) -> Result<(), String> {
+        for i in 0..self.weeks.len() {
+            match self.sim_week(i, rng) {
+                Ok(()) => (),
+                Err(error) => return Err(
+                    format!(
+                        "Failed to simulate season {} week {}: {}",
+                        self.year,
+                        i, error
+                    )
+                ),
+            }
         }
         Ok(())
     }
