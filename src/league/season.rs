@@ -6,6 +6,7 @@ use std::collections::BTreeMap;
 
 use crate::league::season::team::LeagueSeasonTeam;
 use crate::league::season::week::LeagueSeasonWeek;
+use crate::league::season::matchup::LeagueSeasonMatchup;
 
 use chrono::Datelike;
 use serde::{Serialize, Deserialize, Deserializer};
@@ -243,6 +244,32 @@ impl LeagueSeason {
         self.teams.get_mut(&id)
     }
 
+    /// Borrow the weeks of the season
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::league::season::LeagueSeason;
+    ///
+    /// let my_league_season = LeagueSeason::new();
+    /// let my_season_weeks = my_league_season.weeks();
+    /// ```
+    pub fn weeks(&self) -> &Vec<LeagueSeasonWeek> {
+        &self.weeks
+    }
+
+    /// Mutably borrow the weeks of the season
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::league::season::LeagueSeason;
+    ///
+    /// let mut my_league_season = LeagueSeason::new();
+    /// let my_season_weeks = my_league_season.weeks_mut();
+    /// ```
+    pub fn weeks_mut(&mut self) -> &mut Vec<LeagueSeasonWeek> {
+        &mut self.weeks
+    }
+
     /// Borrow the value indicating whether the season has started
     ///
     /// ### Example
@@ -293,5 +320,106 @@ impl LeagueSeason {
     /// ```
     pub fn complete_mut(&mut self) -> &mut bool {
         &mut self.complete
+    }
+
+    /// Generate a schedule for the season
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::league::season::LeagueSeason;
+    /// use fbsim_core::league::season::team::LeagueSeasonTeam;
+    ///
+    /// // Create a new season
+    /// let mut my_league_season = LeagueSeason::new();
+    ///
+    /// // Add 4 teams to the season
+    /// let season_team_0 = LeagueSeasonTeam::new("My Team 0".to_string(), "".to_string(), 50, 50);
+    /// my_league_season.add_team(0, season_team_0);
+    /// let season_team_1 = LeagueSeasonTeam::new("My Team 1".to_string(), "".to_string(), 50, 50);
+    /// my_league_season.add_team(1, season_team_1);
+    /// let season_team_2 = LeagueSeasonTeam::new("My Team 2".to_string(), "".to_string(), 50, 50);
+    /// my_league_season.add_team(2, season_team_2);
+    /// let season_team_3 = LeagueSeasonTeam::new("My Team 3".to_string(), "".to_string(), 50, 50);
+    /// my_league_season.add_team(3, season_team_3);
+    ///
+    /// // Generate the season schedule
+    /// my_league_season.generate_schedule();
+    /// ```
+    pub fn generate_schedule(&mut self) -> Result<(), String> {
+        // Check whether there are at least 4 teams, an even number of teams
+        let num_teams = self.teams.len();
+        if num_teams < 4 {
+            return Err(
+                format!(
+                    "Less than 4 teams, not enough teams to generate a schedule: {}",
+                    num_teams
+                )
+            );
+        }
+        if num_teams % 2 != 0 {
+            return Err(
+                format!(
+                    "Odd number of teams, cannot generate a schedule: {}",
+                    num_teams
+                )
+            )
+        }
+
+        // Check to make sure the season has not already started or completed
+        if self.started || self.complete {
+            return Err(
+                "Season has already started, cannot re-generate schedule".to_string()
+            )
+        }
+
+        // TODO: Generate a random permutation of the season team IDs
+        // TODO: Optionally accept a seed to control the schedule permutation
+        let mut team_ids: Vec<usize> = self.teams.keys().cloned().collect();
+        
+        // TODO: Make number of weeks configurable
+        let num_weeks = num_teams * 2;
+
+        // Generate the round-robin schedule using the season team IDs
+        for week_index in 0..num_weeks {
+            // Create a new league season week
+            let mut week = LeagueSeasonWeek::new();
+
+            // TODO: Implement the ability to have bye weeks
+            let num_matchups = num_teams / 2;
+
+            // Create matchups for each pair of teams
+            for matchup_index in 0..num_matchups {
+                // Match up 0 : (n/2), 1 : (n/2)+1, ...
+                let home_id = match team_ids.get(matchup_index) {
+                    Some(id) => id,
+                    None => return Err(
+                        format!(
+                            "While generating week {} matchup {}, no such home team ID: {}",
+                            week_index,
+                            matchup_index,
+                            matchup_index
+                        )
+                    ),
+                };
+                let away_id = match team_ids.get(num_matchups + matchup_index) {
+                    Some(id) => id,
+                    None => return Err(
+                        format!(
+                            "While generating week {} matchup {}, no such away team ID: {}",
+                            week_index,
+                            matchup_index,
+                            num_matchups + matchup_index
+                        )
+                    ),
+                };
+                let matchup = LeagueSeasonMatchup::new(*home_id, *away_id);
+                week.matchups_mut().push(matchup);
+            }
+
+            // Rotate all but the first ID
+            team_ids.rotate_right(1);
+            team_ids.swap(0, 1);
+        }
+        Ok(())
     }
 }
