@@ -665,12 +665,9 @@ impl LeagueSeason {
         };
 
         // Update the status of the matchup
-        let mut _home_score = *_matchup_to_sim.home_score_mut();
-        let mut _away_score = *_matchup_to_sim.away_score_mut();
-        let mut _complete = *_matchup_to_sim.complete_mut();
-        _home_score = box_score.home_score() as usize;
-        _away_score = box_score.away_score() as usize;
-        _complete = true;
+        *_matchup_to_sim.home_score_mut() = box_score.home_score() as usize;
+        *_matchup_to_sim.away_score_mut() = box_score.away_score() as usize;
+        *_matchup_to_sim.complete_mut() = true;
         Ok(())
     }
 
@@ -750,12 +747,9 @@ impl LeagueSeason {
             };
 
             // Update the status of the matchup
-            let mut _home_score = *matchup.home_score_mut();
-            let mut _away_score = *matchup.away_score_mut();
-            let mut _complete = *matchup.complete_mut();
-            _home_score = box_score.home_score() as usize;
-            _away_score = box_score.away_score() as usize;
-            _complete = true;
+            *matchup.home_score_mut() = box_score.home_score() as usize;
+            *matchup.away_score_mut() = box_score.away_score() as usize;
+            *matchup.complete_mut() = true;
         }
         Ok(())
     }
