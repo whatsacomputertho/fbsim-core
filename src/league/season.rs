@@ -622,7 +622,7 @@ impl LeagueSeason {
         };
 
         // Ensure the matchup is not already complete
-        if !_matchup_to_sim.complete() {
+        if *_matchup_to_sim.complete() {
             return Err(format!("Season {} week {} matchup {} is already complete", self.year, week, matchup));
         }
 
@@ -706,9 +706,9 @@ impl LeagueSeason {
 
         // Loop through the week's matchups mutably
         for (i, matchup) in _week_to_sim.matchups_mut().iter_mut().enumerate() {
-            // Ensure the matchup is not already complete
-            if !matchup.complete() {
-                return Err(format!("Season {} week {} matchup {} is already complete", self.year, week, i));
+            // Skip matchups that have already been completed
+            if *matchup.complete() {
+                continue
             }
 
             // Try to get the home team for the matchup
