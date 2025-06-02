@@ -695,11 +695,32 @@ impl LeagueSeason {
     /// my_league_season.sim_week(0, &mut rng);
     /// ```
     pub fn sim_week(&mut self, week: usize, rng: &mut impl Rng) -> Result<(), String> {
+        // Check if the prior week is not complete
+        if week > 0 {
+            let prev_week = match self.weeks.get(week - 1) {
+                Some(w) => w,
+                None => return Err(format!("Failed to get previous week {} from season {}", week-1, self.year))
+            };
+            if !prev_week.complete() {
+                return Err(
+                    format!(
+                        "Cannot simulate week {} for season {}: previous week {} not complete",
+                        week, self.year, week-1
+                    )
+                );
+            }
+        }
+
         // Try to get the given week
         let mut _week_to_sim = match self.weeks.get_mut(week) {
             Some(w) => w,
             None => return Err(format!("No such week for season {}: {}", self.year, week)),
         };
+
+        // Check if the current week is complete
+        if _week_to_sim.complete() {
+            return Err(format!("Season {} week {} already completed", self.year, week));
+        }
 
         // Loop through the week's matchups mutably
         for (i, matchup) in _week_to_sim.matchups_mut().iter_mut().enumerate() {
@@ -779,6 +800,21 @@ impl LeagueSeason {
     /// ```
     pub fn sim(&mut self, rng: &mut impl Rng) -> Result<(), String> {
         for i in 0..self.weeks.len() {
+            // Skip weeks which have already completed
+            let week = match self.weeks.get(i) {
+                Some(w) => w,
+                None => return Err(
+                    format!(
+                        "Failed to simulate season {} week {}: {}",
+                        self.year, i, "No such week"
+                    )
+                ),
+            };
+            if week.complete() {
+                continue;
+            }
+
+            // Simulate the week
             match self.sim_week(i, rng) {
                 Ok(()) => (),
                 Err(error) => return Err(
