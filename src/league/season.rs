@@ -609,6 +609,22 @@ impl LeagueSeason {
     /// my_league_season.sim_matchup(0, 0, &mut rng);
     /// ```
     pub fn sim_matchup(&mut self, week: usize, matchup: usize, rng: &mut impl Rng) -> Result<(), String> {
+        // Check if the prior week is not complete
+        if week > 0 {
+            let prev_week = match self.weeks.get(week - 1) {
+                Some(w) => w,
+                None => return Err(format!("Failed to get previous week {} from season {}", week-1, self.year))
+            };
+            if !prev_week.complete() {
+                return Err(
+                    format!(
+                        "Cannot simulate week {} for season {}: previous week {} not complete",
+                        week, self.year, week-1
+                    )
+                );
+            }
+        }
+        
         // Try to get the given week
         let mut _week_to_sim = match self.weeks.get_mut(week) {
             Some(w) => w,
