@@ -12,6 +12,7 @@ use crate::team::FootballTeam;
 
 use chrono::Datelike;
 use rand::Rng;
+use rand::seq::SliceRandom;
 use serde::{Serialize, Deserialize, Deserializer};
 
 /// # `LeagueSeasonRaw` struct
@@ -100,6 +101,31 @@ impl LeagueSeasonRaw {
     /// let valid_res = raw_league_season.validate();
     /// ```
     pub fn validate(&self) -> Result<(), String> {
+        // If a schedule has been generated
+        let num_weeks = self.weeks.len();
+        if num_weeks > 0 {
+            let num_teams = self.teams.len();
+            
+            // Check whether the number of games is between the prescribed min and max
+            let max_num_weeks = num_teams * 3;
+            if num_weeks > max_num_weeks {
+                return Err(
+                    format!(
+                        "Schedule can involve teams playing each other team at most 3 times ({} games): {} given",
+                        max_num_weeks, num_weeks
+                    )
+                )
+            }
+            if num_weeks < num_teams {
+                return Err(
+                    format!(
+                        "Schedule must involve teams playing each other team at least 1 time ({} games): {} given",
+                        num_teams, num_weeks
+                    )
+                )
+            }
+        }
+
         // Ensure if the season is started or complete that there are an even
         // number of teams greater than 4
         if self.started() {
@@ -125,7 +151,6 @@ impl LeagueSeasonRaw {
         }
 
         // Validate the season weeks
-        // TODO: Add validation checking whether later weeks have been simulated before earlier weeks
         let mut prev_started: bool = false;
         let mut prev_completed: bool = false;
         for (i, week) in self.weeks.iter().enumerate() {
@@ -490,9 +515,10 @@ impl LeagueSeason {
     /// my_league_season.add_team(3, LeagueSeasonTeam::new());
     ///
     /// // Generate the season schedule
-    /// my_league_season.generate_schedule();
+    /// let mut rng = rand::thread_rng();
+    /// my_league_season.generate_schedule(None, &mut rng);
     /// ```
-    pub fn generate_schedule(&mut self) -> Result<(), String> {
+    pub fn generate_schedule(&mut self, weeks: Option<usize>, rng: &mut impl Rng) -> Result<(), String> {
         // Check whether there are at least 4 teams, an even number of teams
         let num_teams = self.teams.len();
         if num_teams < 4 {
@@ -512,6 +538,29 @@ impl LeagueSeason {
             )
         }
 
+        // Check whether the number of games is between the prescribed min and max
+        let num_weeks = match weeks {
+            Some(weeks) => weeks,
+            None => num_teams * 2,
+        };
+        let max_num_weeks = num_teams * 3;
+        if num_weeks > max_num_weeks {
+            return Err(
+                format!(
+                    "Schedule can involve teams playing each other team at most 3 times ({} games): {} given",
+                    max_num_weeks, num_weeks
+                )
+            )
+        }
+        if num_weeks < num_teams {
+            return Err(
+                format!(
+                    "Schedule must involve teams playing each other team at least 1 time ({} games): {} given",
+                    num_teams, num_weeks
+                )
+            )
+        }
+
         // Check to make sure the season has not already started
         if self.started() {
             return Err(
@@ -524,12 +573,9 @@ impl LeagueSeason {
             self.weeks.clear()
         }
 
-        // TODO: Generate a random permutation of the season team IDs
-        // TODO: Optionally accept a seed to control the schedule permutation
+        // Generate the vec of team IDs and randomly permute it for a unique schedule
         let mut team_ids: Vec<usize> = self.teams.keys().cloned().collect();
-        
-        // TODO: Make number of weeks configurable
-        let num_weeks = num_teams * 2;
+        team_ids.shuffle(rng); // Generate a random permutation of the season team IDs
 
         // Generate the round-robin schedule using the season team IDs
         for week_index in 0..num_weeks {
@@ -602,10 +648,10 @@ impl LeagueSeason {
     /// my_league_season.add_team(3, LeagueSeasonTeam::new());
     ///
     /// // Generate the season schedule
-    /// my_league_season.generate_schedule();
+    /// let mut rng = rand::thread_rng();
+    /// my_league_season.generate_schedule(None, &mut rng);
     ///
     /// // Simulate the first game of the first week
-    /// let mut rng = rand::thread_rng();
     /// my_league_season.sim_matchup(0, 0, &mut rng);
     /// ```
     pub fn sim_matchup(&mut self, week: usize, matchup: usize, rng: &mut impl Rng) -> Result<(), String> {
@@ -704,10 +750,10 @@ impl LeagueSeason {
     /// my_league_season.add_team(3, LeagueSeasonTeam::new());
     ///
     /// // Generate the season schedule
-    /// my_league_season.generate_schedule();
+    /// let mut rng = rand::thread_rng();
+    /// my_league_season.generate_schedule(None, &mut rng);
     ///
     /// // Simulate the first week of the season
-    /// let mut rng = rand::thread_rng();
     /// my_league_season.sim_week(0, &mut rng);
     /// ```
     pub fn sim_week(&mut self, week: usize, rng: &mut impl Rng) -> Result<(), String> {
@@ -808,10 +854,10 @@ impl LeagueSeason {
     /// my_league_season.add_team(3, LeagueSeasonTeam::new());
     ///
     /// // Generate the season schedule
-    /// my_league_season.generate_schedule();
+    /// let mut rng = rand::thread_rng();
+    /// my_league_season.generate_schedule(None, &mut rng);
     ///
     /// // Simulate the entire season
-    /// let mut rng = rand::thread_rng();
     /// my_league_season.sim(&mut rng);
     /// ```
     pub fn sim(&mut self, rng: &mut impl Rng) -> Result<(), String> {
