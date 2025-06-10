@@ -378,12 +378,13 @@ impl League {
     /// my_league.add_season_team(3, LeagueSeasonTeam::new());
     ///
     /// // Generate the season schedule
-    /// my_league.generate_schedule();
+    /// let mut rng = rand::thread_rng();
+    /// my_league.generate_schedule(None, &mut rng);
     /// ```
-    pub fn generate_schedule(&mut self) -> Result<(), String> {
+    pub fn generate_schedule(&mut self, weeks: Option<usize>, rng: &mut impl Rng) -> Result<(), String> {
         // Generate a schedule for the current season if it exists
         match &mut self.current_season {
-            Some(ref mut season) => season.generate_schedule(), // Return the result
+            Some(ref mut season) => season.generate_schedule(weeks, rng), // Return the result
             None => Err("No current season to simulate".to_string()),
         }
     }
@@ -414,10 +415,10 @@ impl League {
     /// my_league.add_season_team(3, LeagueSeasonTeam::new());
     ///
     /// // Generate the season schedule
-    /// my_league.generate_schedule();
+    /// let mut rng = rand::thread_rng();
+    /// my_league.generate_schedule(None, &mut rng);
     ///
     /// // Simulate the season
-    /// let mut rng = rand::thread_rng();
     /// my_league.sim(&mut rng);
     /// ```
     pub fn sim(&mut self, rng: &mut impl Rng) -> Result<(), String> {
@@ -454,10 +455,10 @@ impl League {
     /// my_league.add_season_team(3, LeagueSeasonTeam::new());
     ///
     /// // Generate the season schedule
-    /// my_league.generate_schedule();
+    /// let mut rng = rand::thread_rng();
+    /// my_league.generate_schedule(None, &mut rng);
     ///
     /// // Simulate the first week of the season
-    /// let mut rng = rand::thread_rng();
     /// my_league.sim_week(0, &mut rng);
     /// ```
     pub fn sim_week(&mut self, week: usize, rng: &mut impl Rng) -> Result<(), String> {
@@ -494,10 +495,10 @@ impl League {
     /// my_league.add_season_team(3, LeagueSeasonTeam::new());
     ///
     /// // Generate the season schedule
-    /// my_league.generate_schedule();
+    /// let mut rng = rand::thread_rng();
+    /// my_league.generate_schedule(None, &mut rng);
     ///
     /// // Simulate the first week of the season
-    /// let mut rng = rand::thread_rng();
     /// my_league.sim_week(0, &mut rng);
     /// ```
     pub fn sim_matchup(&mut self, week: usize, matchup: usize, rng: &mut impl Rng) -> Result<(), String> {
