@@ -107,7 +107,7 @@ impl LeagueSeasonRaw {
             let num_teams = self.teams.len();
             
             // Check whether the number of games is between the prescribed min and max
-            let max_num_weeks = num_teams * 3;
+            let max_num_weeks = (num_teams - 1) * 3;
             if num_weeks > max_num_weeks {
                 return Err(
                     format!(
@@ -541,9 +541,9 @@ impl LeagueSeason {
         // Check whether the number of games is between the prescribed min and max
         let num_weeks = match weeks {
             Some(weeks) => weeks,
-            None => num_teams * 2,
+            None => (num_teams - 1) * 2,
         };
-        let max_num_weeks = num_teams * 3;
+        let max_num_weeks = (num_teams - 1) * 3;
         if num_weeks > max_num_weeks {
             return Err(
                 format!(
@@ -552,7 +552,7 @@ impl LeagueSeason {
                 )
             )
         }
-        if num_weeks < num_teams {
+        if num_weeks < (num_teams - 1) {
             return Err(
                 format!(
                     "Schedule must involve teams playing each other team at least 1 time ({} games): {} given",
@@ -889,5 +889,69 @@ impl LeagueSeason {
             }
         }
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_schedule_gen() {
+        // Create a new season
+        let mut my_league_season = LeagueSeason::new();
+    
+        // Add some teams to the season
+        let _ = my_league_season.add_team(0, LeagueSeasonTeam::new());
+        let _ = my_league_season.add_team(1, LeagueSeasonTeam::new());
+        let _ = my_league_season.add_team(2, LeagueSeasonTeam::new());
+        let _ = my_league_season.add_team(3, LeagueSeasonTeam::new());
+        let _ = my_league_season.add_team(4, LeagueSeasonTeam::new());
+        let _ = my_league_season.add_team(5, LeagueSeasonTeam::new());
+        
+        // Generate the season schedule
+        let mut rng = rand::thread_rng();
+        let _ = my_league_season.generate_schedule(None, &mut rng);
+
+        // Validate the schedule
+        // Map team IDs to a tuple of usizes which represent:
+        // Home games, away games, consecutive away games
+        let mut home_away: BTreeMap<usize, (usize, usize, usize)> = BTreeMap::new();
+        for (id, _) in my_league_season.teams().iter() {
+            home_away.insert(*id, (0, 0, 0));
+        }
+        for week in my_league_season.weeks() {
+            // Loop through the week's matchups
+            for matchup in week.matchups().iter() {
+                let home_id = matchup.home_team();
+                let away_id = matchup.away_team();
+
+                // Tally home games, away games, consecutive away games
+                home_away.entry(*home_id)
+                    .and_modify(|(home, _, cons_away)| {
+                        *home += 1;
+                        *cons_away = 0;
+                    });
+                home_away.entry(*away_id)
+                    .and_modify(|(_, away, cons_away)| {
+                        *away += 1;
+                        *cons_away = 0;
+                    });
+
+                // Assert that no team plays three away games in a row
+                match home_away.get(away_id) {
+                    Some(entry) => {
+                        let (_, _, cons_away) = entry;
+                        assert!(*cons_away < 3);
+                    },
+                    None => ()
+                }
+            }
+        }
+
+        // Assert that each team plays an equal number of home and away games
+        for (_, (home, away, _)) in home_away.iter() {
+            assert!(home == away);
+        }
     }
 }
