@@ -233,6 +233,35 @@ impl LeagueSeasonRaw {
     }
 }
 
+/// # `LeagueSeasonScheduleOptions` struct
+///
+/// A `LeagueSeasonScheduleOptions` represents a collection of options used
+/// to generate a season schedule
+#[derive(Clone, Eq, PartialEq, Ord, PartialOrd, Debug, Serialize, Deserialize)]
+pub struct LeagueSeasonScheduleOptions {
+    pub weeks: Option<usize>,
+    pub shift: Option<usize>,
+    pub permute: Option<bool>
+}
+
+impl LeagueSeasonScheduleOptions {
+    /// Constructor for the `LeagueSeasonScheduleOptions` struct with defaults
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::league::season::LeagueSeasonScheduleOptions;
+    ///
+    /// let my_schedule_options = LeagueSeasonScheduleOptions::new();
+    /// ```
+    pub fn new() -> LeagueSeasonScheduleOptions {
+        LeagueSeasonScheduleOptions{
+            weeks: None,
+            shift: None,
+            permute: None
+        }
+    }
+}
+
 /// # `LeagueSeason` struct
 ///
 /// A `LeagueSeason` represents a season of a football league.
@@ -503,6 +532,7 @@ impl LeagueSeason {
     /// ### Example
     /// ```
     /// use fbsim_core::league::season::LeagueSeason;
+    /// use fbsim_core::league::season::LeagueSeasonScheduleOptions;
     /// use fbsim_core::league::season::team::LeagueSeasonTeam;
     ///
     /// // Create a new season
@@ -516,9 +546,9 @@ impl LeagueSeason {
     ///
     /// // Generate the season schedule
     /// let mut rng = rand::thread_rng();
-    /// my_league_season.generate_schedule(None, &mut rng);
+    /// my_league_season.generate_schedule(LeagueSeasonScheduleOptions::new(), &mut rng);
     /// ```
-    pub fn generate_schedule(&mut self, weeks: Option<usize>, rng: &mut impl Rng) -> Result<(), String> {
+    pub fn generate_schedule(&mut self, options: LeagueSeasonScheduleOptions, rng: &mut impl Rng) -> Result<(), String> {
         // Check whether there are at least 4 teams, an even number of teams
         let num_teams = self.teams.len();
         if num_teams < 4 {
@@ -538,8 +568,8 @@ impl LeagueSeason {
             )
         }
 
-        // Check whether the number of games is between the prescribed min and max
-        let num_weeks = match weeks {
+        // Check whether the number of weeks is between the prescribed min and max
+        let num_weeks = match options.weeks {
             Some(weeks) => weeks,
             None => (num_teams - 1) * 2,
         };
@@ -560,6 +590,23 @@ impl LeagueSeason {
                 )
             )
         }
+
+        // Get the shift option value, error if it is invalid
+        let shift = match options.shift {
+            Some(s) => {
+                if s > num_weeks {
+                    return Err(
+                        format!(
+                            "Shift ({}) must be less than the number of weeks ({})",
+                            s, num_weeks
+                        )
+                    )
+                } else {
+                    s
+                }
+            },
+            None => 0
+        };
 
         // Check to make sure the season has not already started
         if self.started() {
@@ -628,6 +675,19 @@ impl LeagueSeason {
             }
             team_ids.rotate_right(num_matchups);
         }
+
+        // If desired, shift the weeks of the season
+        if shift > 0 {
+            self.weeks.rotate_right(shift);
+        }
+
+        // If desired, randomly permute the weeks of the season
+        if let Some(permute) = options.permute {
+            if permute {
+                self.weeks.shuffle(rng);
+            }
+        }
+
         Ok(())
     }
 
@@ -636,6 +696,7 @@ impl LeagueSeason {
     /// ### Example
     /// ```
     /// use fbsim_core::league::season::LeagueSeason;
+    /// use fbsim_core::league::season::LeagueSeasonScheduleOptions;
     /// use fbsim_core::league::season::team::LeagueSeasonTeam;
     ///
     /// // Create a new season
@@ -649,7 +710,7 @@ impl LeagueSeason {
     ///
     /// // Generate the season schedule
     /// let mut rng = rand::thread_rng();
-    /// my_league_season.generate_schedule(None, &mut rng);
+    /// my_league_season.generate_schedule(LeagueSeasonScheduleOptions::new(), &mut rng);
     ///
     /// // Simulate the first game of the first week
     /// my_league_season.sim_matchup(0, 0, &mut rng);
@@ -738,6 +799,7 @@ impl LeagueSeason {
     /// ### Example
     /// ```
     /// use fbsim_core::league::season::LeagueSeason;
+    /// use fbsim_core::league::season::LeagueSeasonScheduleOptions;
     /// use fbsim_core::league::season::team::LeagueSeasonTeam;
     ///
     /// // Create a new season
@@ -751,7 +813,7 @@ impl LeagueSeason {
     ///
     /// // Generate the season schedule
     /// let mut rng = rand::thread_rng();
-    /// my_league_season.generate_schedule(None, &mut rng);
+    /// my_league_season.generate_schedule(LeagueSeasonScheduleOptions::new(), &mut rng);
     ///
     /// // Simulate the first week of the season
     /// my_league_season.sim_week(0, &mut rng);
@@ -842,6 +904,7 @@ impl LeagueSeason {
     /// ### Example
     /// ```
     /// use fbsim_core::league::season::LeagueSeason;
+    /// use fbsim_core::league::season::LeagueSeasonScheduleOptions;
     /// use fbsim_core::league::season::team::LeagueSeasonTeam;
     ///
     /// // Create a new season
@@ -855,7 +918,7 @@ impl LeagueSeason {
     ///
     /// // Generate the season schedule
     /// let mut rng = rand::thread_rng();
-    /// my_league_season.generate_schedule(None, &mut rng);
+    /// my_league_season.generate_schedule(LeagueSeasonScheduleOptions::new(), &mut rng);
     ///
     /// // Simulate the entire season
     /// my_league_season.sim(&mut rng);
@@ -911,7 +974,10 @@ mod tests {
         
         // Generate the season schedule
         let mut rng = rand::thread_rng();
-        let _ = my_league_season.generate_schedule(None, &mut rng);
+        let _ = my_league_season.generate_schedule(
+            LeagueSeasonScheduleOptions::new(),
+            &mut rng
+        );
 
         // Validate the schedule
         // Map team IDs to a tuple of usizes which represent:

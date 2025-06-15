@@ -2,7 +2,7 @@ pub mod season;
 pub mod team;
 
 use crate::league::team::LeagueTeam;
-use crate::league::season::LeagueSeason;
+use crate::league::season::{LeagueSeason, LeagueSeasonScheduleOptions};
 use crate::league::season::team::LeagueSeasonTeam;
 
 use std::collections::BTreeMap;
@@ -357,6 +357,7 @@ impl League {
     /// ### Example
     /// ```
     /// use fbsim_core::league::League;
+    /// use fbsim_core::league::season::LeagueSeasonScheduleOptions;
     /// use fbsim_core::league::season::team::LeagueSeasonTeam;
     ///
     /// // Instantiate a new League
@@ -379,12 +380,12 @@ impl League {
     ///
     /// // Generate the season schedule
     /// let mut rng = rand::thread_rng();
-    /// my_league.generate_schedule(None, &mut rng);
+    /// my_league.generate_schedule(LeagueSeasonScheduleOptions::new(), &mut rng);
     /// ```
-    pub fn generate_schedule(&mut self, weeks: Option<usize>, rng: &mut impl Rng) -> Result<(), String> {
+    pub fn generate_schedule(&mut self, options: LeagueSeasonScheduleOptions, rng: &mut impl Rng) -> Result<(), String> {
         // Generate a schedule for the current season if it exists
         match &mut self.current_season {
-            Some(ref mut season) => season.generate_schedule(weeks, rng), // Return the result
+            Some(ref mut season) => season.generate_schedule(options, rng), // Return the result
             None => Err("No current season to simulate".to_string()),
         }
     }
@@ -394,6 +395,7 @@ impl League {
     /// ### Example
     /// ```
     /// use fbsim_core::league::League;
+    /// use fbsim_core::league::season::LeagueSeasonScheduleOptions;
     /// use fbsim_core::league::season::team::LeagueSeasonTeam;
     ///
     /// // Instantiate a new League
@@ -416,7 +418,7 @@ impl League {
     ///
     /// // Generate the season schedule
     /// let mut rng = rand::thread_rng();
-    /// my_league.generate_schedule(None, &mut rng);
+    /// my_league.generate_schedule(LeagueSeasonScheduleOptions::new(), &mut rng);
     ///
     /// // Simulate the season
     /// my_league.sim(&mut rng);
@@ -434,6 +436,7 @@ impl League {
     /// ### Example
     /// ```
     /// use fbsim_core::league::League;
+    /// use fbsim_core::league::season::LeagueSeasonScheduleOptions;
     /// use fbsim_core::league::season::team::LeagueSeasonTeam;
     ///
     /// // Instantiate a new League
@@ -456,7 +459,7 @@ impl League {
     ///
     /// // Generate the season schedule
     /// let mut rng = rand::thread_rng();
-    /// my_league.generate_schedule(None, &mut rng);
+    /// my_league.generate_schedule(LeagueSeasonScheduleOptions::new(), &mut rng);
     ///
     /// // Simulate the first week of the season
     /// my_league.sim_week(0, &mut rng);
@@ -474,6 +477,7 @@ impl League {
     /// ### Example
     /// ```
     /// use fbsim_core::league::League;
+    /// use fbsim_core::league::season::LeagueSeasonScheduleOptions;
     /// use fbsim_core::league::season::team::LeagueSeasonTeam;
     ///
     /// // Instantiate a new League
@@ -496,7 +500,7 @@ impl League {
     ///
     /// // Generate the season schedule
     /// let mut rng = rand::thread_rng();
-    /// my_league.generate_schedule(None, &mut rng);
+    /// my_league.generate_schedule(LeagueSeasonScheduleOptions::new(), &mut rng);
     ///
     /// // Simulate the first week of the season
     /// my_league.sim_week(0, &mut rng);
