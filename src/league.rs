@@ -1,6 +1,8 @@
+pub mod matchups;
 pub mod season;
 pub mod team;
 
+use crate::league::matchups::LeagueMatchups;
 use crate::league::team::LeagueTeam;
 use crate::league::season::{LeagueSeason, LeagueSeasonScheduleOptions};
 use crate::league::season::team::LeagueSeasonTeam;
@@ -511,5 +513,142 @@ impl League {
             Some(ref mut season) => season.sim_matchup(week, matchup, rng),
             None => Err("No current season to simulate".to_string()),
         }
+    }
+
+    /// Get all matchups involving a team for a given season
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::league::League;
+    /// use fbsim_core::league::matchups::LeagueMatchups;
+    /// use fbsim_core::league::season::LeagueSeasonScheduleOptions;
+    /// use fbsim_core::league::season::team::LeagueSeasonTeam;
+    ///
+    /// // Instantiate a new League
+    /// let mut my_league = League::new();
+    ///
+    /// // Add 4 new teams to the new league
+    /// my_league.add_team();
+    /// my_league.add_team();
+    /// my_league.add_team();
+    /// my_league.add_team();
+    ///
+    /// // Create a new season for the new League
+    /// let res = my_league.add_season();
+    ///
+    /// // Add 4 new season teams to the new season
+    /// my_league.add_season_team(0, LeagueSeasonTeam::new());
+    /// my_league.add_season_team(1, LeagueSeasonTeam::new());
+    /// my_league.add_season_team(2, LeagueSeasonTeam::new());
+    /// my_league.add_season_team(3, LeagueSeasonTeam::new());
+    ///
+    /// // Generate the season schedule
+    /// let mut rng = rand::thread_rng();
+    /// my_league.generate_schedule(LeagueSeasonScheduleOptions::new(), &mut rng);
+    ///
+    /// // Simulate the season
+    /// my_league.sim(&mut rng);
+    ///
+    /// // Get the season matchups for team 0
+    /// let matchups: LeagueMatchups = my_league.team_season_matchups(0, 2025).unwrap();
+    /// ```
+    pub fn team_season_matchups(&self, id: usize, year: usize) -> Result<LeagueMatchups, String> {
+        // Ensure the team ID exists
+        let _team = match self.team(id) {
+            Some(t) => t,
+            None => return Err(
+                format!(
+                    "No team found with id {}",
+                    id
+                )
+            )
+        };
+
+        // Get the season identified by the given year
+        let season = match self.season(year) {
+            Some(s) => s,
+            None => return Err(
+                format!(
+                    "No season found with year {}",
+                    year
+                )
+            )
+        };
+
+        // Get the matchups involving the given team for that season
+        season.team_matchups(id)
+    }
+
+    /// Get all matchups involving a team over all seasons
+    ///
+    /// ### Example
+    /// ```
+    /// use std::collections::BTreeMap;
+    /// use fbsim_core::league::League;
+    /// use fbsim_core::league::matchups::LeagueMatchups;
+    /// use fbsim_core::league::season::LeagueSeasonScheduleOptions;
+    /// use fbsim_core::league::season::team::LeagueSeasonTeam;
+    ///
+    /// // Instantiate a new League
+    /// let mut my_league = League::new();
+    ///
+    /// // Add 4 new teams to the new league
+    /// my_league.add_team();
+    /// my_league.add_team();
+    /// my_league.add_team();
+    /// my_league.add_team();
+    ///
+    /// // Create a new season for the new League
+    /// let res = my_league.add_season();
+    ///
+    /// // Add 4 new season teams to the new season
+    /// my_league.add_season_team(0, LeagueSeasonTeam::new());
+    /// my_league.add_season_team(1, LeagueSeasonTeam::new());
+    /// my_league.add_season_team(2, LeagueSeasonTeam::new());
+    /// my_league.add_season_team(3, LeagueSeasonTeam::new());
+    ///
+    /// // Generate the season schedule
+    /// let mut rng = rand::thread_rng();
+    /// my_league.generate_schedule(LeagueSeasonScheduleOptions::new(), &mut rng);
+    ///
+    /// // Simulate the season
+    /// my_league.sim(&mut rng);
+    ///
+    /// // Get the season matchups for team 0
+    /// let matchups: BTreeMap<usize, LeagueMatchups> = my_league.team_matchups(0);
+    /// ```
+    pub fn team_matchups(&self, id: usize) -> BTreeMap<usize, LeagueMatchups> {
+        // Initialize a map of all of the team's season matchups
+        let mut matchups: BTreeMap<usize, LeagueMatchups> = BTreeMap::new();
+
+        // For the current season, get the team's season matchups
+        match self.current_season() {
+            Some(s) => {
+                let res = s.team_matchups(id);
+                match res {
+                    Ok(m) => {
+                        matchups.insert(*s.year(), m);
+                        ()
+                    },
+                    Err(_) => ()
+                };
+            },
+            None => ()
+        }
+
+        // For each previous season, get the team's season matchups
+        for season in self.seasons().iter() {
+            let res = season.team_matchups(id);
+            match res {
+                Ok(m) => {
+                    matchups.insert(*season.year(), m);
+                    ()
+                },
+                Err(_) => ()
+            }
+        }
+
+        // Return the map of matchups
+        matchups
     }
 }

@@ -6,6 +6,15 @@ use serde::{Serialize, Deserialize};
 
 use crate::team::FootballTeam;
 
+/// # `FootballMatchupResult` enum
+///
+/// Represents a result (win, loss, tie) of a football game
+pub enum FootballMatchupResult {
+    Win,
+    Loss,
+    Tie,
+}
+
 /// # `FootballMatchup` struct
 ///
 /// A FootballMatchup represents a matchup between a home and away team

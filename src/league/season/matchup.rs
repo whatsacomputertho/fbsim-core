@@ -1,5 +1,7 @@
 use serde::{Serialize, Deserialize};
 
+use crate::matchup::FootballMatchupResult;
+
 /// # `LeagueSeasonMatchup` struct
 ///
 /// A `LeagueSeasonMatchup` represents a matchup during a week of a football season
@@ -134,5 +136,76 @@ impl LeagueSeasonMatchup {
     /// ```
     pub fn complete_mut(&mut self) -> &mut bool {
         &mut self.complete
+    }
+
+    /// Determine whether the given team participated in the matchup
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::league::season::matchup::LeagueSeasonMatchup;
+    ///
+    /// let mut my_matchup = LeagueSeasonMatchup::new(0, 1);
+    /// assert!(my_matchup.participated(0));
+    /// assert!(!my_matchup.participated(2));
+    /// ```
+    pub fn participated(&self, id: usize) -> bool {
+        if id == self.home_team || id == self.away_team {
+            return true;
+        }
+        false
+    }
+
+    /// Determine whether the given team was the home team in the matchup
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::league::season::matchup::LeagueSeasonMatchup;
+    ///
+    /// let mut my_matchup = LeagueSeasonMatchup::new(0, 1);
+    /// assert!(my_matchup.is_home_team(0));
+    /// assert!(!my_matchup.is_home_team(1));
+    /// assert!(!my_matchup.is_home_team(2));
+    /// ```
+    pub fn is_home_team(&self, id: usize) -> bool {
+        if id == self.home_team {
+            return true;
+        }
+        false
+    }
+
+    /// Determine whether the given team won, lost, or tied
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::league::season::matchup::LeagueSeasonMatchup;
+    ///
+    /// let mut my_matchup = LeagueSeasonMatchup::new(0, 1);
+    /// let res = my_matchup.result(0);
+    /// assert!(res.is_none());
+    /// ```
+    pub fn result(&self, id: usize) -> Option<FootballMatchupResult> {
+        // If the team did not participate or the game is not complete
+        // Then it has no result
+        if !(self.complete && self.participated(id)) {
+            return None;
+        }
+
+        // Calculate and return the result
+        if self.home_score == self.away_score {
+            return Some(FootballMatchupResult::Tie);
+        }
+        if self.is_home_team(id) {
+            if self.home_score > self.away_score {
+                return Some(FootballMatchupResult::Win);
+            } else {
+                return Some(FootballMatchupResult::Loss);
+            }
+        } else {
+            if self.home_score > self.away_score {
+                return Some(FootballMatchupResult::Loss);
+            } else {
+                return Some(FootballMatchupResult::Win);
+            }
+        }
     }
 }
