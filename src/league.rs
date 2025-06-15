@@ -1,10 +1,11 @@
-pub mod matchups;
+pub mod matchup;
 pub mod season;
 pub mod team;
 
-use crate::league::matchups::LeagueMatchups;
+use crate::league::matchup::LeagueMatchups;
 use crate::league::team::LeagueTeam;
 use crate::league::season::{LeagueSeason, LeagueSeasonScheduleOptions};
+use crate::league::season::matchup::LeagueSeasonMatchups;
 use crate::league::season::team::LeagueSeasonTeam;
 
 use std::collections::BTreeMap;
@@ -520,8 +521,8 @@ impl League {
     /// ### Example
     /// ```
     /// use fbsim_core::league::League;
-    /// use fbsim_core::league::matchups::LeagueMatchups;
     /// use fbsim_core::league::season::LeagueSeasonScheduleOptions;
+    /// use fbsim_core::league::season::matchup::LeagueSeasonMatchups;
     /// use fbsim_core::league::season::team::LeagueSeasonTeam;
     ///
     /// // Instantiate a new League
@@ -550,9 +551,9 @@ impl League {
     /// my_league.sim(&mut rng);
     ///
     /// // Get the season matchups for team 0
-    /// let matchups: LeagueMatchups = my_league.team_season_matchups(0, 2025).unwrap();
+    /// let matchups: LeagueSeasonMatchups = my_league.team_season_matchups(0, 2025).unwrap();
     /// ```
-    pub fn team_season_matchups(&self, id: usize, year: usize) -> Result<LeagueMatchups, String> {
+    pub fn team_season_matchups(&self, id: usize, year: usize) -> Result<LeagueSeasonMatchups, String> {
         // Ensure the team ID exists
         let _team = match self.team(id) {
             Some(t) => t,
@@ -585,7 +586,7 @@ impl League {
     /// ```
     /// use std::collections::BTreeMap;
     /// use fbsim_core::league::League;
-    /// use fbsim_core::league::matchups::LeagueMatchups;
+    /// use fbsim_core::league::matchup::LeagueMatchups;
     /// use fbsim_core::league::season::LeagueSeasonScheduleOptions;
     /// use fbsim_core::league::season::team::LeagueSeasonTeam;
     ///
@@ -615,11 +616,11 @@ impl League {
     /// my_league.sim(&mut rng);
     ///
     /// // Get the season matchups for team 0
-    /// let matchups: BTreeMap<usize, LeagueMatchups> = my_league.team_matchups(0);
+    /// let matchups: LeagueMatchups = my_league.team_matchups(0);
     /// ```
-    pub fn team_matchups(&self, id: usize) -> BTreeMap<usize, LeagueMatchups> {
+    pub fn team_matchups(&self, id: usize) -> LeagueMatchups {
         // Initialize a map of all of the team's season matchups
-        let mut matchups: BTreeMap<usize, LeagueMatchups> = BTreeMap::new();
+        let mut matchups: BTreeMap<usize, LeagueSeasonMatchups> = BTreeMap::new();
 
         // For the current season, get the team's season matchups
         match self.current_season() {
@@ -648,7 +649,7 @@ impl League {
             }
         }
 
-        // Return the map of matchups
-        matchups
+        // Return the matchups as a LeagueMatchups struct
+        LeagueMatchups::new(matchups)
     }
 }

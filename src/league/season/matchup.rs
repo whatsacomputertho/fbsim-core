@@ -1,6 +1,7 @@
 use serde::{Serialize, Deserialize};
 
 use crate::matchup::FootballMatchupResult;
+use crate::league::matchup::LeagueTeamRecord;
 
 /// # `LeagueSeasonMatchup` struct
 ///
@@ -207,5 +208,76 @@ impl LeagueSeasonMatchup {
                 return Some(FootballMatchupResult::Win);
             }
         }
+    }
+}
+
+/// # `LeagueSeasonMatchups` struct
+///
+/// Represents a list of matchups for a given team during a given season
+#[derive(Clone, Eq, PartialEq, Ord, PartialOrd, Debug)]
+pub struct LeagueSeasonMatchups {
+    team_id: usize,
+    matchups: Vec<Option<LeagueSeasonMatchup>>
+}
+
+impl LeagueSeasonMatchups {
+    /// Instantiate a new LeagueSeasonMatchups struct
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::league::season::matchup::LeagueSeasonMatchups;
+    ///
+    /// let my_matchups = LeagueSeasonMatchups::new(0, Vec::new());
+    /// ```
+    pub fn new(team_id: usize, matchups: Vec<Option<LeagueSeasonMatchup>>) -> LeagueSeasonMatchups {
+        LeagueSeasonMatchups{
+            team_id: team_id,
+            matchups: matchups
+        }
+    }
+
+    /// Borrow the season matchups
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::league::season::matchup::LeagueSeasonMatchups;
+    /// 
+    /// let my_matchups = LeagueSeasonMatchups::new(0, Vec::new());
+    /// let matchups = my_matchups.matchups();
+    /// ```
+    pub fn matchups(&self) -> &Vec<Option<LeagueSeasonMatchup>> {
+        &self.matchups
+    }
+
+    /// Compute the team record
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::league::matchup::LeagueTeamRecord;
+    /// use fbsim_core::league::season::matchup::LeagueSeasonMatchups;
+    ///
+    /// let my_matchups = LeagueSeasonMatchups::new(0, Vec::new());
+    /// let record = my_matchups.record();
+    /// assert!(record == LeagueTeamRecord::new());
+    /// ```
+    pub fn record(&self) -> LeagueTeamRecord {
+        // Initialize a new LeagueTeamRecord
+        let mut record = LeagueTeamRecord::new();
+
+        // Loop through the matchups and increment the team record
+        for matchup in self.matchups.iter() {
+            match matchup {
+                Some(m) => match m.result(self.team_id) {
+                    Some(r) => match r {
+                        FootballMatchupResult::Win => record.increment_wins(1),
+                        FootballMatchupResult::Loss => record.increment_losses(1),
+                        FootballMatchupResult::Tie => record.increment_ties(1)
+                    },
+                    None => ()
+                },
+                None => ()
+            }
+        }
+        record
     }
 }

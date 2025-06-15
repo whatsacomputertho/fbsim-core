@@ -4,10 +4,9 @@ pub mod week;
 
 use std::collections::BTreeMap;
 
-use crate::league::matchups::LeagueMatchups;
 use crate::league::season::team::LeagueSeasonTeam;
 use crate::league::season::week::LeagueSeasonWeek;
-use crate::league::season::matchup::LeagueSeasonMatchup;
+use crate::league::season::matchup::{LeagueSeasonMatchup, LeagueSeasonMatchups};
 use crate::sim::BoxScoreSimulator;
 use crate::team::FootballTeam;
 
@@ -659,7 +658,7 @@ impl LeagueSeason {
                     ),
                 };
                 let matchup = LeagueSeasonMatchup::new(*home_id, *away_id);
-                week.matchups_mut().push(matchup);
+                week.matchups_mut().push(matchup.into());
             }
 
             // Add the week to the season
@@ -959,9 +958,9 @@ impl LeagueSeason {
     ///
     /// ### Example
     /// ```
-    /// use fbsim_core::league::matchups::LeagueMatchups;
     /// use fbsim_core::league::season::LeagueSeason;
     /// use fbsim_core::league::season::LeagueSeasonScheduleOptions;
+    /// use fbsim_core::league::season::matchup::LeagueSeasonMatchups;
     /// use fbsim_core::league::season::team::LeagueSeasonTeam;
     ///
     /// // Create a new season
@@ -981,9 +980,9 @@ impl LeagueSeason {
     /// my_league_season.sim(&mut rng);
     ///
     /// // Get the mathups for team 0
-    /// let matchups: LeagueMatchups = my_league_season.team_matchups(0).unwrap();
+    /// let matchups: LeagueSeasonMatchups = my_league_season.team_matchups(0).unwrap();
     /// ```
-    pub fn team_matchups(&self, id: usize) -> Result<LeagueMatchups, String> {
+    pub fn team_matchups(&self, id: usize) -> Result<LeagueSeasonMatchups, String> {
         // Ensure the given team ID exists
         let _team = match self.team(id) {
             Some(t) => t,
@@ -996,11 +995,11 @@ impl LeagueSeason {
         };
 
         // Construct the matchups vector
-        let mut matchups: Vec<Option<&LeagueSeasonMatchup>> = Vec::new();
+        let mut matchups: Vec<Option<LeagueSeasonMatchup>> = Vec::new();
         for week in self.weeks.iter() {
             matchups.push(week.team_matchup(id));
         }
-        Ok(LeagueMatchups::new(id, matchups))
+        Ok(LeagueSeasonMatchups::new(id, matchups))
     }
 }
 
