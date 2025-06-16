@@ -1,5 +1,8 @@
 use serde::{Serialize, Deserialize};
 
+use crate::matchup::FootballMatchupResult;
+use crate::league::matchup::LeagueTeamRecord;
+
 /// # `LeagueSeasonMatchup` struct
 ///
 /// A `LeagueSeasonMatchup` represents a matchup during a week of a football season
@@ -134,5 +137,147 @@ impl LeagueSeasonMatchup {
     /// ```
     pub fn complete_mut(&mut self) -> &mut bool {
         &mut self.complete
+    }
+
+    /// Determine whether the given team participated in the matchup
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::league::season::matchup::LeagueSeasonMatchup;
+    ///
+    /// let mut my_matchup = LeagueSeasonMatchup::new(0, 1);
+    /// assert!(my_matchup.participated(0));
+    /// assert!(!my_matchup.participated(2));
+    /// ```
+    pub fn participated(&self, id: usize) -> bool {
+        if id == self.home_team || id == self.away_team {
+            return true;
+        }
+        false
+    }
+
+    /// Determine whether the given team was the home team in the matchup
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::league::season::matchup::LeagueSeasonMatchup;
+    ///
+    /// let mut my_matchup = LeagueSeasonMatchup::new(0, 1);
+    /// assert!(my_matchup.is_home_team(0));
+    /// assert!(!my_matchup.is_home_team(1));
+    /// assert!(!my_matchup.is_home_team(2));
+    /// ```
+    pub fn is_home_team(&self, id: usize) -> bool {
+        if id == self.home_team {
+            return true;
+        }
+        false
+    }
+
+    /// Determine whether the given team won, lost, or tied
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::league::season::matchup::LeagueSeasonMatchup;
+    ///
+    /// let mut my_matchup = LeagueSeasonMatchup::new(0, 1);
+    /// let res = my_matchup.result(0);
+    /// assert!(res.is_none());
+    /// ```
+    pub fn result(&self, id: usize) -> Option<FootballMatchupResult> {
+        // If the team did not participate or the game is not complete
+        // Then it has no result
+        if !(self.complete && self.participated(id)) {
+            return None;
+        }
+
+        // Calculate and return the result
+        if self.home_score == self.away_score {
+            return Some(FootballMatchupResult::Tie);
+        }
+        if self.is_home_team(id) {
+            if self.home_score > self.away_score {
+                return Some(FootballMatchupResult::Win);
+            } else {
+                return Some(FootballMatchupResult::Loss);
+            }
+        } else {
+            if self.home_score > self.away_score {
+                return Some(FootballMatchupResult::Loss);
+            } else {
+                return Some(FootballMatchupResult::Win);
+            }
+        }
+    }
+}
+
+/// # `LeagueSeasonMatchups` struct
+///
+/// Represents a list of matchups for a given team during a given season
+#[derive(Clone, Eq, PartialEq, Ord, PartialOrd, Debug)]
+pub struct LeagueSeasonMatchups {
+    team_id: usize,
+    matchups: Vec<Option<LeagueSeasonMatchup>>
+}
+
+impl LeagueSeasonMatchups {
+    /// Instantiate a new LeagueSeasonMatchups struct
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::league::season::matchup::LeagueSeasonMatchups;
+    ///
+    /// let my_matchups = LeagueSeasonMatchups::new(0, Vec::new());
+    /// ```
+    pub fn new(team_id: usize, matchups: Vec<Option<LeagueSeasonMatchup>>) -> LeagueSeasonMatchups {
+        LeagueSeasonMatchups{
+            team_id: team_id,
+            matchups: matchups
+        }
+    }
+
+    /// Borrow the season matchups
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::league::season::matchup::LeagueSeasonMatchups;
+    /// 
+    /// let my_matchups = LeagueSeasonMatchups::new(0, Vec::new());
+    /// let matchups = my_matchups.matchups();
+    /// ```
+    pub fn matchups(&self) -> &Vec<Option<LeagueSeasonMatchup>> {
+        &self.matchups
+    }
+
+    /// Compute the team record
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::league::matchup::LeagueTeamRecord;
+    /// use fbsim_core::league::season::matchup::LeagueSeasonMatchups;
+    ///
+    /// let my_matchups = LeagueSeasonMatchups::new(0, Vec::new());
+    /// let record = my_matchups.record();
+    /// assert!(record == LeagueTeamRecord::new());
+    /// ```
+    pub fn record(&self) -> LeagueTeamRecord {
+        // Initialize a new LeagueTeamRecord
+        let mut record = LeagueTeamRecord::new();
+
+        // Loop through the matchups and increment the team record
+        for matchup in self.matchups.iter() {
+            match matchup {
+                Some(m) => match m.result(self.team_id) {
+                    Some(r) => match r {
+                        FootballMatchupResult::Win => record.increment_wins(1),
+                        FootballMatchupResult::Loss => record.increment_losses(1),
+                        FootballMatchupResult::Tie => record.increment_ties(1)
+                    },
+                    None => ()
+                },
+                None => ()
+            }
+        }
+        record
     }
 }
