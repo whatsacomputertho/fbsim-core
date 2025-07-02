@@ -99,4 +99,14 @@ impl LeagueSeasonWeek {
         }
         true
     }
+
+    /// Get a matchup involving a team
+    pub fn team_matchup(&self, id: usize) -> Option<LeagueSeasonMatchup> {
+        for matchup in self.matchups.iter() {
+            if matchup.participated(id) {
+                return Some(matchup.clone());
+            }
+        }
+        return None
+    }
 }

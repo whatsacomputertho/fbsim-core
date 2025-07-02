@@ -6,7 +6,7 @@ use std::collections::BTreeMap;
 
 use crate::league::season::team::LeagueSeasonTeam;
 use crate::league::season::week::LeagueSeasonWeek;
-use crate::league::season::matchup::LeagueSeasonMatchup;
+use crate::league::season::matchup::{LeagueSeasonMatchup, LeagueSeasonMatchups};
 use crate::sim::BoxScoreSimulator;
 use crate::team::FootballTeam;
 
@@ -658,7 +658,7 @@ impl LeagueSeason {
                     ),
                 };
                 let matchup = LeagueSeasonMatchup::new(*home_id, *away_id);
-                week.matchups_mut().push(matchup);
+                week.matchups_mut().push(matchup.into());
             }
 
             // Add the week to the season
@@ -952,6 +952,54 @@ impl LeagueSeason {
             }
         }
         Ok(())
+    }
+
+    /// Get all season matchups involving a team
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::league::season::LeagueSeason;
+    /// use fbsim_core::league::season::LeagueSeasonScheduleOptions;
+    /// use fbsim_core::league::season::matchup::LeagueSeasonMatchups;
+    /// use fbsim_core::league::season::team::LeagueSeasonTeam;
+    ///
+    /// // Create a new season
+    /// let mut my_league_season = LeagueSeason::new();
+    ///
+    /// // Add 4 teams to the season
+    /// my_league_season.add_team(0, LeagueSeasonTeam::new());
+    /// my_league_season.add_team(1, LeagueSeasonTeam::new());
+    /// my_league_season.add_team(2, LeagueSeasonTeam::new());
+    /// my_league_season.add_team(3, LeagueSeasonTeam::new());
+    ///
+    /// // Generate the season schedule
+    /// let mut rng = rand::thread_rng();
+    /// my_league_season.generate_schedule(LeagueSeasonScheduleOptions::new(), &mut rng);
+    ///
+    /// // Simulate the entire season
+    /// my_league_season.sim(&mut rng);
+    ///
+    /// // Get the mathups for team 0
+    /// let matchups: LeagueSeasonMatchups = my_league_season.team_matchups(0).unwrap();
+    /// ```
+    pub fn team_matchups(&self, id: usize) -> Result<LeagueSeasonMatchups, String> {
+        // Ensure the given team ID exists
+        let _team = match self.team(id) {
+            Some(t) => t,
+            None => return Err(
+                format!(
+                    "No team found with ID {} in season {}",
+                    id, self.year()
+                )
+            )
+        };
+
+        // Construct the matchups vector
+        let mut matchups: Vec<Option<LeagueSeasonMatchup>> = Vec::new();
+        for week in self.weeks.iter() {
+            matchups.push(week.team_matchup(id));
+        }
+        Ok(LeagueSeasonMatchups::new(id, matchups))
     }
 }
 
