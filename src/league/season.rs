@@ -10,6 +10,10 @@ use crate::league::season::matchup::{LeagueSeasonMatchup, LeagueSeasonMatchups};
 use crate::sim::BoxScoreSimulator;
 use crate::team::FootballTeam;
 
+#[cfg(feature = "rocket_okapi")]
+use rocket_okapi::okapi::schemars;
+#[cfg(feature = "rocket_okapi")]
+use rocket_okapi::okapi::schemars::JsonSchema;
 use chrono::Datelike;
 use rand::Rng;
 use rand::seq::SliceRandom;
@@ -265,6 +269,7 @@ impl LeagueSeasonScheduleOptions {
 /// # `LeagueSeason` struct
 ///
 /// A `LeagueSeason` represents a season of a football league.
+#[cfg_attr(feature = "rocket_okapi", derive(JsonSchema))]
 #[derive(Clone, Eq, PartialEq, Ord, PartialOrd, Debug, Serialize)]
 pub struct LeagueSeason {
     year: usize,

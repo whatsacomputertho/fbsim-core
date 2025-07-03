@@ -1,3 +1,7 @@
+#[cfg(feature = "rocket_okapi")]
+use rocket_okapi::okapi::schemars;
+#[cfg(feature = "rocket_okapi")]
+use rocket_okapi::okapi::schemars::JsonSchema;
 use serde::{Serialize, Deserialize};
 
 use crate::league::season::matchup::LeagueSeasonMatchup;
@@ -5,6 +9,7 @@ use crate::league::season::matchup::LeagueSeasonMatchup;
 /// # `LeagueSeasonWeek` struct
 ///
 /// A `LeagueSeasonWeek` represents a week of a football season
+#[cfg_attr(feature = "rocket_okapi", derive(JsonSchema))]
 #[derive(Clone, Eq, PartialEq, Ord, PartialOrd, Debug, Serialize, Deserialize)]
 pub struct LeagueSeasonWeek {
     matchups: Vec<LeagueSeasonMatchup>

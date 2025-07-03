@@ -10,6 +10,10 @@ use crate::league::season::team::LeagueSeasonTeam;
 
 use std::collections::BTreeMap;
 
+#[cfg(feature = "rocket_okapi")]
+use rocket_okapi::okapi::schemars;
+#[cfg(feature = "rocket_okapi")]
+use rocket_okapi::okapi::schemars::JsonSchema;
 use rand::Rng;
 use serde::{Serialize, Deserialize, Deserializer};
 
@@ -64,6 +68,7 @@ impl LeagueRaw {
 /// A `League` represents a football league. It contains a vector of teams in
 /// the league as `LeagueTeam` objects. It also contains the season that is
 /// currently in-progress, and it contains a vector of past seasons
+#[cfg_attr(feature = "rocket_okapi", derive(JsonSchema))]
 #[derive(Clone, Eq, PartialEq, Ord, PartialOrd, Debug, Serialize)]
 pub struct League {
     teams: BTreeMap<usize, LeagueTeam>,
