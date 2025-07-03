@@ -1,3 +1,7 @@
+#[cfg(feature = "rocket_okapi")]
+use rocket_okapi::okapi::schemars;
+#[cfg(feature = "rocket_okapi")]
+use rocket_okapi::okapi::schemars::JsonSchema;
 use serde::{Serialize, Deserialize, Deserializer};
 
 use crate::team::DEFAULT_TEAM_NAME;
@@ -40,6 +44,7 @@ impl LeagueSeasonTeamRaw {
 /// # `LeagueSeasonTeam` struct
 ///
 /// A `LeagueSeasonTeam` represents a team during a season of a football leauge
+#[cfg_attr(feature = "rocket_okapi", derive(JsonSchema))]
 #[derive(Clone, Eq, PartialEq, Ord, PartialOrd, Debug, Serialize)]
 pub struct LeagueSeasonTeam {
     name: String,
