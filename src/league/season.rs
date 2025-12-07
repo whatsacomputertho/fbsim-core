@@ -7,8 +7,7 @@ use std::collections::BTreeMap;
 use crate::league::season::team::LeagueSeasonTeam;
 use crate::league::season::week::LeagueSeasonWeek;
 use crate::league::season::matchup::{LeagueSeasonMatchup, LeagueSeasonMatchups};
-use crate::sim::BoxScoreSimulator;
-use crate::team::FootballTeam;
+use crate::game::score::FinalScoreSimulator;
 
 #[cfg(feature = "rocket_okapi")]
 use rocket_okapi::okapi::schemars;
@@ -779,10 +778,8 @@ impl LeagueSeason {
         };
 
         // Simulate the matchup
-        let home_sim_team = FootballTeam::from(home_team.clone());
-        let away_sim_team = FootballTeam::from(away_team.clone());
-        let simulator = BoxScoreSimulator::new();
-        let box_score = match simulator.sim(&home_sim_team, &away_sim_team, rng) {
+        let simulator = FinalScoreSimulator::new();
+        let final_score = match simulator.sim(home_team, away_team, rng) {
             Ok(score) => score,
             Err(error) => return Err(
                 format!(
@@ -793,8 +790,8 @@ impl LeagueSeason {
         };
 
         // Update the status of the matchup
-        *_matchup_to_sim.home_score_mut() = box_score.home_score() as usize;
-        *_matchup_to_sim.away_score_mut() = box_score.away_score() as usize;
+        *_matchup_to_sim.home_score_mut() = final_score.home_score() as usize;
+        *_matchup_to_sim.away_score_mut() = final_score.away_score() as usize;
         *_matchup_to_sim.complete_mut() = true;
         Ok(())
     }
@@ -883,10 +880,8 @@ impl LeagueSeason {
             };
 
             // Simulate the matchup
-            let home_sim_team = FootballTeam::from(home_team.clone());
-            let away_sim_team = FootballTeam::from(away_team.clone());
-            let simulator = BoxScoreSimulator::new();
-            let box_score = match simulator.sim(&home_sim_team, &away_sim_team, rng) {
+            let simulator = FinalScoreSimulator::new();
+            let final_score = match simulator.sim(home_team, away_team, rng) {
                 Ok(score) => score,
                 Err(error) => return Err(
                     format!(
@@ -897,8 +892,8 @@ impl LeagueSeason {
             };
 
             // Update the status of the matchup
-            *matchup.home_score_mut() = box_score.home_score() as usize;
-            *matchup.away_score_mut() = box_score.away_score() as usize;
+            *matchup.home_score_mut() = final_score.home_score() as usize;
+            *matchup.away_score_mut() = final_score.away_score() as usize;
             *matchup.complete_mut() = true;
         }
         Ok(())

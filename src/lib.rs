@@ -1,6 +1,3 @@
-pub mod boxscore;
-pub mod freq;
+pub mod game;
 pub mod league;
-pub mod matchup;
-pub mod sim;
 pub mod team;

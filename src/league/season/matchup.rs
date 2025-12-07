@@ -4,7 +4,7 @@ use rocket_okapi::okapi::schemars;
 use rocket_okapi::okapi::schemars::JsonSchema;
 use serde::{Serialize, Deserialize};
 
-use crate::matchup::FootballMatchupResult;
+use crate::game::matchup::FootballMatchupResult;
 use crate::league::matchup::LeagueTeamRecord;
 
 /// # `LeagueSeasonMatchup` struct

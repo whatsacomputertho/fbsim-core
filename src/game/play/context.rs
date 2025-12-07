@@ -1,0 +1,292 @@
+#[cfg(feature = "rocket_okapi")]
+use rocket_okapi::okapi::schemars;
+#[cfg(feature = "rocket_okapi")]
+use rocket_okapi::okapi::schemars::JsonSchema;
+use serde::{Serialize, Deserialize};
+
+use crate::game::context::GameContext;
+
+/// # `PlayContext` struct
+///
+/// A `PlayContext` represents a play scenario
+#[cfg_attr(feature = "rocket_okapi", derive(JsonSchema))]
+#[derive(Clone, Eq, PartialEq, Ord, PartialOrd, Debug, Default, Serialize, Deserialize)]
+pub struct PlayContext {
+    quarter: u32,
+    half_seconds: u32,
+    down: u32,
+    distance: u32,
+    yard_line: u32,
+    score_diff: i32,
+    off_timeouts: u32,
+    def_timeouts: u32,
+    clock_running: bool
+}
+
+impl From<GameContext> for PlayContext {
+    /// Initialize a PlayContext from a GameContext
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::game::context::GameContext;
+    /// use fbsim_core::game::play::context::PlayContext;
+    /// 
+    /// let game_context = GameContext::new();
+    /// let play_context = PlayContext::from(game_context);
+    /// ```
+    fn from(item: GameContext) -> PlayContext {
+        // Determine score diff and timeouts based on possession
+        let score_diff: i32 = if *item.home_possession() {
+            *item.home_score() as i32 - *item.away_score() as i32
+        } else {
+            *item.away_score() as i32 - *item.home_score() as i32
+        };
+        let off_timeouts: u32 = if *item.home_possession() {
+            *item.home_timeouts()
+        } else {
+            *item.away_timeouts()
+        };
+        let def_timeouts: u32 = if *item.home_possession() {
+            *item.away_timeouts()
+        } else {
+            *item.home_timeouts()
+        };
+
+        // Determine yard line based on possession and direction
+        let yard_line: u32 = if *item.home_possession() ^ *item.home_positive_direction() {
+            100 - *item.yard_line()
+        } else {
+            *item.yard_line()
+        };
+
+        // Construct the play context
+        PlayContext{
+            quarter: *item.quarter(),
+            half_seconds: *item.half_seconds(),
+            down: *item.down(),
+            distance: *item.distance(),
+            yard_line: yard_line,
+            score_diff: score_diff,
+            off_timeouts: off_timeouts,
+            def_timeouts: def_timeouts,
+            clock_running: item.clock_running()
+        }
+    }
+}
+
+impl PlayContext {
+    /// Whether this is a drain-clock scenario for the offense
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::game::context::GameContext;
+    /// use fbsim_core::game::play::context::PlayContext;
+    /// 
+    /// let game_context = GameContext::new();
+    /// let play_context = PlayContext::from(game_context);
+    /// let drain_clock = play_context.drain_clock();
+    /// assert!(!drain_clock);
+    /// ```
+    pub fn drain_clock(&self) -> bool {
+        if self.score_diff <= 0 {
+            return false
+        }
+        let scores_up_by: f32 = self.score_diff as f32 / 8_f32;
+        let drain_threshold_sig: i32 = (scores_up_by * 4_f32 * 60_f32) as i32;
+        let drain_threshold: u32 = match u32::try_from(drain_threshold_sig) {
+            Ok(n) => n,
+            Err(_) => 0
+        };
+        if self.quarter >= 4 && self.half_seconds < drain_threshold {
+            return true
+        }
+        return false
+    }
+
+    /// Whether this is an up-tempo scenario for the offense
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::game::context::GameContext;
+    /// use fbsim_core::game::play::context::PlayContext;
+    /// 
+    /// let game_context = GameContext::new();
+    /// let play_context = PlayContext::from(game_context);
+    /// let up_tempo = play_context.up_tempo();
+    /// assert!(!up_tempo);
+    /// ```
+    pub fn up_tempo(&self) -> bool {
+        self.quarter >= 4 && self.half_seconds <= 180 &&
+        self.score_diff < 0 && self.score_diff >= -17
+    }
+
+    /// Whether this is a critical down scenario
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::game::context::GameContext;
+    /// use fbsim_core::game::play::context::PlayContext;
+    /// 
+    /// let game_context = GameContext::new();
+    /// let play_context = PlayContext::from(game_context);
+    /// let critical_down = play_context.critical_down();
+    /// assert!(!critical_down);
+    /// ```
+    pub fn critical_down(&self) -> bool {
+        self.down == 3 && self.half_seconds <= 180 &&
+        self.score_diff < 9 && self.score_diff > -9
+    }
+
+    /// Whether this is a conserve-clock scenario for the offense
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::game::context::GameContext;
+    /// use fbsim_core::game::play::context::PlayContext;
+    /// 
+    /// let game_context = GameContext::new();
+    /// let play_context = PlayContext::from(game_context);
+    /// let conserve_clock = play_context.offense_conserve_clock();
+    /// assert!(!conserve_clock);
+    /// ```
+    pub fn offense_conserve_clock(&self) -> bool {
+        self.quarter >= 4 && self.half_seconds <= 180 &&
+        self.score_diff < 0 && self.score_diff > -18
+    }
+
+    /// Whether this is a conserve-clock scenario for the defense
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::game::context::GameContext;
+    /// use fbsim_core::game::play::context::PlayContext;
+    /// 
+    /// let game_context = GameContext::new();
+    /// let play_context = PlayContext::from(game_context);
+    /// let conserve_clock = play_context.defense_conserve_clock();
+    /// assert!(!conserve_clock);
+    /// ```
+    pub fn defense_conserve_clock(&self) -> bool {
+        self.quarter >= 4 && self.half_seconds <= 180 &&
+        self.score_diff > 0 && self.score_diff < 18
+    }
+
+    /// Whether this is the last play
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::game::context::GameContext;
+    /// use fbsim_core::game::play::context::PlayContext;
+    /// 
+    /// let game_context = GameContext::new();
+    /// let play_context = PlayContext::from(game_context);
+    /// let last_play = play_context.last_play();
+    /// assert!(!last_play);
+    /// ```
+    pub fn last_play(&self) -> bool {
+        self.half_seconds < 6
+    }
+
+    /// Whether the offense needs a touchdown on the last play
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::game::context::GameContext;
+    /// use fbsim_core::game::play::context::PlayContext;
+    /// 
+    /// let game_context = GameContext::new();
+    /// let play_context = PlayContext::from(game_context);
+    /// let last_play_need_td = play_context.last_play_need_td();
+    /// assert!(!last_play_need_td);
+    /// ```
+    pub fn last_play_need_td(&self) -> bool {
+        self.score_diff < -3
+    }
+
+    /// Whether the offense can kneel to end the game
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::game::context::GameContext;
+    /// use fbsim_core::game::play::context::PlayContext;
+    /// 
+    /// let game_context = GameContext::new();
+    /// let play_context = PlayContext::from(game_context);
+    /// let can_kneel = play_context.can_kneel();
+    /// assert!(!can_kneel);
+    /// ```
+    pub fn can_kneel(&self) -> bool {
+        let downs_remaining = 4 - self.down;
+        let runoff_seconds = 42 * 0.max(downs_remaining - self.def_timeouts);
+        runoff_seconds >= self.half_seconds
+    }
+
+    /// Whether this is a must-score scenario for 4th-down playcalling
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::game::context::GameContext;
+    /// use fbsim_core::game::play::context::PlayContext;
+    /// 
+    /// let game_context = GameContext::new();
+    /// let play_context = PlayContext::from(game_context);
+    /// let must_score = play_context.must_score();
+    /// assert!(!must_score);
+    /// ```
+    pub fn must_score(&self) -> bool {
+        if self.score_diff >= 0 {
+            return false
+        }
+        let timeout_drive_time = (42 * (3 - self.off_timeouts)) + 8;
+        if self.half_seconds <= timeout_drive_time {
+            return true
+        }
+        let non_timeout_drive_time = (42 * 3) + 8;
+        let timeout_drives_remaining: u32 = 1;
+        let non_timeout_drive_time_remaining = match u32::try_from(self.half_seconds - timeout_drive_time) {
+            Ok(n) => n,
+            Err(_) => 0
+        };
+        let non_timeout_drives_remaining = (
+            non_timeout_drive_time_remaining as f32 / non_timeout_drive_time as f32
+        ).ceil() as u32;
+        let scores_needed = (self.score_diff as f32 / 8_f32).round().abs() as u32;
+        let drives_remaining = timeout_drives_remaining + non_timeout_drives_remaining;
+        drives_remaining <= scores_needed
+    }
+
+    /// Whether this is a go for it on 4th scenario
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::game::context::GameContext;
+    /// use fbsim_core::game::play::context::PlayContext;
+    /// 
+    /// let game_context = GameContext::new();
+    /// let play_context = PlayContext::from(game_context);
+    /// let can_go_for_it = play_context.can_go_for_it();
+    /// assert!(!can_go_for_it);
+    /// ```
+    pub fn can_go_for_it(&self) -> bool {
+        self.distance <= 4 && (
+            self.yard_line >= 80 ||
+            (self.yard_line >= 40 && self.yard_line <= 60)
+        )
+    }
+
+    /// Whether the offense is in field goal range
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::game::context::GameContext;
+    /// use fbsim_core::game::play::context::PlayContext;
+    /// 
+    /// let game_context = GameContext::new();
+    /// let play_context = PlayContext::from(game_context);
+    /// let in_field_goal_range = play_context.in_field_goal_range();
+    /// assert!(!in_field_goal_range);
+    /// ```
+    pub fn in_field_goal_range(&self) -> bool {
+        self.yard_line >= 45
+    }
+}
