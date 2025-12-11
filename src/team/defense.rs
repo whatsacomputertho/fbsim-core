@@ -139,6 +139,48 @@ impl FootballTeamDefense {
         self.rush_defense
     }
 
+    /// Borrow the defense's pass defense skill level
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::team::defense::FootballTeamDefense;
+    /// 
+    /// let my_defense = FootballTeamDefense::new();
+    /// let pass_defense = my_defense.pass_defense();
+    /// assert!(pass_defense == 50_u32);
+    /// ```
+    pub fn pass_defense(&self) -> u32 {
+        self.pass_defense
+    }
+
+    /// Borrow the defense's coverage skill level
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::team::defense::FootballTeamDefense;
+    /// 
+    /// let my_defense = FootballTeamDefense::new();
+    /// let coverage = my_defense.coverage();
+    /// assert!(coverage == 50_u32);
+    /// ```
+    pub fn coverage(&self) -> u32 {
+        self.coverage
+    }
+
+    /// Borrow the defense's blitzing skill level
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::team::defense::FootballTeamDefense;
+    /// 
+    /// let my_defense = FootballTeamDefense::new();
+    /// let blitzing = my_defense.blitzing();
+    /// assert!(blitzing == 50_u32);
+    /// ```
+    pub fn blitzing(&self) -> u32 {
+        self.blitzing
+    }
+
     /// Borrow the offense's turnovers skill level
     ///
     /// ### Example

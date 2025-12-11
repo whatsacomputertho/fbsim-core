@@ -155,7 +155,7 @@ impl FootballTeamOffense {
         ) as u32;
     }
 
-    /// Borrow the offense's rushing skill level
+    /// Get the offense's rushing skill level
     ///
     /// ### Example
     /// ```
@@ -169,7 +169,63 @@ impl FootballTeamOffense {
         self.rushing
     }
 
-    /// Borrow the offense's turnovers skill level
+    /// Get the offense's passing skill level
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::team::offense::FootballTeamOffense;
+    /// 
+    /// let my_offense = FootballTeamOffense::new();
+    /// let passing = my_offense.passing();
+    /// assert!(passing == 50_u32);
+    /// ```
+    pub fn passing(&self) -> u32 {
+        self.passing
+    }
+
+    /// Get the offense's receiving skill level
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::team::offense::FootballTeamOffense;
+    /// 
+    /// let my_offense = FootballTeamOffense::new();
+    /// let receiving = my_offense.receiving();
+    /// assert!(receiving == 50_u32);
+    /// ```
+    pub fn receiving(&self) -> u32 {
+        self.receiving
+    }
+
+    /// Get the offense's scrambling skill level
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::team::offense::FootballTeamOffense;
+    /// 
+    /// let my_offense = FootballTeamOffense::new();
+    /// let scrambling = my_offense.scrambling();
+    /// assert!(scrambling == 50_u32);
+    /// ```
+    pub fn scrambling(&self) -> u32 {
+        self.scrambling
+    }
+
+    /// Get the offense's blocking skill level
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::team::offense::FootballTeamOffense;
+    /// 
+    /// let my_offense = FootballTeamOffense::new();
+    /// let blocking = my_offense.blocking();
+    /// assert!(blocking == 50_u32);
+    /// ```
+    pub fn blocking(&self) -> u32 {
+        self.blocking
+    }
+
+    /// Get the offense's turnovers skill level
     ///
     /// ### Example
     /// ```
