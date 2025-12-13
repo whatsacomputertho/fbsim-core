@@ -239,6 +239,20 @@ impl FootballTeamOffense {
         self.turnovers
     }
 
+    /// Get the offense's field goal kicking skill level
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::team::offense::FootballTeamOffense;
+    /// 
+    /// let my_offense = FootballTeamOffense::new();
+    /// let field_goals = my_offense.field_goals();
+    /// assert!(field_goals == 50_u32);
+    /// ```
+    pub fn field_goals(&self) -> u32 {
+        self.field_goals
+    }
+
     /// Get the offense's punting skill level
     ///
     /// ### Example

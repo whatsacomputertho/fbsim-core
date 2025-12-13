@@ -238,6 +238,20 @@ impl GameContext {
         &self.home_positive_direction
     }
 
+    /// Borrow the GameContext next_play_extra_point property
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::game::context::GameContext;
+    /// 
+    /// let my_context = GameContext::new();
+    /// let next_play_extra_point = my_context.next_play_extra_point();
+    /// assert!(!*next_play_extra_point);
+    /// ```
+    pub fn next_play_extra_point(&self) -> &bool {
+        &self.next_play_extra_point
+    }
+
     /// Determine whether the clock is running
     ///
     /// ### Example
