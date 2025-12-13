@@ -155,13 +155,13 @@ impl RunResultSimulator {
 
     /// Generates whether this is a big rushing play
     fn big_play(&self, norm_diff_rushing: f64, rng: &mut impl Rng) -> bool {
-        let p_big_play: f64 = P_BP_INTR + (P_BP_COEF * norm_diff_rushing);
+        let p_big_play: f64 = 1_f64.min(0_f64.max(P_BP_INTR + (P_BP_COEF * norm_diff_rushing)));
         rng.gen::<f64>() < p_big_play
     }
 
     /// Generates whether this is a big play touchdown
     fn big_play_touchdown(&self, norm_diff_rushing: f64, rng: &mut impl Rng) -> bool {
-        let p_bp_td: f64 = P_BP_TD_INTR + (P_BP_TD_COEF * norm_diff_rushing);
+        let p_bp_td: f64 = 1_f64.min(0_f64.max(P_BP_TD_INTR + (P_BP_TD_COEF * norm_diff_rushing)));
         rng.gen::<f64>() < p_bp_td
     }
 
@@ -193,7 +193,7 @@ impl RunResultSimulator {
 
     /// Generates whether a fumble occurred on the play
     fn fumble(&self, norm_diff_turnovers: f64, rng: &mut impl Rng) -> bool {
-        let p_fumble: f64 = P_FUMBLE_INTR + (P_FUMBLE_COEF * norm_diff_turnovers);
+        let p_fumble: f64 = 1_f64.min(0_f64.max(P_FUMBLE_INTR + (P_FUMBLE_COEF * norm_diff_turnovers)));
         rng.gen::<f64>() < p_fumble
     }
 

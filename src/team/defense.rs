@@ -125,7 +125,7 @@ impl FootballTeamDefense {
         ) as u32;
     }
 
-    /// Borrow the defense's rush defense skill level
+    /// Get the defense's rush defense skill level
     ///
     /// ### Example
     /// ```
@@ -139,7 +139,7 @@ impl FootballTeamDefense {
         self.rush_defense
     }
 
-    /// Borrow the defense's pass defense skill level
+    /// Get the defense's pass defense skill level
     ///
     /// ### Example
     /// ```
@@ -153,7 +153,7 @@ impl FootballTeamDefense {
         self.pass_defense
     }
 
-    /// Borrow the defense's coverage skill level
+    /// Get the defense's coverage skill level
     ///
     /// ### Example
     /// ```
@@ -167,7 +167,7 @@ impl FootballTeamDefense {
         self.coverage
     }
 
-    /// Borrow the defense's blitzing skill level
+    /// Get the defense's blitzing skill level
     ///
     /// ### Example
     /// ```
@@ -181,7 +181,7 @@ impl FootballTeamDefense {
         self.blitzing
     }
 
-    /// Borrow the offense's turnovers skill level
+    /// Get the defense's turnovers skill level
     ///
     /// ### Example
     /// ```
@@ -193,5 +193,19 @@ impl FootballTeamDefense {
     /// ```
     pub fn turnovers(&self) -> u32 {
         self.turnovers
+    }
+
+    /// Get the defense's kick returning skill level
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::team::defense::FootballTeamDefense;
+    /// 
+    /// let my_defense = FootballTeamDefense::new();
+    /// let kick_returning = my_defense.kick_returning();
+    /// assert!(kick_returning == 50_u32);
+    /// ```
+    pub fn kick_returning(&self) -> u32 {
+        self.kick_returning
     }
 }

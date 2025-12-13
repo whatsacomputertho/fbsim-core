@@ -1,3 +1,14 @@
+use rand::Rng;
+#[cfg(feature = "rocket_okapi")]
+use rocket_okapi::okapi::schemars;
+#[cfg(feature = "rocket_okapi")]
+use rocket_okapi::okapi::schemars::JsonSchema;
+use serde::{Serialize, Deserialize};
+use rand_distr::{Normal, Distribution, Exp, SkewNormal};
+
+use crate::game::context::GameContext;
+use crate::game::play::PlaySimulatable;
+use crate::game::play::result::{PlayResult, PlayResultSimulator, ScoreResult};
 
 // Punt block probability regression
 const P_BLOCK_INTR: f64 = -0.0010160286505995551_f64;
@@ -150,7 +161,7 @@ impl PlayResult for PuntResult {
 
     fn defense_score(&self) -> ScoreResult {
         if self.touchdown && !self.fumble {
-            ScoreResult::Touchdown
+            return ScoreResult::Touchdown;
         }
         ScoreResult::None
     }
@@ -171,5 +182,264 @@ impl PlayResult for PuntResult {
 
     fn next_play_extra_point(&self) -> bool {
         self.touchdown
+    }
+}
+
+/// # `PuntResultSimulator` struct
+///
+/// A `PuntResultSimulator` represents a simulator which can produce a result of a punt play
+#[cfg_attr(feature = "rocket_okapi", derive(JsonSchema))]
+#[derive(Clone, Eq, PartialEq, Ord, PartialOrd, Debug, Default, Serialize, Deserialize)]
+pub struct PuntResultSimulator {}
+
+impl PuntResultSimulator {
+    /// Initialize a new PuntResultSimulator
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::game::play::result::punt::PuntResultSimulator;
+    ///
+    /// let my_sim = PuntResultSimulator::new();
+    /// ```
+    pub fn new() -> PuntResultSimulator {
+        PuntResultSimulator{}
+    }
+
+    /// Generates whether the punt was blocked
+    fn blocked(&self, norm_diff_blocking: f64, rng: &mut impl Rng) -> bool {
+        let p_block: f64 = 1_f64.min(0_f64.max(P_BLOCK_INTR + (P_BLOCK_COEF * norm_diff_blocking)));
+        rng.gen::<f64>() < p_block
+    }
+
+    /// Generates whether the punt landed inside the 20 yard line
+    fn inside_20(&self, norm_punting: f64, yard_line: i32, rng: &mut impl Rng) -> bool {
+        let p_inside_20_skill: f64 = P_PUNT_INSIDE_20_SKILL_INTR + (P_PUNT_INSIDE_20_SKILL_COEF * norm_punting);
+        let p_inside_20_yardline: f64 = P_PUNT_INSIDE_20_YARD_LINE_PARAM_1 / (
+            1_f64 + (
+                -1_f64 * P_PUNT_INSIDE_20_YARD_LINE_PARAM_2 * (
+                    yard_line as f64 - P_PUNT_INSIDE_20_YARD_LINE_PARAM_3
+                )
+            ).exp() + P_PUNT_INSIDE_20_YARD_LINE_PARAM_4
+        ); // Logistic curve fit
+        let p_inside_20: f64 = 1_f64.min(0_f64.max(
+            ((p_inside_20_skill * 0.4) + (p_inside_20_yardline * 0.6)) * 1.18
+        )); // Weighted average
+        rng.gen::<f64>() < p_inside_20
+    }
+
+    /// Generates the distance of the punt
+    fn distance(&self, yard_line: i32, punt_inside_20: bool, rng: &mut impl Rng) -> i32 {
+        let mean_rel_dist: f64 = if punt_inside_20 {
+            PUNT_INSIDE_20_MEAN_REL_DIST_INTR + (PUNT_INSIDE_20_MEAN_REL_DIST_COEF * yard_line as f64)
+        } else {
+            PUNT_OUTSIDE_20_MEAN_REL_DIST_INTR + (PUNT_OUTSIDE_20_MEAN_REL_DIST_COEF_1 * yard_line as f64) +
+                (PUNT_OUTSIDE_20_MEAN_REL_DIST_COEF_2 * yard_line.pow(2) as f64) +
+                (PUNT_OUTSIDE_20_MEAN_REL_DIST_COEF_3 * yard_line.pow(3) as f64)
+        };
+        let std_rel_dist: f64 = if punt_inside_20 {
+            PUNT_INSIDE_20_STD_REL_DIST_INTR + (PUNT_INSIDE_20_STD_REL_DIST_COEF * yard_line as f64)
+        } else {
+            PUNT_OUTSIDE_20_STD_REL_DIST_INTR + (PUNT_OUTSIDE_20_STD_REL_DIST_COEF * yard_line as f64)
+        };
+        let skew_rel_dist: f64 = if punt_inside_20 {
+            PUNT_INSIDE_20_SKEW_REL_DIST_INTR + (PUNT_INSIDE_20_SKEW_REL_DIST_COEF_1 * yard_line as f64) +
+                (PUNT_INSIDE_20_SKEW_REL_DIST_COEF_2 * yard_line.pow(2) as f64)
+        } else {
+            PUNT_OUTSIDE_20_SKEW_REL_DIST_INTR + (PUNT_OUTSIDE_20_SKEW_REL_DIST_COEF_1 * yard_line as f64) +
+                (PUNT_OUTSIDE_20_SKEW_REL_DIST_COEF_2 * yard_line.pow(2) as f64)
+        };
+        let rel_dist_dist = SkewNormal::new(mean_rel_dist, std_rel_dist, skew_rel_dist).unwrap();
+        let rel_dist: f64 = rel_dist_dist.sample(rng);
+        let new_yard_line: f64 = yard_line as f64 * rel_dist;
+        let punt_distance: i32 = yard_line - new_yard_line as i32;
+        punt_distance
+    }
+
+    /// Generates whether the punt went out of bounds
+    fn out_of_bounds(&self, yard_line: i32, rng: &mut impl Rng) -> bool {
+        let p_oob: f64 = 1_f64.min(0_f64.max(
+            P_PUNT_OOB_INTR + (P_PUNT_OOB_COEF_1 * yard_line as f64) +
+                (P_PUNT_OOB_COEF_2 * yard_line.pow(2) as f64)
+        ));
+        rng.gen::<f64>() < p_oob
+    }
+
+    /// Generates whether a fair catch was called on the punt
+    fn fair_catch(&self, yard_line: i32, rng: &mut impl Rng) -> bool {
+        let p_fair_catch: f64 = 1_f64.min(0_f64.max(
+            P_FAIR_CATCH_INTR + (P_FAIR_CATCH_COEF * yard_line as f64)
+        ));
+        rng.gen::<f64>() < p_fair_catch
+    }
+
+    /// Generates whether the punt was muffed
+    fn muffed(&self, norm_diff_returning: f64, rng: &mut impl Rng) -> bool {
+        let p_muffed_punt: f64 = 1_f64.min(0_f64.max(
+            P_MUFFED_PUNT_INTR + (P_MUFFED_PUNT_COEF * norm_diff_returning)
+        ));
+        rng.gen::<f64>() < p_muffed_punt
+    }
+
+    /// Generates the punt return yards
+    fn return_yards(&self, landing_yard_line: i32, norm_diff_returning: f64, rng: &mut impl Rng) -> i32 {
+        let mean_rel_return_yards: f64 = MEAN_REL_RETURN_YARDS_INTR + (MEAN_REL_RETURN_YARDS_COEF_1 * norm_diff_returning) +
+            (MEAN_REL_RETURN_YARDS_COEF_2 * norm_diff_returning.powi(2));
+        let std_rel_return_yards: f64 = STD_REL_RETURN_YARDS_INTR + (STD_REL_RETURN_YARDS_COEF_1 * norm_diff_returning) +
+            (STD_REL_RETURN_YARDS_COEF_2 * norm_diff_returning.powi(2));
+        let skew_rel_return_yards: f64 = SKEW_REL_RETURN_YARDS_INTR + (SKEW_REL_RETURN_YARDS_COEF_1 * norm_diff_returning) +
+            (SKEW_REL_RETURN_YARDS_COEF_2 * norm_diff_returning.powi(2));
+        let rel_return_yards_dist = SkewNormal::new(mean_rel_return_yards, std_rel_return_yards, skew_rel_return_yards).unwrap();
+        let rel_return_yards: f64 = rel_return_yards_dist.sample(rng);
+        let new_yard_line: i32 = (landing_yard_line as f64 * rel_return_yards) as i32;
+        let return_yards: i32 = landing_yard_line as i32 - new_yard_line;
+        return_yards
+    }
+
+    /// Generates whether a fumble occurred on the punt return
+    fn fumble(&self, norm_diff_returning: f64, rng: &mut impl Rng) -> bool {
+        let p_fumble: f64 = 1_f64.min(0_f64.max(
+            P_FUMBLE_INTR + (P_FUMBLE_COEF * norm_diff_returning)
+        ));
+        rng.gen::<f64>() < p_fumble
+    }
+
+    /// Generates fumble return yards
+    fn fumble_return_yards(&self, rng: &mut impl Rng) -> i32 {
+        Exp::new(1_f64).unwrap().sample(rng).round() as i32
+    }
+
+    /// Generates the duration of the punt play
+    fn play_duration(&self, total_yards: u32, rng: &mut impl Rng) -> u32 {
+        let mean_duration: f64 = PUNT_PLAY_DURATION_INTR + (PUNT_PLAY_DURATION_COEF * total_yards as f64);
+        let duration_dist = Normal::new(mean_duration, 2_f64).unwrap();
+        match u32::try_from(duration_dist.sample(rng).round() as i32) {
+            Ok(n) => n,
+            Err(_) => 0
+        }
+    }
+}
+
+impl PlayResultSimulator for PuntResultSimulator {
+    /// Simulate a punt play
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::team::FootballTeam;
+    /// use fbsim_core::game::context::GameContext;
+    /// use fbsim_core::game::play::result::PlayResultSimulator;
+    /// use fbsim_core::game::play::result::punt::PuntResultSimulator;
+    ///
+    /// // Initialize home & away teams
+    /// let my_off = FootballTeam::new();
+    /// let my_def = FootballTeam::new();
+    ///
+    /// // Initialize a game context
+    /// let my_context = GameContext::new();
+    ///
+    /// // Initialize a punt play simulator and simulate a play
+    /// let my_sim = PuntResultSimulator::new();
+    /// let mut rng = rand::thread_rng();
+    /// let my_res = my_sim.sim(&my_off, &my_def, &my_context, &mut rng);
+    /// ```
+    fn sim(&self, offense: &impl PlaySimulatable, defense: &impl PlaySimulatable, context: &GameContext, rng: &mut impl Rng) -> impl PlayResult {
+        // Calculate normalized skill levels and skill diffs
+        let norm_diff_blocking: f64 = 0.5_f64 + ((offense.offense().blocking() as f64 - defense.defense().blitzing() as f64) / 200_f64);
+        let norm_diff_returning: f64 = 0.5_f64 + ((defense.defense().kick_returning() as f64 - offense.offense().kick_return_defense() as f64) / 200_f64);
+        let norm_punting: f64 = offense.offense().punting() as f64 / 100_f64;
+        let td_yards: i32 = context.yards_to_touchdown();
+        
+        // Generate whether the punt was blocked
+        let blocked: bool = self.blocked(norm_diff_blocking, rng);
+
+        // Generate whether the punt landed inside the 20
+        let inside_20: bool = if !blocked {
+            self.inside_20(norm_punting, td_yards, rng)
+        } else {
+            false
+        };
+
+        // Generate the distance of the punt
+        let punt_distance: i32 = if !blocked {
+            self.distance(td_yards, inside_20, rng)
+        } else {
+            0
+        };
+        let punt_landing: i32 = td_yards + punt_distance;
+        let touchback: bool = punt_landing >= 100;
+
+        // Generate whether the punt went out of bounds
+        let out_of_bounds: bool = if !(blocked || touchback) {
+            self.out_of_bounds(td_yards, rng)
+        } else {
+            false
+        };
+
+        // Generate whether a fair catch was called
+        let fair_catch: bool = if !(blocked || out_of_bounds || touchback) {
+            self.fair_catch(punt_landing, rng)
+        } else {
+            false
+        };
+
+        // Generate whether the punt was muffed
+        let punt_muffed: bool = if !(blocked || out_of_bounds || touchback) {
+            self.muffed(norm_diff_returning, rng)
+        } else {
+            false
+        };
+
+        // Generate the punt return yards
+        let punt_return_yards: i32 = if !(blocked || out_of_bounds || touchback || punt_muffed) {
+            self.return_yards(100 - punt_landing, norm_diff_returning, rng)
+        } else {
+            0
+        };
+
+        // Determine if a punt return touchdown occurred
+        let mut touchdown: bool = if !(blocked || out_of_bounds || touchback || punt_muffed) {
+            (punt_landing + punt_return_yards) >= 100
+        } else {
+            false
+        };
+
+        // Generate whether a fumble occurred
+        let fumble: bool = if punt_muffed {
+            true
+        } else if !(blocked || out_of_bounds || touchback || touchdown) {
+            self.fumble(norm_diff_returning, rng)
+        } else {
+            false
+        };
+
+        // Generate the fumble return yards
+        let fumble_return_yards: i32 = if fumble {
+            self.fumble_return_yards(rng)
+        } else {
+            0
+        };
+
+        // Determine if a fumble recovery touchdown occurred
+        touchdown = if fumble {
+            punt_landing as i32 + punt_return_yards - fumble_return_yards <= 0
+        } else {
+            touchdown
+        };
+
+        // Calculate total yardage and play duration
+        let total_yards: u32 = punt_distance.abs() as u32 + punt_return_yards.abs() as u32 + fumble_return_yards.abs() as u32;
+        let play_duration: u32 = self.play_duration(total_yards, rng);
+        PuntResult{
+            fumble_return_yards: fumble_return_yards,
+            punt_yards: punt_distance,
+            punt_return_yards: punt_return_yards,
+            play_duration: play_duration,
+            blocked: blocked,
+            touchback: touchback,
+            out_of_bounds: out_of_bounds,
+            fair_catch: fair_catch,
+            muffed: punt_muffed,
+            fumble: fumble,
+            touchdown: touchdown
+        }
     }
 }

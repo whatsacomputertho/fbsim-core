@@ -227,25 +227,27 @@ impl PassResultSimulator {
 
     /// Generates whether the quarterback was under pressure
     fn pressure(&self, norm_diff_blocking: f64, rng: &mut impl Rng) -> bool {
-        let p_pressure: f64 = P_PRESSURE_INTR + (P_PRESSURE_COEF * norm_diff_blocking);
+        let p_pressure: f64 = 1_f64.min(0_f64.max(P_PRESSURE_INTR + (P_PRESSURE_COEF * norm_diff_blocking)));
         rng.gen::<f64>() < p_pressure
     }
 
     /// Generates whether the quarterback was sacked while under pressure
     fn sack(&self, norm_diff_blocking: f64, rng: &mut impl Rng) -> bool {
-        let p_sack: f64 = P_SACK_INTR + (P_SACK_COEF * norm_diff_blocking);
+        let p_sack: f64 = 1_f64.min(0_f64.max(P_SACK_INTR + (P_SACK_COEF * norm_diff_blocking)));
         rng.gen::<f64>() < p_sack
     }
 
     /// Generates whether the quarterback scrambled while under pressure
     fn scramble(&self, norm_scrambling: f64, rng: &mut impl Rng) -> bool {
-        let p_scramble: f64 = P_SCRAMBLE_INTR + (P_SCRAMBLE_COEF * norm_scrambling);
+        let p_scramble: f64 = 1_f64.min(0_f64.max(P_SCRAMBLE_INTR + (P_SCRAMBLE_COEF * norm_scrambling)));
         rng.gen::<f64>() < p_scramble
     }
 
     /// Generates whether the quarterback threw a short pass
     fn short_pass(&self, yard_line: u32, rng: &mut impl Rng) -> bool {
-        let p_short_pass: f64 = P_SHORT_PASS_INTR + (P_SHORT_PASS_COEF_1 * yard_line as f64) + (P_SHORT_PASS_COEF_2 * yard_line.pow(2) as f64);
+        let p_short_pass: f64 = 1_f64.min(0_f64.max(
+            P_SHORT_PASS_INTR + (P_SHORT_PASS_COEF_1 * yard_line as f64) + (P_SHORT_PASS_COEF_2 * yard_line.pow(2) as f64)
+        ));
         rng.gen::<f64>() < p_short_pass
     }
 
@@ -267,7 +269,7 @@ impl PassResultSimulator {
 
     /// Generates whether the quarterback threw an interception
     fn interception(&self, norm_diff_turnovers: f64, rng: &mut impl Rng) -> bool {
-        let p_interception: f64 = P_INTERCEPTION_INTR + (P_INTERCEPTION_COEF * norm_diff_turnovers);
+        let p_interception: f64 = 1_f64.min(0_f64.max(P_INTERCEPTION_INTR + (P_INTERCEPTION_COEF * norm_diff_turnovers)));
         rng.gen::<f64>() < p_interception
     }
 
@@ -282,13 +284,13 @@ impl PassResultSimulator {
 
     /// Generates whether the quarterback threw a complete pass
     fn complete(&self, norm_diff_passing: f64, rng: &mut impl Rng) -> bool {
-        let p_complete: f64 = P_COMPLETE_INTR + (P_COMPLETE_COEF * norm_diff_passing as f64);
+        let p_complete: f64 = 1_f64.min(0_f64.max(P_COMPLETE_INTR + (P_COMPLETE_COEF * norm_diff_passing as f64)));
         rng.gen::<f64>() < p_complete
     }
 
     /// Generates whether the wide receiver had zero yards after catch
     fn zero_yards_after_catch(&self, norm_diff_receiving: f64, rng: &mut impl Rng) -> bool {
-        let p_zero_yac: f64 = P_ZERO_YAC_INTR + (P_ZERO_YAC_COEF * norm_diff_receiving);
+        let p_zero_yac: f64 = 1_f64.min(0_f64.max(P_ZERO_YAC_INTR + (P_ZERO_YAC_COEF * norm_diff_receiving)));
         rng.gen::<f64>() < p_zero_yac
     }
 

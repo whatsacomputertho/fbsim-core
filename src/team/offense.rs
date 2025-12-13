@@ -238,4 +238,32 @@ impl FootballTeamOffense {
     pub fn turnovers(&self) -> u32 {
         self.turnovers
     }
+
+    /// Get the offense's punting skill level
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::team::offense::FootballTeamOffense;
+    /// 
+    /// let my_offense = FootballTeamOffense::new();
+    /// let punting = my_offense.punting();
+    /// assert!(punting == 50_u32);
+    /// ```
+    pub fn punting(&self) -> u32 {
+        self.punting
+    }
+
+    /// Get the offense's kick return defense skill level
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::team::offense::FootballTeamOffense;
+    /// 
+    /// let my_offense = FootballTeamOffense::new();
+    /// let kick_return_defense = my_offense.kick_return_defense();
+    /// assert!(kick_return_defense == 50_u32);
+    /// ```
+    pub fn kick_return_defense(&self) -> u32 {
+        self.kick_return_defense
+    }
 }
