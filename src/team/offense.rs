@@ -253,6 +253,20 @@ impl FootballTeamOffense {
         self.punting
     }
 
+    /// Get the offense's kickoffs skill level
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::team::offense::FootballTeamOffense;
+    /// 
+    /// let my_offense = FootballTeamOffense::new();
+    /// let kickoffs = my_offense.kickoffs();
+    /// assert!(kickoffs == 50_u32);
+    /// ```
+    pub fn kickoffs(&self) -> u32 {
+        self.kickoffs
+    }
+
     /// Get the offense's kick return defense skill level
     ///
     /// ### Example

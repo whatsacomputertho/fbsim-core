@@ -143,7 +143,7 @@ impl PlayResult for PuntResult {
     }
 
     fn net_yards(&self) -> i32 {
-        self.punt_yards - self.punt_return_yards - self.fumble_return_yards
+        self.punt_yards - self.punt_return_yards + self.fumble_return_yards
     }
 
     fn turnover(&self) -> bool {
