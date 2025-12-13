@@ -23,8 +23,8 @@ pub struct PlayContext {
     clock_running: bool
 }
 
-impl From<GameContext> for PlayContext {
-    /// Initialize a PlayContext from a GameContext
+impl From<&GameContext> for PlayContext {
+    /// Initialize a PlayContext from a borrowed GameContext
     ///
     /// ### Example
     /// ```
@@ -32,9 +32,9 @@ impl From<GameContext> for PlayContext {
     /// use fbsim_core::game::play::context::PlayContext;
     /// 
     /// let game_context = GameContext::new();
-    /// let play_context = PlayContext::from(game_context);
+    /// let play_context = PlayContext::from(&game_context);
     /// ```
-    fn from(item: GameContext) -> PlayContext {
+    fn from(item: &GameContext) -> PlayContext {
         // Determine score diff and timeouts based on possession
         let score_diff: i32 = if *item.home_possession() {
             *item.home_score() as i32 - *item.away_score() as i32
@@ -75,6 +75,70 @@ impl From<GameContext> for PlayContext {
 }
 
 impl PlayContext {
+    /// Whether the clock is running
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::game::context::GameContext;
+    /// use fbsim_core::game::play::context::PlayContext;
+    /// 
+    /// let game_context = GameContext::new();
+    /// let play_context = PlayContext::from(&game_context);
+    /// let clock_running = play_context.clock_running();
+    /// assert!(!clock_running);
+    /// ```
+    pub fn clock_running(&self) -> bool {
+        self.clock_running
+    }
+
+    /// Gets the number of timeouts the offense has
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::game::context::GameContext;
+    /// use fbsim_core::game::play::context::PlayContext;
+    /// 
+    /// let game_context = GameContext::new();
+    /// let play_context = PlayContext::from(&game_context);
+    /// let offense_timeouts = play_context.offense_timeouts();
+    /// assert!(offense_timeouts == 3);
+    /// ```
+    pub fn offense_timeouts(&self) -> u32 {
+        self.off_timeouts
+    }
+
+    /// Gets the number of timeouts the defense has
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::game::context::GameContext;
+    /// use fbsim_core::game::play::context::PlayContext;
+    /// 
+    /// let game_context = GameContext::new();
+    /// let play_context = PlayContext::from(&game_context);
+    /// let defense_timeouts = play_context.defense_timeouts();
+    /// assert!(defense_timeouts == 3);
+    /// ```
+    pub fn defense_timeouts(&self) -> u32 {
+        self.def_timeouts
+    }
+
+    /// Gets the current quarter
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::game::context::GameContext;
+    /// use fbsim_core::game::play::context::PlayContext;
+    /// 
+    /// let game_context = GameContext::new();
+    /// let play_context = PlayContext::from(&game_context);
+    /// let quarter = play_context.quarter();
+    /// assert!(quarter == 1);
+    /// ```
+    pub fn quarter(&self) -> u32 {
+        self.quarter
+    }
+
     /// Whether this is a drain-clock scenario for the offense
     ///
     /// ### Example
@@ -83,7 +147,7 @@ impl PlayContext {
     /// use fbsim_core::game::play::context::PlayContext;
     /// 
     /// let game_context = GameContext::new();
-    /// let play_context = PlayContext::from(game_context);
+    /// let play_context = PlayContext::from(&game_context);
     /// let drain_clock = play_context.drain_clock();
     /// assert!(!drain_clock);
     /// ```
@@ -111,7 +175,7 @@ impl PlayContext {
     /// use fbsim_core::game::play::context::PlayContext;
     /// 
     /// let game_context = GameContext::new();
-    /// let play_context = PlayContext::from(game_context);
+    /// let play_context = PlayContext::from(&game_context);
     /// let up_tempo = play_context.up_tempo();
     /// assert!(!up_tempo);
     /// ```
@@ -128,7 +192,7 @@ impl PlayContext {
     /// use fbsim_core::game::play::context::PlayContext;
     /// 
     /// let game_context = GameContext::new();
-    /// let play_context = PlayContext::from(game_context);
+    /// let play_context = PlayContext::from(&game_context);
     /// let critical_down = play_context.critical_down();
     /// assert!(!critical_down);
     /// ```
@@ -145,7 +209,7 @@ impl PlayContext {
     /// use fbsim_core::game::play::context::PlayContext;
     /// 
     /// let game_context = GameContext::new();
-    /// let play_context = PlayContext::from(game_context);
+    /// let play_context = PlayContext::from(&game_context);
     /// let conserve_clock = play_context.offense_conserve_clock();
     /// assert!(!conserve_clock);
     /// ```
@@ -162,7 +226,7 @@ impl PlayContext {
     /// use fbsim_core::game::play::context::PlayContext;
     /// 
     /// let game_context = GameContext::new();
-    /// let play_context = PlayContext::from(game_context);
+    /// let play_context = PlayContext::from(&game_context);
     /// let conserve_clock = play_context.defense_conserve_clock();
     /// assert!(!conserve_clock);
     /// ```
@@ -179,7 +243,7 @@ impl PlayContext {
     /// use fbsim_core::game::play::context::PlayContext;
     /// 
     /// let game_context = GameContext::new();
-    /// let play_context = PlayContext::from(game_context);
+    /// let play_context = PlayContext::from(&game_context);
     /// let last_play = play_context.last_play();
     /// assert!(!last_play);
     /// ```
@@ -195,7 +259,7 @@ impl PlayContext {
     /// use fbsim_core::game::play::context::PlayContext;
     /// 
     /// let game_context = GameContext::new();
-    /// let play_context = PlayContext::from(game_context);
+    /// let play_context = PlayContext::from(&game_context);
     /// let last_play_need_td = play_context.last_play_need_td();
     /// assert!(!last_play_need_td);
     /// ```
@@ -211,7 +275,7 @@ impl PlayContext {
     /// use fbsim_core::game::play::context::PlayContext;
     /// 
     /// let game_context = GameContext::new();
-    /// let play_context = PlayContext::from(game_context);
+    /// let play_context = PlayContext::from(&game_context);
     /// let can_kneel = play_context.can_kneel();
     /// assert!(!can_kneel);
     /// ```
@@ -229,7 +293,7 @@ impl PlayContext {
     /// use fbsim_core::game::play::context::PlayContext;
     /// 
     /// let game_context = GameContext::new();
-    /// let play_context = PlayContext::from(game_context);
+    /// let play_context = PlayContext::from(&game_context);
     /// let must_score = play_context.must_score();
     /// assert!(!must_score);
     /// ```
@@ -263,7 +327,7 @@ impl PlayContext {
     /// use fbsim_core::game::play::context::PlayContext;
     /// 
     /// let game_context = GameContext::new();
-    /// let play_context = PlayContext::from(game_context);
+    /// let play_context = PlayContext::from(&game_context);
     /// let can_go_for_it = play_context.can_go_for_it();
     /// assert!(!can_go_for_it);
     /// ```
@@ -282,7 +346,7 @@ impl PlayContext {
     /// use fbsim_core::game::play::context::PlayContext;
     /// 
     /// let game_context = GameContext::new();
-    /// let play_context = PlayContext::from(game_context);
+    /// let play_context = PlayContext::from(&game_context);
     /// let in_field_goal_range = play_context.in_field_goal_range();
     /// assert!(!in_field_goal_range);
     /// ```

@@ -84,6 +84,34 @@ impl GameContext {
         GameContext::default()
     }
 
+    /// Borrow the GameContext home team short property
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::game::context::GameContext;
+    /// 
+    /// let my_context = GameContext::new();
+    /// let home_team_short = my_context.home_team_short();
+    /// assert!(home_team_short == "HOME");
+    /// ```
+    pub fn home_team_short(&self) -> &str {
+        &self.home_team_short
+    }
+
+    /// Borrow the GameContext away team short property
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::game::context::GameContext;
+    /// 
+    /// let my_context = GameContext::new();
+    /// let away_team_short = my_context.away_team_short();
+    /// assert!(away_team_short == "AWAY");
+    /// ```
+    pub fn away_team_short(&self) -> &str {
+        &self.away_team_short
+    }
+
     /// Borrow the GameContext quarter property
     ///
     /// ### Example
@@ -238,6 +266,90 @@ impl GameContext {
         &self.home_positive_direction
     }
 
+    /// Borrow the GameContext home_opening_kickoff property
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::game::context::GameContext;
+    /// 
+    /// let my_context = GameContext::new();
+    /// let home_opening_kickoff = my_context.home_opening_kickoff();
+    /// assert!(*home_opening_kickoff);
+    /// ```
+    pub fn home_opening_kickoff(&self) -> &bool {
+        &self.home_opening_kickoff
+    }
+
+    /// Borrow the GameContext last_play_incomplete property
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::game::context::GameContext;
+    /// 
+    /// let my_context = GameContext::new();
+    /// let last_play_incomplete = my_context.last_play_incomplete();
+    /// assert!(!*last_play_incomplete);
+    /// ```
+    pub fn last_play_incomplete(&self) -> &bool {
+        &self.last_play_incomplete
+    }
+
+    /// Borrow the GameContext last_play_out_of_bounds property
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::game::context::GameContext;
+    /// 
+    /// let my_context = GameContext::new();
+    /// let last_play_out_of_bounds = my_context.last_play_out_of_bounds();
+    /// assert!(!*last_play_out_of_bounds);
+    /// ```
+    pub fn last_play_out_of_bounds(&self) -> &bool {
+        &self.last_play_out_of_bounds
+    }
+
+    /// Borrow the GameContext last_play_kickoff property
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::game::context::GameContext;
+    /// 
+    /// let my_context = GameContext::new();
+    /// let last_play_kickoff = my_context.last_play_kickoff();
+    /// assert!(!*last_play_kickoff);
+    /// ```
+    pub fn last_play_kickoff(&self) -> &bool {
+        &self.last_play_kickoff
+    }
+
+    /// Borrow the GameContext last_play_timeout property
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::game::context::GameContext;
+    /// 
+    /// let my_context = GameContext::new();
+    /// let last_play_timeout = my_context.last_play_timeout();
+    /// assert!(!*last_play_timeout);
+    /// ```
+    pub fn last_play_timeout(&self) -> &bool {
+        &self.last_play_timeout
+    }
+
+    /// Borrow the GameContext next_play_kickoff property
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::game::context::GameContext;
+    /// 
+    /// let my_context = GameContext::new();
+    /// let next_play_kickoff = my_context.next_play_kickoff();
+    /// assert!(*next_play_kickoff);
+    /// ```
+    pub fn next_play_kickoff(&self) -> &bool {
+        &self.next_play_kickoff
+    }
+
     /// Borrow the GameContext next_play_extra_point property
     ///
     /// ### Example
@@ -250,6 +362,38 @@ impl GameContext {
     /// ```
     pub fn next_play_extra_point(&self) -> &bool {
         &self.next_play_extra_point
+    }
+
+    /// Borrow the GameContext game_over property
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::game::context::GameContext;
+    /// 
+    /// let my_context = GameContext::new();
+    /// let game_over = my_context.game_over();
+    /// assert!(!*game_over);
+    /// ```
+    pub fn game_over(&self) -> &bool {
+        &self.game_over
+    }
+
+    /// Get the number of timeouts the defense has left
+    pub fn defense_timeouts(&self) -> u32 {
+        if self.home_possession {
+            self.away_timeouts
+        } else {
+            self.home_timeouts
+        }
+    }
+
+    /// Get the number of timeouts the offense has left
+    pub fn offense_timeouts(&self) -> u32 {
+        if self.home_possession {
+            self.home_timeouts
+        } else {
+            self.away_timeouts
+        }
     }
 
     /// Determine whether the clock is running
@@ -740,6 +884,477 @@ impl GameContext {
             next_play_extra_point: result.next_play_extra_point(),
             next_play_kickoff: result.next_play_kickoff(),
             game_over: self.next_game_over(duration, off_score, def_score)
+        }
+    }
+}
+
+/// # `GameContextBuilder` struct
+///
+/// A `GameContextBuilder` implements the builder pattern for the `GameContext`
+/// struct
+#[cfg_attr(feature = "rocket_okapi", derive(JsonSchema))]
+#[derive(Clone, Eq, PartialEq, Ord, PartialOrd, Debug, Serialize, Deserialize)]
+pub struct GameContextBuilder {
+    home_team_short: String,
+    away_team_short: String,
+    quarter: u32,
+    half_seconds: u32,
+    down: u32,
+    distance: u32,
+    yard_line: u32,
+    home_score: u32,
+    away_score: u32,
+    home_timeouts: u32,
+    away_timeouts: u32,
+    home_positive_direction: bool,
+    home_opening_kickoff: bool,
+    home_possession: bool,
+    last_play_incomplete: bool,
+    last_play_out_of_bounds: bool,
+    last_play_timeout: bool,
+    last_play_kickoff: bool,
+    next_play_extra_point: bool,
+    next_play_kickoff: bool,
+    game_over: bool
+}
+
+impl Default for GameContextBuilder {
+    /// Default constructor for the GameContextBuilder class
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::game::context::GameContextBuilder;
+    /// 
+    /// let my_context = GameContextBuilder::default();
+    /// ```
+    fn default() -> Self {
+        GameContextBuilder {
+            home_team_short: String::from("HOME"),
+            away_team_short: String::from("AWAY"),
+            quarter: 1,
+            half_seconds: 1800,
+            down: 0,
+            distance: 10,
+            yard_line: 35,
+            home_score: 0,
+            away_score: 0,
+            home_timeouts: 3,
+            away_timeouts: 3,
+            home_positive_direction: true,
+            home_opening_kickoff: true,
+            home_possession: true,
+            last_play_incomplete: false,
+            last_play_out_of_bounds: false,
+            last_play_timeout: false,
+            last_play_kickoff: false,
+            next_play_extra_point: false,
+            next_play_kickoff: true,
+            game_over: false
+        }
+    }
+}
+
+impl GameContextBuilder {
+    /// Initialize a new game context builder
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::game::context::GameContextBuilder;
+    ///
+    /// let mut my_context_builder = GameContextBuilder::new();
+    /// ```
+    pub fn new() -> GameContextBuilder {
+        GameContextBuilder::default()
+    }
+
+    /// Set the home team short name
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::game::context::{GameContext, GameContextBuilder};
+    /// 
+    /// let my_context = GameContextBuilder::new()
+    ///     .home_team_short("TEST")
+    ///     .build();
+    /// assert!(my_context.home_team_short() == "TEST");
+    /// ```
+    pub fn home_team_short(mut self, home_team_short: &str) -> Self {
+        self.home_team_short = String::from(home_team_short);
+        self
+    }
+
+    /// Set the away team short name
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::game::context::{GameContext, GameContextBuilder};
+    /// 
+    /// let my_context = GameContextBuilder::new()
+    ///     .away_team_short("TEST")
+    ///     .build();
+    /// assert!(my_context.away_team_short() == "TEST");
+    /// ```
+    pub fn away_team_short(mut self, away_team_short: &str) -> Self {
+        self.away_team_short = String::from(away_team_short);
+        self
+    }
+
+    /// Set the quarter
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::game::context::{GameContext, GameContextBuilder};
+    /// 
+    /// let my_context = GameContextBuilder::new()
+    ///     .quarter(2)
+    ///     .build();
+    /// assert!(*my_context.quarter() == 2);
+    /// ```
+    pub fn quarter(mut self, quarter: u32) -> Self {
+        self.quarter = quarter;
+        self
+    }
+
+    /// Set the half seconds
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::game::context::{GameContext, GameContextBuilder};
+    /// 
+    /// let my_context = GameContextBuilder::new()
+    ///     .half_seconds(100)
+    ///     .build();
+    /// assert!(*my_context.half_seconds() == 100);
+    /// ```
+    pub fn half_seconds(mut self, half_seconds: u32) -> Self {
+        self.half_seconds = half_seconds;
+        self
+    }
+
+    /// Set the down
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::game::context::{GameContext, GameContextBuilder};
+    /// 
+    /// let my_context = GameContextBuilder::new()
+    ///     .down(4)
+    ///     .build();
+    /// assert!(*my_context.down() == 4);
+    /// ```
+    pub fn down(mut self, down: u32) -> Self {
+        self.down = down;
+        self
+    }
+
+    /// Set the distance
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::game::context::{GameContext, GameContextBuilder};
+    /// 
+    /// let my_context = GameContextBuilder::new()
+    ///     .distance(7)
+    ///     .build();
+    /// assert!(*my_context.distance() == 7);
+    /// ```
+    pub fn distance(mut self, distance: u32) -> Self {
+        self.distance = distance;
+        self
+    }
+
+    /// Set the yard line
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::game::context::{GameContext, GameContextBuilder};
+    /// 
+    /// let my_context = GameContextBuilder::new()
+    ///     .yard_line(50)
+    ///     .build();
+    /// assert!(*my_context.yard_line() == 50);
+    /// ```
+    pub fn yard_line(mut self, yard_line: u32) -> Self {
+        self.yard_line = yard_line;
+        self
+    }
+
+    /// Set the home score
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::game::context::{GameContext, GameContextBuilder};
+    /// 
+    /// let my_context = GameContextBuilder::new()
+    ///     .home_score(21)
+    ///     .build();
+    /// assert!(*my_context.home_score() == 21);
+    /// ```
+    pub fn home_score(mut self, home_score: u32) -> Self {
+        self.home_score = home_score;
+        self
+    }
+
+    /// Set the away score
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::game::context::{GameContext, GameContextBuilder};
+    /// 
+    /// let my_context = GameContextBuilder::new()
+    ///     .away_score(14)
+    ///     .build();
+    /// assert!(*my_context.away_score() == 14);
+    /// ```
+    pub fn away_score(mut self, away_score: u32) -> Self {
+        self.away_score = away_score;
+        self
+    }
+
+    /// Set the home timeouts
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::game::context::{GameContext, GameContextBuilder};
+    /// 
+    /// let my_context = GameContextBuilder::new()
+    ///     .home_timeouts(2)
+    ///     .build();
+    /// assert!(*my_context.home_timeouts() == 2);
+    /// ```
+    pub fn home_timeouts(mut self, home_timeouts: u32) -> Self {
+        self.home_timeouts = home_timeouts;
+        self
+    }
+
+    /// Set the away timeouts
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::game::context::{GameContext, GameContextBuilder};
+    /// 
+    /// let my_context = GameContextBuilder::new()
+    ///     .away_timeouts(2)
+    ///     .build();
+    /// assert!(*my_context.away_timeouts() == 2);
+    /// ```
+    pub fn away_timeouts(mut self, away_timeouts: u32) -> Self {
+        self.away_timeouts = away_timeouts;
+        self
+    }
+    
+    /// Set the home positive direction property
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::game::context::{GameContext, GameContextBuilder};
+    /// 
+    /// let my_context = GameContextBuilder::new()
+    ///     .home_positive_direction(false)
+    ///     .build();
+    /// assert!(*my_context.home_positive_direction() == false);
+    /// ```
+    pub fn home_positive_direction(mut self, home_positive_direction: bool) -> Self {
+        self.home_positive_direction = home_positive_direction;
+        self
+    }
+    
+    /// Set the home opening kickoff property
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::game::context::{GameContext, GameContextBuilder};
+    /// 
+    /// let my_context = GameContextBuilder::new()
+    ///     .home_opening_kickoff(false)
+    ///     .build();
+    /// assert!(*my_context.home_opening_kickoff() == false);
+    /// ```
+    pub fn home_opening_kickoff(mut self, home_opening_kickoff: bool) -> Self {
+        self.home_opening_kickoff = home_opening_kickoff;
+        self
+    }
+    
+    /// Set the home opening kickoff property
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::game::context::{GameContext, GameContextBuilder};
+    /// 
+    /// let my_context = GameContextBuilder::new()
+    ///     .home_possession(false)
+    ///     .build();
+    /// assert!(*my_context.home_possession() == false);
+    /// ```
+    pub fn home_possession(mut self, home_possession: bool) -> Self {
+        self.home_possession = home_possession;
+        self
+    }
+    
+    /// Set the last play incomplete property
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::game::context::{GameContext, GameContextBuilder};
+    /// 
+    /// let my_context = GameContextBuilder::new()
+    ///     .last_play_incomplete(true)
+    ///     .build();
+    /// assert!(*my_context.last_play_incomplete() == true);
+    /// ```
+    pub fn last_play_incomplete(mut self, last_play_incomplete: bool) -> Self {
+        self.last_play_incomplete = last_play_incomplete;
+        self
+    }
+    
+    /// Set the last play out of bounds property
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::game::context::{GameContext, GameContextBuilder};
+    /// 
+    /// let my_context = GameContextBuilder::new()
+    ///     .last_play_out_of_bounds(true)
+    ///     .build();
+    /// assert!(*my_context.last_play_out_of_bounds() == true);
+    /// ```
+    pub fn last_play_out_of_bounds(mut self, last_play_out_of_bounds: bool) -> Self {
+        self.last_play_out_of_bounds = last_play_out_of_bounds;
+        self
+    }
+    
+    /// Set the last play timeout property
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::game::context::{GameContext, GameContextBuilder};
+    /// 
+    /// let my_context = GameContextBuilder::new()
+    ///     .last_play_timeout(true)
+    ///     .build();
+    /// assert!(*my_context.last_play_timeout() == true);
+    /// ```
+    pub fn last_play_timeout(mut self, last_play_timeout: bool) -> Self {
+        self.last_play_timeout = last_play_timeout;
+        self
+    }
+    
+    /// Set the last play kickoff property
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::game::context::{GameContext, GameContextBuilder};
+    /// 
+    /// let my_context = GameContextBuilder::new()
+    ///     .last_play_kickoff(true)
+    ///     .build();
+    /// assert!(*my_context.last_play_kickoff() == true);
+    /// ```
+    pub fn last_play_kickoff(mut self, last_play_kickoff: bool) -> Self {
+        self.last_play_kickoff = last_play_kickoff;
+        self
+    }
+    
+    /// Set the next play extra point property
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::game::context::{GameContext, GameContextBuilder};
+    /// 
+    /// let my_context = GameContextBuilder::new()
+    ///     .next_play_extra_point(true)
+    ///     .build();
+    /// assert!(*my_context.next_play_extra_point() == true);
+    /// ```
+    pub fn next_play_extra_point(mut self, next_play_extra_point: bool) -> Self {
+        self.next_play_extra_point = next_play_extra_point;
+        self
+    }
+    
+    /// Set the next play kickoff property
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::game::context::{GameContext, GameContextBuilder};
+    /// 
+    /// let my_context = GameContextBuilder::new()
+    ///     .next_play_kickoff(false)
+    ///     .build();
+    /// assert!(*my_context.next_play_kickoff() == false);
+    /// ```
+    pub fn next_play_kickoff(mut self, next_play_kickoff: bool) -> Self {
+        self.next_play_kickoff = next_play_kickoff;
+        self
+    }
+    
+    /// Set the game over property
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::game::context::{GameContext, GameContextBuilder};
+    /// 
+    /// let my_context = GameContextBuilder::new()
+    ///     .game_over(true)
+    ///     .build();
+    /// assert!(*my_context.game_over() == true);
+    /// ```
+    pub fn game_over(mut self, game_over: bool) -> Self {
+        self.game_over = game_over;
+        self
+    }
+
+    /// Build the game context
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::game::context::{GameContext, GameContextBuilder};
+    /// 
+    /// let my_context = GameContextBuilder::new()
+    ///     .home_team_short("NYM")
+    ///     .away_team_short("CAR")
+    ///     .quarter(2)
+    ///     .half_seconds(700)
+    ///     .down(3)
+    ///     .distance(4)
+    ///     .yard_line(14)
+    ///     .home_score(0)
+    ///     .away_score(3)
+    ///     .home_timeouts(2)
+    ///     .away_timeouts(3)
+    ///     .home_positive_direction(true)
+    ///     .home_possession(true)
+    ///     .last_play_incomplete(true)
+    ///     .last_play_out_of_bounds(false)
+    ///     .last_play_timeout(false)
+    ///     .last_play_kickoff(false)
+    ///     .next_play_extra_point(false)
+    ///     .next_play_kickoff(false)
+    ///     .game_over(false)
+    ///     .build();
+    /// ```
+    pub fn build(self) -> GameContext {
+        GameContext{
+            home_team_short: self.home_team_short,
+            away_team_short: self.away_team_short,
+            quarter: self.quarter,
+            half_seconds: self.half_seconds,
+            down: self.down,
+            distance: self.distance,
+            yard_line: self.yard_line,
+            home_score: self.home_score,
+            away_score: self.away_score,
+            home_timeouts: self.home_timeouts,
+            away_timeouts: self.away_timeouts,
+            home_positive_direction: self.home_positive_direction,
+            home_opening_kickoff: self.home_opening_kickoff,
+            home_possession: self.home_possession,
+            last_play_incomplete: self.last_play_incomplete,
+            last_play_out_of_bounds: self.last_play_out_of_bounds,
+            last_play_timeout: self.last_play_timeout,
+            last_play_kickoff: self.last_play_kickoff,
+            next_play_extra_point: self.next_play_extra_point,
+            next_play_kickoff: self.next_play_kickoff,
+            game_over: self.game_over
         }
     }
 }

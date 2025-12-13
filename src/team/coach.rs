@@ -61,4 +61,32 @@ impl FootballTeamCoach {
             }
         )
     }
+
+    /// Get the coach's risk taking tendency
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::team::coach::FootballTeamCoach;
+    /// 
+    /// let my_coach = FootballTeamCoach::new();
+    /// let risk_taking = my_coach.risk_taking();
+    /// assert!(risk_taking == 50_u32);
+    /// ```
+    pub fn risk_taking(&self) -> u32 {
+        self.risk_taking
+    }
+
+    /// Get the coach's up-tempo tendency
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::team::coach::FootballTeamCoach;
+    /// 
+    /// let my_coach = FootballTeamCoach::new();
+    /// let up_tempo = my_coach.up_tempo();
+    /// assert!(up_tempo == 50_u32);
+    /// ```
+    pub fn up_tempo(&self) -> u32 {
+        self.up_tempo
+    }
 }
