@@ -344,8 +344,8 @@ impl FinalScoreSimulator {
     /// ```
     pub fn sim(&self, home_team: &impl ScoreSimulatable, away_team: &impl ScoreSimulatable, rng: &mut impl Rng) -> Result<FinalScore, String> {
         // Calculate the normalized skill differentials
-        let ha_norm_diff: f64 = (home_team.offense_overall() - away_team.defense_overall() + 100) as f64 / 200_f64;
-        let ah_norm_diff: f64 = (away_team.offense_overall() - home_team.defense_overall() + 100) as f64 / 200_f64;
+        let ha_norm_diff: f64 = (home_team.offense_overall() as i32 - away_team.defense_overall() as i32 + 100_i32) as f64 / 200_f64;
+        let ah_norm_diff: f64 = (away_team.offense_overall() as i32 - home_team.defense_overall() as i32 + 100_i32) as f64 / 200_f64;
 
         // Generate the final score, return error if error is encountered
         let (home_score, away_score): (i32, i32) = match self.gen_score(ha_norm_diff, ah_norm_diff, rng) {
