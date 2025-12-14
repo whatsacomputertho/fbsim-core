@@ -150,6 +150,61 @@ impl Default for PassResult {
     }
 }
 
+impl std::fmt::Display for PassResult {
+    /// Format a `PassResult` as a string.
+    ///
+    /// ### Example
+    ///
+    /// ```
+    /// use fbsim_core::game::play::result::pass::PassResult;
+    /// 
+    /// let my_result = PassResult::default();
+    /// println!("{}", my_result);
+    /// ```
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let pressure_str = if self.pressure {
+            let pressure_prefix = "Defense brings pressure";
+            if self.sack {
+                format!("{}, QB SACKED for loss of {} yards.", pressure_prefix, self.sack_yards_lost)
+            } else {
+                String::from("")
+            }
+        } else {
+            String::from("")
+        };
+        let catch_str = if !self.pressure || (self.pressure && !self.sack) {
+            let pass_prefix = format!(" Pass {} yards", self.pass_dist);
+            if self.interception {
+                format!("{} INTERCEPTED, returned {} yards.", pass_prefix, self.return_yards)
+            } else if self.complete {
+                format!("{} complete for gain of {}.", pass_prefix, self.pass_dist + self.yards_after_catch)
+            } else {
+                format!("{} incomplete.", pass_prefix)
+            }
+        } else {
+            String::from("")
+        };
+        let fumble_str = if self.complete && self.fumble {
+            format!(" FUMBLE recovered by the defense, returned {} yards", self.return_yards)
+        } else {
+            String::from("")
+        };
+        let safety_str = if self.safety {
+            " SAFETY!"
+        } else {
+            ""
+        };
+        let pass_str = format!(
+            "{}{}{}{}",
+            &pressure_str,
+            &catch_str,
+            &fumble_str,
+            safety_str
+        );
+        f.write_str(&pass_str.trim())
+    }
+}
+
 impl PlayResult for PassResult {
     fn next_context(&self, context: &GameContext) -> GameContext {
         context.next_context(self)
@@ -202,6 +257,10 @@ impl PlayResult for PassResult {
 
     fn next_play_extra_point(&self) -> bool {
         self.touchdown
+    }
+
+    fn summary(&self) -> String {
+        format!("{}", self)
     }
 }
 

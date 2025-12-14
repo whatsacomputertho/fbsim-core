@@ -211,6 +211,10 @@ impl PlayResult for KickoffResult {
     fn next_play_extra_point(&self) -> bool {
         self.touchdown
     }
+
+    fn summary(&self) -> String {
+        format!("{}", self)
+    }
 }
 
 /// # `KickoffResultSimulator` struct

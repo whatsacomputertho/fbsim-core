@@ -895,7 +895,7 @@ impl std::fmt::Display for GameContext {
     /// ### Example
     ///
     /// ```
-    /// use fbsim_core::game::play::Play;
+    /// use fbsim_core::game::context::GameContext;
     ///
     /// // Initialize a game context and display it
     /// let my_context = GameContext::new();

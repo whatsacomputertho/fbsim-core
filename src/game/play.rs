@@ -66,6 +66,7 @@ impl std::fmt::Display for Play {
     /// ### Example
     ///
     /// ```
+    /// use fbsim_core::game::context::GameContext;
     /// use fbsim_core::game::play::Play;
     ///
     /// // Initialize a game context
