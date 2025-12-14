@@ -202,6 +202,10 @@ impl PlayResult for KickoffResult {
         self.out_of_bounds
     }
 
+    fn touchback(&self) -> bool {
+        self.touchback
+    }
+
     fn kickoff(&self) -> bool { true }
 
     fn next_play_kickoff(&self) -> bool { false }

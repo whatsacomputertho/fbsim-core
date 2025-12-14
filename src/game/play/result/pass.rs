@@ -189,7 +189,9 @@ impl std::fmt::Display for PassResult {
         } else {
             String::from("")
         };
-        let safety_str = if self.safety {
+        let score_str = if self.touchdown {
+            " TOUCHDOWN!"
+        } else if self.safety {
             " SAFETY!"
         } else {
             ""
@@ -199,7 +201,7 @@ impl std::fmt::Display for PassResult {
             &pressure_str,
             &catch_str,
             &fumble_str,
-            safety_str
+            score_str
         );
         f.write_str(&pass_str.trim())
     }
@@ -215,7 +217,11 @@ impl PlayResult for PassResult {
     }
 
     fn net_yards(&self) -> i32 {
-        self.pass_dist + self.yards_after_catch - (self.return_yards + self.sack_yards_lost)
+        if self.complete {
+            self.pass_dist + self.yards_after_catch - (self.return_yards + self.sack_yards_lost)
+        } else {
+            -1 * (self.return_yards + self.sack_yards_lost)
+        }
     }
 
     fn turnover(&self) -> bool {
@@ -413,6 +419,10 @@ impl PlayResultSimulator for PassResultSimulator {
         let norm_diff_turnovers: f64 = 0.5_f64 + ((offense.offense().turnovers() as f64 - defense.defense().turnovers() as f64) / 200_f64);
         let norm_scrambling: f64 = offense.offense().scrambling() as f64 / 100_f64;
         let td_yards = context.yards_to_touchdown();
+        let yard_line = match u32::try_from(td_yards) {
+            Ok(n) => n,
+            Err(_) => 0
+        };
         let oob_yards = td_yards + 10;
         let safety_yards = context.yards_to_safety();
 
@@ -452,16 +462,16 @@ impl PlayResultSimulator for PassResultSimulator {
         // Generate whether a short pass occurred
         let pass: bool = !pressure || (pressure && !(sack || scramble));
         let short_pass: bool = if pass {
-            self.short_pass(td_yards as u32, rng)
+            self.short_pass(yard_line, rng)
         } else {
             false
         };
 
         // Generate pass distance
         let pass_distance: i32 = if pass && !short_pass {
-            self.deep_pass_distance(td_yards as u32, rng)
+            self.deep_pass_distance(yard_line, rng)
         } else {
-            self.short_pass_distance(td_yards as u32, rng)
+            self.short_pass_distance(yard_line, rng)
         };
 
         // Generate whether an interception occurred
@@ -473,7 +483,7 @@ impl PlayResultSimulator for PassResultSimulator {
 
         // Generate the interception return yards
         let int_return_yards: i32 = if interception {
-            self.interception_return_yards(td_yards as u32, rng)
+            self.interception_return_yards(yard_line, rng)
         } else {
             0
         };

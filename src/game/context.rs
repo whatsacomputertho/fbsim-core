@@ -694,19 +694,25 @@ impl GameContext {
     /// use fbsim_core::game::play::result::ScoreResult;
     /// 
     /// let my_context = GameContext::new();
-    /// let next_home_possession = my_context.next_home_possession(10_i32, false, ScoreResult::None);
+    /// let next_home_possession = my_context.next_home_possession(10_i32, false, ScoreResult::None, ScoreResult::None);
     /// assert!(!next_home_possession);
     /// ```
-    pub fn next_home_possession(&self, net_yards: i32, turnover: bool, defense_score: ScoreResult) -> bool {
+    pub fn next_home_possession(&self, net_yards: i32, turnover: bool, offense_score: ScoreResult, defense_score: ScoreResult) -> bool {
         // Change possession on successful kickoffs, defensive TDs, turnovers
         if (self.next_play_kickoff && !turnover) || defense_score == ScoreResult::Touchdown || turnover {
             return !self.home_possession;
         }
 
-        // Maintain possession on first downs, change on turnover on downs
-        if net_yards >= self.distance as i32 {
+        // Maintain possession on first downs, offensive scores
+        if net_yards >= self.distance as i32 ||
+            offense_score == ScoreResult::Touchdown ||
+            offense_score == ScoreResult::FieldGoal ||
+            offense_score == ScoreResult::ExtraPoint ||
+            offense_score == ScoreResult::TwoPointConversion {
             return self.home_possession;
         }
+
+        // Change possession on turnovers on downs
         let next_down = self.down + 1;
         if next_down > 4 {
             return !self.home_possession;
@@ -722,10 +728,10 @@ impl GameContext {
     /// use fbsim_core::game::play::result::ScoreResult;
     /// 
     /// let my_context = GameContext::new();
-    /// let yard_line = my_context.next_yard_line(10, ScoreResult::None, ScoreResult::None);
+    /// let yard_line = my_context.next_yard_line(10, false, false, ScoreResult::None, ScoreResult::None);
     /// assert!(yard_line == 45);
     /// ```
-    pub fn next_yard_line(&self, net_yards: i32, offense_score: ScoreResult, defense_score: ScoreResult) -> u32 {
+    pub fn next_yard_line(&self, net_yards: i32, touchback: bool, kickoff_oob: bool, offense_score: ScoreResult, defense_score: ScoreResult) -> u32 {
         // Kickoff after PAT, field goals, safeties
         if self.next_play_extra_point || defense_score == ScoreResult::Safety || offense_score == ScoreResult::FieldGoal {
             if self.home_possession ^ self.home_positive_direction {
@@ -745,6 +751,19 @@ impl GameContext {
                 return 98;
             }
             return 2;
+        }
+
+        // Touchbacks and kickoffs out of bounds
+        if touchback {
+            if self.home_possession ^ self.home_positive_direction {
+                return 75;
+            }
+            return 25;
+        } else if kickoff_oob {
+            if self.home_possession ^ self.home_positive_direction {
+                return 65;
+            }
+            return 35;
         }
 
         // Increment the yard line
@@ -769,10 +788,10 @@ impl GameContext {
     /// use fbsim_core::game::play::result::ScoreResult;
     /// 
     /// let my_context = GameContext::new();
-    /// let distance = my_context.next_distance(10, true, ScoreResult::None, ScoreResult::None);
+    /// let distance = my_context.next_distance(10, true, false, false, ScoreResult::None, ScoreResult::None);
     /// assert!(distance == 10);
     /// ```
-    pub fn next_distance(&self, net_yards: i32, turnover: bool, offense_score: ScoreResult, defense_score: ScoreResult) -> u32 {
+    pub fn next_distance(&self, net_yards: i32, turnover: bool, touchback: bool, kickoff_oob: bool, offense_score: ScoreResult, defense_score: ScoreResult) -> u32 {
         // Kickoff after PAT, field goals, safeties
         if self.next_play_extra_point || defense_score == ScoreResult::Safety || offense_score == ScoreResult::FieldGoal {
             return 10;
@@ -785,7 +804,7 @@ impl GameContext {
 
         // If a turnover occurred, determine the distance based on the defense's direction
         // Note it will always be a first down after a turnover
-        let next_yl = self.next_yard_line(net_yards, offense_score, defense_score);
+        let next_yl = self.next_yard_line(net_yards, touchback, kickoff_oob, offense_score, defense_score);
         if turnover {
             if self.home_possession ^ self.home_positive_direction {
                 return 10.min(100 - next_yl);
@@ -861,6 +880,8 @@ impl GameContext {
         let off_score = result.offense_score();
         let def_score = result.defense_score();
         let turnover = result.turnover();
+        let touchback = result.touchback();
+        let kickoff_oob = result.kickoff() && result.out_of_bounds();
         let off_timeout = result.offense_timeout();
         let def_timeout = result.defense_timeout();
         GameContext{
@@ -869,15 +890,15 @@ impl GameContext {
             quarter: self.next_quarter(duration, off_score, def_score),
             half_seconds: self.next_half_seconds(duration, off_score, def_score),
             down: self.next_down(net_yards, turnover, off_score, def_score),
-            distance: self.next_distance(net_yards, turnover, off_score, def_score),
-            yard_line: self.next_yard_line(net_yards, off_score, def_score),
+            distance: self.next_distance(net_yards, touchback, kickoff_oob, turnover, off_score, def_score),
+            yard_line: self.next_yard_line(net_yards, touchback, kickoff_oob, off_score, def_score),
             home_score: self.next_home_score(off_score, def_score),
             away_score: self.next_away_score(off_score, def_score),
             home_timeouts: self.next_home_timeouts(off_timeout, def_timeout),
             away_timeouts: self.next_away_timeouts(off_timeout, def_timeout),
             home_positive_direction: self.next_home_positive_direction(duration, off_score, def_score),
             home_opening_kickoff: self.home_opening_kickoff,
-            home_possession: self.next_home_positive_direction(duration, off_score, def_score),
+            home_possession: self.next_home_possession(net_yards, turnover, off_score, def_score),
             last_play_incomplete: result.incomplete(),
             last_play_out_of_bounds: result.out_of_bounds(),
             last_play_timeout: off_timeout || def_timeout,

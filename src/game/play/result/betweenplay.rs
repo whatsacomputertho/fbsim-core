@@ -24,6 +24,7 @@ const MEAN_UP_TEMPO_BETWEEN_PLAY_DURATION: f64 = 6_f64;
 const STD_UP_TEMPO_BETWEEN_PLAY_DURATION: f64 = 2_f64;
 
 // Probability defense is not set
+const P_DEFENSE_NOT_SET_CLOCK_STOPPED: f64 = 0.001_f64;
 const P_DEFENSE_NOT_SET: f64 = 0.08_f64;
 const P_DEFENSE_NOT_SET_UP_TEMPO: f64 = 0.3_f64;
 
@@ -169,11 +170,15 @@ impl BetweenPlayResultSimulator {
     }
 
     /// Generates whether the defense is not set
-    fn defense_not_set(&self, up_tempo: bool, rng: &mut impl Rng) -> bool {
-        let p_not_set: f64 = if up_tempo {
-            P_DEFENSE_NOT_SET_UP_TEMPO
+    fn defense_not_set(&self, up_tempo: bool, clock_running: bool, rng: &mut impl Rng) -> bool {
+        let p_not_set: f64 = if clock_running {
+            if up_tempo {
+                P_DEFENSE_NOT_SET_UP_TEMPO
+            } else {
+                P_DEFENSE_NOT_SET
+            }
         } else {
-            P_DEFENSE_NOT_SET
+            P_DEFENSE_NOT_SET_CLOCK_STOPPED
         };
         rng.gen::<f64>() < p_not_set
     }
@@ -253,18 +258,19 @@ impl PlayResultSimulator for BetweenPlayResultSimulator {
     /// let my_res = my_sim.sim(&my_off, &my_def, &my_context, &mut rng);
     /// ```
     fn sim(&self, offense: &impl PlaySimulatable, defense: &impl PlaySimulatable, context: &GameContext, rng: &mut impl Rng) -> impl PlayResult {
-        // Calculate normalized skill diffs and skill levels
+        // Calculate normalized skill diffs, skill levels, context values
         let norm_defense_risk_taking: f64 = defense.coach().risk_taking() as f64 / 100_f64;
         let norm_offense_up_tempo: f64 = offense.coach().up_tempo() as f64 / 100_f64;
+        let clock_running: bool = context.clock_running();
         let play_context = PlayContext::from(context);
 
         // Generate whether the offense goes up-tempo, defense is not set
-        let up_tempo: bool = if context.clock_running() {
+        let up_tempo: bool = if clock_running {
             self.up_tempo(&play_context, norm_offense_up_tempo, rng)
         } else {
             false
         };
-        let defense_not_set: bool = self.defense_not_set(up_tempo, rng);
+        let defense_not_set: bool = self.defense_not_set(up_tempo, clock_running, rng);
 
         // Check if this is a critical down
         let critical_down: bool = play_context.critical_down();

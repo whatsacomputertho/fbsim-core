@@ -21,6 +21,7 @@ pub trait PlayResult {
     fn defense_timeout(&self) -> bool { false }
     fn incomplete(&self) -> bool { false }
     fn out_of_bounds(&self) -> bool { false }
+    fn touchback(&self) -> bool { false }
     fn kickoff(&self) -> bool { false }
     fn next_play_kickoff(&self) -> bool { false }
     fn next_play_extra_point(&self) -> bool { false }

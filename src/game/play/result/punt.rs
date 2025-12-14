@@ -233,6 +233,10 @@ impl PlayResult for PuntResult {
         self.out_of_bounds
     }
 
+    fn touchback(&self) -> bool {
+        self.touchback
+    }
+
     fn kickoff(&self) -> bool { false }
 
     fn next_play_kickoff(&self) -> bool { false }
