@@ -68,6 +68,41 @@ impl Default for BetweenPlayResult {
     }
 }
 
+impl std::fmt::Display for BetweenPlayResult {
+    /// Format a `BetweenPlayResult` as a string.
+    ///
+    /// ### Example
+    ///
+    /// ```
+    /// use fbsim_core::game::play::result::betweenplay::BetweenPlayResult;
+    /// 
+    /// let my_result = BetweenPlayResult::default();
+    /// println!("{}", my_result);
+    /// ```
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let timeout_str = if self.offense_timeout {
+            "Offense calls timeout after the play."
+        } else if self.defense_timeout {
+            if self.defense_not_set {
+                "Defense slow to get set, calls timeout to get set."
+            } else if self.critical_down {
+                "Defense calls timeout to make a playcall."
+            } else {
+                "Defense calls timeout."
+            }
+        } else {
+            ""
+        };
+        let up_tempo_str = if self.up_tempo {
+            "Offense rushes to the line."
+        } else {
+            ""
+        };
+        let result_str = format!("{} {}", up_tempo_str, timeout_str);
+        f.write_str(&result_str.trim())
+    }
+}
+
 impl PlayResult for BetweenPlayResult {
     fn next_context(&self, context: &GameContext) -> GameContext {
         let off_score = ScoreResult::None;
@@ -95,6 +130,10 @@ impl PlayResult for BetweenPlayResult {
             .next_play_kickoff(*context.next_play_kickoff())
             .game_over(context.next_game_over(self.duration, off_score, def_score))
             .build()
+    }
+
+    fn summary(&self) -> String {
+        format!("{}", self)
     }
 }
 

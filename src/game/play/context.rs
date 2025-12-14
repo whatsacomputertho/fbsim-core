@@ -419,14 +419,19 @@ impl std::fmt::Display for PlayContext {
     /// ```
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         // Format the clock
-        let clock_total = if self.half_seconds > 900 {
+        let clock_total = if self.half_seconds < 900 {
             self.half_seconds
         } else {
             self.half_seconds - 900
         };
         let clock_mins = clock_total / 60;
         let clock_secs = clock_total - (clock_mins * 60);
-        let clock_str = format!("{}:{}", clock_mins, clock_secs);
+        let clock_secs_str = if clock_secs < 10 {
+            format!("0{}", clock_secs)
+        } else {
+            format!("{}", clock_secs)
+        };
+        let clock_str = format!("{}:{}", clock_mins, &clock_secs_str);
 
         // Format the quarter
         let quarter_str = if self.quarter <= 4 {

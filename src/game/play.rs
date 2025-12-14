@@ -2,6 +2,11 @@ pub mod call;
 pub mod context;
 pub mod result;
 
+#[cfg(feature = "rocket_okapi")]
+use rocket_okapi::okapi::schemars;
+#[cfg(feature = "rocket_okapi")]
+use rocket_okapi::okapi::schemars::JsonSchema;
+use serde::{Serialize, Deserialize};
 use rand::Rng;
 
 use crate::game::context::GameContext;
@@ -27,6 +32,8 @@ pub trait PlaySimulatable {
 /// # `Play` struct
 ///
 /// A `Play` represents the outcome of a play
+#[cfg_attr(feature = "rocket_okapi", derive(JsonSchema))]
+#[derive(Clone, Eq, PartialEq, Ord, PartialOrd, Debug, Serialize, Deserialize)]
 pub struct Play {
     context: GameContext,
     summary: String

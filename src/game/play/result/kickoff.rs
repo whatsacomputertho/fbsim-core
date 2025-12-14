@@ -106,6 +106,61 @@ impl Default for KickoffResult {
     }
 }
 
+impl std::fmt::Display for KickoffResult {
+    /// Format a `KickoffResult` as a string.
+    ///
+    /// ### Example
+    ///
+    /// ```
+    /// use fbsim_core::game::play::result::kickoff::KickoffResult;
+    /// 
+    /// let my_result = KickoffResult::default();
+    /// println!("{}", my_result);
+    /// ```
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let distance_str = format!("Kickoff {} yards", self.kickoff_yards);
+        let landing_suffix = if self.touchback {
+            "for a touchback"
+        } else if self.out_of_bounds {
+            "out of bounds"
+        } else if self.fair_catch && !self.fumble {
+            "for a fair catch"
+        } else if self.fumble && self.kick_return_yards == 0 {
+            "MUFFED, recovered by the kicking team"
+        } else {
+            "fielded"
+        };
+        let kick_return_str = if !(
+            self.touchback || self.out_of_bounds ||
+                (self.fair_catch && !self.fumble) ||
+                (self.fumble && self.kick_return_yards == 0)
+        ) {
+            format!(" Returned {} yards", self.kick_return_yards)
+        } else {
+            String::from("")
+        };
+        let fumble_str = if self.fumble && self.kick_return_yards != 0 {
+            format!(" FUMBLED recovered by the kicking team, returned {} yards.", self.fumble_return_yards)
+        } else {
+            String::from("")
+        };
+        let touchdown_str = if self.touchdown {
+            " TOUCHDOWN!"
+        } else {
+            ""
+        };
+        let kickoff_str = format!(
+            "{} {}.{}{}{}",
+            &distance_str,
+            landing_suffix,
+            &kick_return_str,
+            &fumble_str,
+            &touchdown_str
+        );
+        f.write_str(&kickoff_str.trim())
+    }
+}
+
 impl PlayResult for KickoffResult {
     fn next_context(&self, context: &GameContext) -> GameContext {
         context.next_context(self)

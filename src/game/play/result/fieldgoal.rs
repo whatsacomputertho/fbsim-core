@@ -74,6 +74,52 @@ impl Default for FieldGoalResult {
     }
 }
 
+impl std::fmt::Display for FieldGoalResult {
+    /// Format a `FieldGoalResult` as a string.
+    ///
+    /// ### Example
+    ///
+    /// ```
+    /// use fbsim_core::game::play::result::fieldgoal::FieldGoalResult;
+    /// 
+    /// let my_result = FieldGoalResult::default();
+    /// println!("{}", my_result);
+    /// ```
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let distance_str = format!("{} yard", self.field_goal_distance);
+        let fg_type_str = if self.extra_point {
+            "extra point"
+        } else {
+            "field goal"
+        };
+        let result_str = if self.made {
+            "is good."
+        } else if self.blocked {
+            "BLOCKED."
+        } else {
+            "NO GOOD."
+        };
+        let return_str = if self.blocked {
+            let return_prefix = format!("Returned {} yards", self.return_yards);
+            if self.touchdown {
+                format!("{}, TOUCHDOWN!", &return_prefix)
+            } else {
+                format!("{}.", return_prefix)
+            }
+        } else {
+            String::from("")
+        };
+        let fg_str = format!(
+            "{} {} {} {}",
+            &distance_str,
+            fg_type_str,
+            result_str,
+            &return_str
+        );
+        f.write_str(&fg_str.trim())
+    }
+}
+
 impl PlayResult for FieldGoalResult {
     fn next_context(&self, context: &GameContext) -> GameContext {
         context.next_context(self)
@@ -125,6 +171,10 @@ impl PlayResult for FieldGoalResult {
 
     fn next_play_extra_point(&self) -> bool {
         !self.extra_point && self.blocked && self.touchdown
+    }
+
+    fn summary(&self) -> String {
+        format!("{}", self)
     }
 }
 
