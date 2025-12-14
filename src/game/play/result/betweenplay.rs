@@ -259,7 +259,11 @@ impl PlayResultSimulator for BetweenPlayResultSimulator {
         let play_context = PlayContext::from(context);
 
         // Generate whether the offense goes up-tempo, defense is not set
-        let up_tempo: bool = self.up_tempo(&play_context, norm_offense_up_tempo, rng);
+        let up_tempo: bool = if context.clock_running() {
+            self.up_tempo(&play_context, norm_offense_up_tempo, rng)
+        } else {
+            false
+        };
         let defense_not_set: bool = self.defense_not_set(up_tempo, rng);
 
         // Check if this is a critical down

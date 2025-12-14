@@ -449,9 +449,9 @@ impl std::fmt::Display for PlayContext {
             _ => "th"
         };
         let down_dist_str = if self.yard_line + self.distance >= 100 {
-            format!("{} & goal", down_suf)
+            format!("{}{} & goal", self.down, down_suf)
         } else {
-            format!("{} & {}", down_suf, self.distance)
+            format!("{}{} & {}", self.down, down_suf, self.distance)
         };
 
         // Format the yard line

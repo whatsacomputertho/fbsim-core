@@ -120,20 +120,20 @@ impl std::fmt::Display for KickoffResult {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let distance_str = format!("Kickoff {} yards", self.kickoff_yards);
         let landing_suffix = if self.touchback {
-            "for a touchback"
+            " for a touchback."
         } else if self.out_of_bounds {
-            "out of bounds"
+            " out of bounds."
         } else if self.fair_catch && !self.fumble {
-            "for a fair catch"
+            " for a fair catch."
         } else {
-            "fielded"
+            " fielded."
         };
         let kick_return_str = if !(
             self.touchback || self.out_of_bounds ||
                 (self.fair_catch && !self.fumble) ||
                 (self.fumble && self.kick_return_yards == 0)
         ) {
-            format!(" Returned {} yards", self.kick_return_yards)
+            format!(" Returned {} yards.", self.kick_return_yards)
         } else {
             String::from("")
         };
@@ -148,7 +148,7 @@ impl std::fmt::Display for KickoffResult {
             ""
         };
         let kickoff_str = format!(
-            "{} {}.{}{}{}",
+            "{}{}{}{}{}",
             &distance_str,
             landing_suffix,
             &kick_return_str,
