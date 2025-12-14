@@ -125,8 +125,6 @@ impl std::fmt::Display for KickoffResult {
             "out of bounds"
         } else if self.fair_catch && !self.fumble {
             "for a fair catch"
-        } else if self.fumble && self.kick_return_yards == 0 {
-            "MUFFED, recovered by the kicking team"
         } else {
             "fielded"
         };
@@ -139,7 +137,7 @@ impl std::fmt::Display for KickoffResult {
         } else {
             String::from("")
         };
-        let fumble_str = if self.fumble && self.kick_return_yards != 0 {
+        let fumble_str = if self.fumble {
             format!(" FUMBLED recovered by the kicking team, returned {} yards.", self.fumble_return_yards)
         } else {
             String::from("")

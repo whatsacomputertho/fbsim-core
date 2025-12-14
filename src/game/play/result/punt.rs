@@ -133,6 +133,63 @@ impl Default for PuntResult {
     }
 }
 
+impl std::fmt::Display for PuntResult {
+    /// Format a `PuntResult` as a string.
+    ///
+    /// ### Example
+    ///
+    /// ```
+    /// use fbsim_core::game::play::result::punt::PuntResult;
+    /// 
+    /// let my_result = PuntResult::default();
+    /// println!("{}", my_result);
+    /// ```
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let blocked_prefix = if self.blocked {
+            format!("Punt BLOCKED, returned {} yards.", self.fumble_return_yards)
+        } else {
+            String::from("")
+        };
+        let punt_distance_str = if !self.blocked {
+            format!("Punt {} yards", self.punt_yards)
+        } else {
+            String::from("")
+        };
+        let catch_str = if self.touchback {
+            String::from(" for a touchback.")
+        } else if self.out_of_bounds {
+            String::from(" out of bounds.")
+        } else if self.fair_catch {
+            if self.muffed {
+                format!(" fair catch MUFFED.")
+            } else {
+                String::from(" for a fair catch.")
+            }
+        } else {
+            String::from(" fielded.")
+        };
+        let return_str = if !(self.touchback || self.out_of_bounds || (self.fair_catch && !self.muffed)) {
+            format!(" Punt returned {} yards.", self.punt_return_yards)
+        } else {
+            String::from("")
+        };
+        let fumble_str = if self.fumble {
+            format!(" FUMBLE recovered by the kicking team, returned {} yards", self.fumble_return_yards)
+        } else {
+            String::from("")
+        };
+        let punt_str = format!(
+            "{}{}{}{}{}",
+            &blocked_prefix,
+            &punt_distance_str,
+            &catch_str,
+            &return_str,
+            &fumble_str
+        );
+        f.write_str(&punt_str.trim())
+    }
+}
+
 impl PlayResult for PuntResult {
     fn next_context(&self, context: &GameContext) -> GameContext {
         context.next_context(self)
@@ -182,6 +239,10 @@ impl PlayResult for PuntResult {
 
     fn next_play_extra_point(&self) -> bool {
         self.touchdown
+    }
+
+    fn summary(&self) -> String {
+        format!("{}", self)
     }
 }
 

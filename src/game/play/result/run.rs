@@ -80,6 +80,41 @@ impl Default for RunResult {
     }
 }
 
+impl std::fmt::Display for RunResult {
+    /// Format a `RunResult` as a string.
+    ///
+    /// ### Example
+    ///
+    /// ```
+    /// use fbsim_core::game::play::result::run::RunResult;
+    /// 
+    /// let my_result = RunResult::default();
+    /// println!("{}", my_result);
+    /// ```
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let dist_str = format!("Rush {} yards.", self.yards_gained);
+        let fumble_str = if self.fumble {
+            format!(" FUMBLE recovered by the defense, returned {} yards.", self.return_yards)
+        } else {
+            String::from("")
+        };
+        let result_str = if self.touchdown {
+            " TOUCHDOWN!"
+        } else if self.safety {
+            " SAFETY!"
+        } else {
+            ""
+        };
+        let run_str = format!(
+            "{}{}{}",
+            &dist_str,
+            &fumble_str,
+            result_str
+        );
+        f.write_str(&run_str)
+    }
+}
+
 impl PlayResult for RunResult {
     fn next_context(&self, context: &GameContext) -> GameContext {
         context.next_context(self)
@@ -130,6 +165,10 @@ impl PlayResult for RunResult {
 
     fn next_play_extra_point(&self) -> bool {
         self.touchdown
+    }
+
+    fn summary(&self) -> String {
+        format!("{}", self)
     }
 }
 
