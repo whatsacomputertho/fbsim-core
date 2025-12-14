@@ -24,6 +24,7 @@ pub trait PlayResult {
     fn kickoff(&self) -> bool { false }
     fn next_play_kickoff(&self) -> bool { false }
     fn next_play_extra_point(&self) -> bool { false }
+    fn summary(&self) -> String { String::from("Not yet implemented") }
 }
 
 pub trait PlayResultSimulator {

@@ -89,4 +89,18 @@ impl FootballTeamCoach {
     pub fn up_tempo(&self) -> u32 {
         self.up_tempo
     }
+
+    /// Get the coach's run-pass playcalling tendency
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::team::coach::FootballTeamCoach;
+    /// 
+    /// let my_coach = FootballTeamCoach::new();
+    /// let run_pass = my_coach.run_pass();
+    /// assert!(run_pass == 50_u32);
+    /// ```
+    pub fn run_pass(&self) -> u32 {
+        self.run_pass
+    }
 }

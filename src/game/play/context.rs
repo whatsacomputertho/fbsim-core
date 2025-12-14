@@ -91,6 +91,54 @@ impl PlayContext {
         self.clock_running
     }
 
+    /// Gets the current down
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::game::context::GameContext;
+    /// use fbsim_core::game::play::context::PlayContext;
+    /// 
+    /// let game_context = GameContext::new();
+    /// let play_context = PlayContext::from(&game_context);
+    /// let down = play_context.down();
+    /// assert!(down == 0);
+    /// ```
+    pub fn down(&self) -> u32 {
+        self.down
+    }
+
+    /// Gets the current distance
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::game::context::GameContext;
+    /// use fbsim_core::game::play::context::PlayContext;
+    /// 
+    /// let game_context = GameContext::new();
+    /// let play_context = PlayContext::from(&game_context);
+    /// let distance = play_context.distance();
+    /// assert!(distance == 10);
+    /// ```
+    pub fn distance(&self) -> u32 {
+        self.distance
+    }
+
+    /// Gets the current yard line
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::game::context::GameContext;
+    /// use fbsim_core::game::play::context::PlayContext;
+    /// 
+    /// let game_context = GameContext::new();
+    /// let play_context = PlayContext::from(&game_context);
+    /// let yard_line = play_context.yard_line();
+    /// assert!(yard_line == 35);
+    /// ```
+    pub fn yard_line(&self) -> u32 {
+        self.yard_line
+    }
+
     /// Gets the number of timeouts the offense has
     ///
     /// ### Example
