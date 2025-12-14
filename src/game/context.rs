@@ -4,6 +4,7 @@ use rocket_okapi::okapi::schemars;
 use rocket_okapi::okapi::schemars::JsonSchema;
 use serde::{Serialize, Deserialize};
 
+use crate::game::play::context::PlayContext;
 use crate::game::play::result::{ScoreResult, PlayResult};
 
 /// # `GameContext` struct
@@ -885,6 +886,37 @@ impl GameContext {
             next_play_kickoff: result.next_play_kickoff(),
             game_over: self.next_game_over(duration, off_score, def_score)
         }
+    }
+}
+
+impl std::fmt::Display for GameContext {
+    /// Format a `GameContext` as a string.
+    ///
+    /// ### Example
+    ///
+    /// ```
+    /// use fbsim_core::game::play::Play;
+    ///
+    /// // Initialize a game context and display it
+    /// let my_context = GameContext::new();
+    /// println!("{}", my_context);
+    /// ```
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let play_context = PlayContext::from(self);
+        let (home_team_str, away_team_str) = if self.home_possession {
+            (format!("*{}", &self.home_team_short), String::from(&self.away_team_short))
+        } else {
+            (String::from(&self.home_team_short), format!("*{}", &self.away_team_short))
+        };
+        let context_str = format!(
+            "{} ({} {} - {} {})",
+            &play_context,
+            &home_team_str,
+            self.home_score,
+            &away_team_str,
+            self.away_score
+        );
+        f.write_str(&context_str)
     }
 }
 

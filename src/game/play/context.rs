@@ -402,3 +402,69 @@ impl PlayContext {
         self.yard_line >= 45
     }
 }
+
+impl std::fmt::Display for PlayContext {
+    /// Format a `PlayContext` as a string.
+    ///
+    /// ### Example
+    ///
+    /// ```
+    /// use fbsim_core::game::context::GameContext;
+    /// use fbsim_core::game::play::context::PlayContext;
+    ///
+    /// // Initialize a play context and display it
+    /// let game_context = GameContext::new();
+    /// let play_context = PlayContext::from(&game_context);
+    /// println!("{}", play_context);
+    /// ```
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        // Format the clock
+        let clock_total = if self.half_seconds > 900 {
+            self.half_seconds
+        } else {
+            self.half_seconds - 900
+        };
+        let clock_mins = clock_total / 60;
+        let clock_secs = clock_total - (clock_mins * 60);
+        let clock_str = format!("{}:{}", clock_mins, clock_secs);
+
+        // Format the quarter
+        let quarter_str = if self.quarter <= 4 {
+            format!("{}Q", self.quarter)
+        } else {
+            let num_ot = self.quarter - 4;
+            format!("{}OT", num_ot)
+        };
+
+        // Format the down & distance
+        let down_suf = match self.down {
+            1 => "st",
+            2 => "nd",
+            3 => "rd",
+            _ => "th"
+        };
+        let down_dist_str = if self.yard_line + self.distance >= 100 {
+            format!("{} & goal", down_suf)
+        } else {
+            format!("{} & {}", down_suf, self.distance)
+        };
+
+        // Format the yard line
+        let (yard, side_of_field) = if self.yard_line < 50 {
+            (self.yard_line, "OWN")
+        } else {
+            (100 - self.yard_line, "OPP")
+        };
+        let yard_str = format!("{} {}", side_of_field, yard);
+
+        // Format the play context
+        let context_str = format!(
+            "[{} {}] {} at {}",
+            clock_str,
+            quarter_str,
+            down_dist_str,
+            yard_str
+        );
+        f.write_str(&context_str)
+    }
+}

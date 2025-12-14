@@ -53,6 +53,31 @@ impl Play {
     }
 }
 
+impl std::fmt::Display for Play {
+    /// Format a `Play` as a string.
+    ///
+    /// ### Example
+    ///
+    /// ```
+    /// use fbsim_core::game::play::Play;
+    ///
+    /// // Initialize a game context
+    /// let my_context = GameContext::new();
+    ///
+    /// // Initialize a play and display it
+    /// let my_play = Play::new(my_context, "Team A rushes for 10 yards");
+    /// println!("{}", my_play);
+    /// ```
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let score_str = format!(
+            "{} {}",
+            &self.context,
+            &self.summary
+        );
+        f.write_str(&score_str)
+    }
+}
+
 /// # `PlaySimulator` struct
 ///
 /// A `PlaySimulator` can simulate a play given a context, returning an
