@@ -159,8 +159,12 @@ impl PlayCallSimulator {
             }
         }
 
-        // Otherwise punt
-        PlayCall::Punt
+        // Otherwise field goal if in range, or punt if not in range
+        if in_field_goal_range {
+            PlayCall::FieldGoal
+        } else {
+            PlayCall::Punt
+        }
     }
 
     /// Generate a play call

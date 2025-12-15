@@ -108,6 +108,7 @@ impl PlayResult for BetweenPlayResult {
     fn next_context(&self, context: &GameContext) -> GameContext {
         let off_score = ScoreResult::None;
         let def_score = ScoreResult::None;
+        let end_of_half = context.next_end_of_half(self.duration, off_score, def_score);
         GameContextBuilder::new()
             .home_team_short(context.home_team_short())
             .away_team_short(context.away_team_short())
@@ -118,8 +119,8 @@ impl PlayResult for BetweenPlayResult {
             .yard_line(*context.yard_line())
             .home_score(*context.home_score())
             .away_score(*context.away_score())
-            .home_timeouts(context.next_home_timeouts(self.offense_timeout, self.defense_timeout))
-            .away_timeouts(context.next_away_timeouts(self.offense_timeout, self.defense_timeout))
+            .home_timeouts(context.next_home_timeouts(self.offense_timeout, self.defense_timeout, end_of_half))
+            .away_timeouts(context.next_away_timeouts(self.offense_timeout, self.defense_timeout, end_of_half))
             .home_positive_direction(*context.home_positive_direction())
             .home_opening_kickoff(*context.home_opening_kickoff())
             .home_possession(*context.home_possession())
@@ -130,6 +131,7 @@ impl PlayResult for BetweenPlayResult {
             .last_play_kickoff(*context.last_play_kickoff())
             .next_play_extra_point(*context.next_play_extra_point())
             .next_play_kickoff(*context.next_play_kickoff())
+            .end_of_half(end_of_half)
             .game_over(context.next_game_over(self.duration, off_score, def_score))
             .build()
     }
