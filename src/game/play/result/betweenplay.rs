@@ -235,7 +235,6 @@ impl BetweenPlayResultSimulator {
     }
 }
 
-
 impl PlayResultSimulator for BetweenPlayResultSimulator {
     /// Simulate the events between plays
     ///
@@ -267,7 +266,7 @@ impl PlayResultSimulator for BetweenPlayResultSimulator {
         let play_context = PlayContext::from(context);
 
         // Generate whether the offense goes up-tempo, defense is not set
-        let up_tempo: bool = if clock_running {
+        let up_tempo: bool = if clock_running && play_context.down() != 4 {
             self.up_tempo(&play_context, norm_offense_up_tempo, rng)
         } else {
             false
@@ -296,7 +295,7 @@ impl PlayResultSimulator for BetweenPlayResultSimulator {
         };
 
         // Generate the between-play duration
-        let between_play_duration: u32 = if !(offense_timeout || defense_timeout) {
+        let between_play_duration: u32 = if !(offense_timeout || defense_timeout || clock_running) {
             self.duration(&play_context, up_tempo, rng)
         } else {
             0

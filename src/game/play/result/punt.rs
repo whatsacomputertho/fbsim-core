@@ -355,8 +355,7 @@ impl PuntResultSimulator {
             (SKEW_REL_RETURN_YARDS_COEF_2 * norm_diff_returning.powi(2));
         let rel_return_yards_dist = SkewNormal::new(mean_rel_return_yards, std_rel_return_yards, skew_rel_return_yards).unwrap();
         let rel_return_yards: f64 = rel_return_yards_dist.sample(rng);
-        let new_yard_line: i32 = (landing_yard_line as f64 * rel_return_yards) as i32;
-        let return_yards: i32 = landing_yard_line as i32 - new_yard_line;
+        let return_yards: i32 = (landing_yard_line as f64 * rel_return_yards) as i32;
         return_yards
     }
 
@@ -429,8 +428,8 @@ impl PlayResultSimulator for PuntResultSimulator {
         } else {
             0
         };
-        let punt_landing: i32 = td_yards + punt_distance;
-        let touchback: bool = punt_landing >= 100;
+        let punt_landing: i32 = 100.min(0.max(td_yards - punt_distance));
+        let touchback: bool = punt_landing <= 0;
 
         // Generate whether the punt went out of bounds
         let out_of_bounds: bool = if !(blocked || touchback) {
