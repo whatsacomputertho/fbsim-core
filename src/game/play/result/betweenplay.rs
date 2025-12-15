@@ -123,6 +123,7 @@ impl PlayResult for BetweenPlayResult {
             .home_positive_direction(*context.home_positive_direction())
             .home_opening_kickoff(*context.home_opening_kickoff())
             .home_possession(*context.home_possession())
+            .last_play_turnover(*context.last_play_turnover())
             .last_play_incomplete(*context.last_play_incomplete())
             .last_play_out_of_bounds(*context.last_play_out_of_bounds())
             .last_play_timeout(self.offense_timeout || self.defense_timeout)
@@ -262,6 +263,7 @@ impl PlayResultSimulator for BetweenPlayResultSimulator {
         let norm_defense_risk_taking: f64 = defense.coach().risk_taking() as f64 / 100_f64;
         let norm_offense_up_tempo: f64 = offense.coach().up_tempo() as f64 / 100_f64;
         let clock_running: bool = context.clock_running();
+        let last_play_turnover: bool = *context.last_play_turnover();
         let play_context = PlayContext::from(context);
 
         // Generate whether the offense goes up-tempo, defense is not set
@@ -270,7 +272,11 @@ impl PlayResultSimulator for BetweenPlayResultSimulator {
         } else {
             false
         };
-        let defense_not_set: bool = self.defense_not_set(up_tempo, clock_running, rng);
+        let defense_not_set: bool = if !last_play_turnover {
+            self.defense_not_set(up_tempo, clock_running, rng)
+        } else {
+            false
+        };
 
         // Check if this is a critical down
         let critical_down: bool = play_context.critical_down();

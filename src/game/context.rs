@@ -27,6 +27,7 @@ pub struct GameContext {
     home_positive_direction: bool,
     home_opening_kickoff: bool,
     home_possession: bool,
+    last_play_turnover: bool,
     last_play_incomplete: bool,
     last_play_out_of_bounds: bool,
     last_play_timeout: bool,
@@ -61,6 +62,7 @@ impl Default for GameContext {
             home_positive_direction: true,
             home_opening_kickoff: true,
             home_possession: true,
+            last_play_turnover: false,
             last_play_incomplete: false,
             last_play_out_of_bounds: false,
             last_play_timeout: false,
@@ -279,6 +281,20 @@ impl GameContext {
     /// ```
     pub fn home_opening_kickoff(&self) -> &bool {
         &self.home_opening_kickoff
+    }
+
+    /// Borrow the GameContext last_play_turnover property
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::game::context::GameContext;
+    /// 
+    /// let my_context = GameContext::new();
+    /// let last_play_turnover = my_context.last_play_turnover();
+    /// assert!(!*last_play_turnover);
+    /// ```
+    pub fn last_play_turnover(&self) -> &bool {
+        &self.last_play_turnover
     }
 
     /// Borrow the GameContext last_play_incomplete property
@@ -756,14 +772,14 @@ impl GameContext {
         // Touchbacks and kickoffs out of bounds
         if touchback {
             if self.home_possession ^ self.home_positive_direction {
-                return 75;
+                return 25;
             }
-            return 25;
+            return 75;
         } else if kickoff_oob {
             if self.home_possession ^ self.home_positive_direction {
-                return 65;
+                return 35;
             }
-            return 35;
+            return 65;
         }
 
         // Increment the yard line
@@ -890,7 +906,7 @@ impl GameContext {
             quarter: self.next_quarter(duration, off_score, def_score),
             half_seconds: self.next_half_seconds(duration, off_score, def_score),
             down: self.next_down(net_yards, turnover, off_score, def_score),
-            distance: self.next_distance(net_yards, touchback, kickoff_oob, turnover, off_score, def_score),
+            distance: self.next_distance(net_yards, turnover, touchback, kickoff_oob, off_score, def_score),
             yard_line: self.next_yard_line(net_yards, touchback, kickoff_oob, off_score, def_score),
             home_score: self.next_home_score(off_score, def_score),
             away_score: self.next_away_score(off_score, def_score),
@@ -899,6 +915,7 @@ impl GameContext {
             home_positive_direction: self.next_home_positive_direction(duration, off_score, def_score),
             home_opening_kickoff: self.home_opening_kickoff,
             home_possession: self.next_home_possession(net_yards, turnover, off_score, def_score),
+            last_play_turnover: turnover,
             last_play_incomplete: result.incomplete(),
             last_play_out_of_bounds: result.out_of_bounds(),
             last_play_timeout: off_timeout || def_timeout,
@@ -962,6 +979,7 @@ pub struct GameContextBuilder {
     home_positive_direction: bool,
     home_opening_kickoff: bool,
     home_possession: bool,
+    last_play_turnover: bool,
     last_play_incomplete: bool,
     last_play_out_of_bounds: bool,
     last_play_timeout: bool,
@@ -996,6 +1014,7 @@ impl Default for GameContextBuilder {
             home_positive_direction: true,
             home_opening_kickoff: true,
             home_possession: true,
+            last_play_turnover: false,
             last_play_incomplete: false,
             last_play_out_of_bounds: false,
             last_play_timeout: false,
@@ -1244,6 +1263,22 @@ impl GameContextBuilder {
         self
     }
     
+    /// Set the last play turnover property
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::game::context::{GameContext, GameContextBuilder};
+    /// 
+    /// let my_context = GameContextBuilder::new()
+    ///     .last_play_turnover(true)
+    ///     .build();
+    /// assert!(*my_context.last_play_turnover() == true);
+    /// ```
+    pub fn last_play_turnover(mut self, last_play_turnover: bool) -> Self {
+        self.last_play_turnover = last_play_turnover;
+        self
+    }
+    
     /// Set the last play incomplete property
     ///
     /// ### Example
@@ -1401,6 +1436,7 @@ impl GameContextBuilder {
             home_positive_direction: self.home_positive_direction,
             home_opening_kickoff: self.home_opening_kickoff,
             home_possession: self.home_possession,
+            last_play_turnover: self.last_play_turnover,
             last_play_incomplete: self.last_play_incomplete,
             last_play_out_of_bounds: self.last_play_out_of_bounds,
             last_play_timeout: self.last_play_timeout,
