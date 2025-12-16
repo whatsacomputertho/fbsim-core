@@ -56,7 +56,7 @@ impl From<&GameContext> for PlayContext {
         let yard_line: u32 = if *item.home_possession() ^ *item.home_positive_direction() {
             match u32::try_from(100_i32 - *item.yard_line() as i32) {
                 Ok(n) => n,
-                0
+                Err(_) => 0
             }
         } else {
             *item.yard_line()

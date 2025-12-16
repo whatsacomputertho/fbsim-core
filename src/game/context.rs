@@ -938,11 +938,11 @@ impl GameContext {
         let away_tos = self.away_timeouts;
         if self.home_possession {
             if defense_timeout {
-                return 0.max(away_tos as i32 - 1_i32);
+                return 0.max(away_tos as i32 - 1_i32) as u32;
             }
         }
         if offense_timeout {
-            return 0.max(away_tos as i32 - 1_i32);
+            return 0.max(away_tos as i32 - 1_i32) as u32;
         }
         away_tos
     }
