@@ -294,12 +294,8 @@ impl PlayResultSimulator for BetweenPlayResultSimulator {
         };
 
         // Generate whether the offense calls timeout
-        let offense_timeout: bool = if !last_play_turnover {
-            if !defense_timeout {
-                self.offense_conserve_clock_timeout(&play_context)
-            } else {
-                false
-            }
+        let offense_timeout: bool = if !(last_play_turnover || defense_timeout) {
+            self.offense_conserve_clock_timeout(&play_context)
         } else {
             false
         };

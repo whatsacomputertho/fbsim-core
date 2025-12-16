@@ -54,7 +54,10 @@ impl From<&GameContext> for PlayContext {
 
         // Determine yard line based on possession and direction
         let yard_line: u32 = if *item.home_possession() ^ *item.home_positive_direction() {
-            100 - *item.yard_line()
+            match u32::try_from(100_i32 - *item.yard_line() as i32) {
+                Ok(n) => n,
+                0
+            }
         } else {
             *item.yard_line()
         };
