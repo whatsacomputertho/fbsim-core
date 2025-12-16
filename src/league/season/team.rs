@@ -1,6 +1,11 @@
+#[cfg(feature = "rocket_okapi")]
+use rocket_okapi::okapi::schemars;
+#[cfg(feature = "rocket_okapi")]
+use rocket_okapi::okapi::schemars::JsonSchema;
 use serde::{Serialize, Deserialize, Deserializer};
 
 use crate::team::DEFAULT_TEAM_NAME;
+use crate::game::score::ScoreSimulatable;
 
 /// # `LeagueSeasonTeamRaw` struct
 ///
@@ -10,14 +15,14 @@ use crate::team::DEFAULT_TEAM_NAME;
 pub struct LeagueSeasonTeamRaw {
     name: String,
     logo: String,
-    offense_overall: usize,
-    defense_overall: usize
+    offense_overall: u32,
+    defense_overall: u32
 }
 
 impl LeagueSeasonTeamRaw {
     pub fn validate(&self) -> Result<(), String> {
         // Ensure the offense and defense overall are in range
-        if !self.offense_overall <= 100_usize {
+        if !self.offense_overall <= 100_u32 {
             return Err(
                 format!(
                     "Offense overall not in range [0, 100]: {}",
@@ -25,7 +30,7 @@ impl LeagueSeasonTeamRaw {
                 )
             )
         }
-        if !self.defense_overall <= 100_usize {
+        if !self.defense_overall <= 100_u32 {
             return Err(
                 format!(
                     "Defense overall not in range [0, 100]: {}",
@@ -40,12 +45,58 @@ impl LeagueSeasonTeamRaw {
 /// # `LeagueSeasonTeam` struct
 ///
 /// A `LeagueSeasonTeam` represents a team during a season of a football leauge
+#[cfg_attr(feature = "rocket_okapi", derive(JsonSchema))]
 #[derive(Clone, Eq, PartialEq, Ord, PartialOrd, Debug, Serialize)]
 pub struct LeagueSeasonTeam {
     name: String,
     logo: String,
-    offense_overall: usize,
-    defense_overall: usize
+    offense_overall: u32,
+    defense_overall: u32
+}
+
+impl ScoreSimulatable for LeagueSeasonTeam {
+    /// Borrow the season team name
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::league::season::team::LeagueSeasonTeam;
+    ///
+    /// let my_season_team = LeagueSeasonTeam::new();
+    /// let team_name = my_season_team.name();
+    /// ```
+    fn name(&self) -> &str {
+        &self.name
+    }
+
+    /// Get the defense overall
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::game::score::ScoreSimulatable;
+    /// use fbsim_core::league::season::team::LeagueSeasonTeam;
+    ///
+    /// let my_team = LeagueSeasonTeam::new();
+    /// let def_ovr = my_team.defense_overall();
+    /// assert!(def_ovr == 50_u32);
+    /// ```
+    fn defense_overall(&self) -> u32 {
+        self.defense_overall
+    }
+
+    /// Get the offense overall
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::game::score::ScoreSimulatable;
+    /// use fbsim_core::league::season::team::LeagueSeasonTeam;
+    ///
+    /// let my_team = LeagueSeasonTeam::new();
+    /// let off_ovr = my_team.offense_overall();
+    /// assert!(off_ovr == 50_u32);
+    /// ```
+    fn offense_overall(&self) -> u32 {
+        self.offense_overall
+    }
 }
 
 impl TryFrom<LeagueSeasonTeamRaw> for LeagueSeasonTeam {
@@ -95,8 +146,8 @@ impl LeagueSeasonTeam {
         LeagueSeasonTeam{
             name: String::from(DEFAULT_TEAM_NAME), 
             logo: "".to_string(), // TODO: Default logo
-            offense_overall: 50_usize,
-            defense_overall: 50_usize
+            offense_overall: 50_u32,
+            defense_overall: 50_u32
         }
     }
 
@@ -114,7 +165,7 @@ impl LeagueSeasonTeam {
     ///     50
     /// );
     /// ```
-    pub fn from_properties(name: String, logo: String, offense_overall: usize, defense_overall: usize) -> Result<LeagueSeasonTeam, String> {
+    pub fn from_properties(name: String, logo: String, offense_overall: u32, defense_overall: u32) -> Result<LeagueSeasonTeam, String> {
         let raw = LeagueSeasonTeamRaw{
             name: name, 
             logo: logo,
@@ -176,19 +227,6 @@ impl LeagueSeasonTeam {
         &mut self.logo
     }
 
-    /// Borrow the season team offensive overall value
-    ///
-    /// ### Example
-    /// ```
-    /// use fbsim_core::league::season::team::LeagueSeasonTeam;
-    ///
-    /// let my_season_team = LeagueSeasonTeam::new();
-    /// let offense_overall = my_season_team.offense_overall();
-    /// ```
-    pub fn offense_overall(&self) -> &usize {
-        &self.offense_overall
-    }
-
     /// Mutably borrow the season team offensive overall value
     ///
     /// ### Example
@@ -198,21 +236,8 @@ impl LeagueSeasonTeam {
     /// let mut my_season_team = LeagueSeasonTeam::new();
     /// let mut offense_overall = my_season_team.offense_overall_mut();
     /// ```
-    pub fn offense_overall_mut(&mut self) -> &mut usize {
+    pub fn offense_overall_mut(&mut self) -> &mut u32 {
         &mut self.offense_overall
-    }
-
-    /// Borrow the season team defensive overall value
-    ///
-    /// ### Example
-    /// ```
-    /// use fbsim_core::league::season::team::LeagueSeasonTeam;
-    ///
-    /// let my_season_team = LeagueSeasonTeam::new();
-    /// let defense_overall = my_season_team.defense_overall();
-    /// ```
-    pub fn defense_overall(&self) -> &usize {
-        &self.defense_overall
     }
 
     /// Mutably borrow the season team defensive overall value
@@ -224,7 +249,7 @@ impl LeagueSeasonTeam {
     /// let mut my_season_team = LeagueSeasonTeam::new();
     /// let mut defense_overall = my_season_team.defense_overall_mut();
     /// ```
-    pub fn defense_overall_mut(&mut self) -> &mut usize {
+    pub fn defense_overall_mut(&mut self) -> &mut u32 {
         &mut self.defense_overall
     }
 }

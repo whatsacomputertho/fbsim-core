@@ -1,11 +1,17 @@
+pub mod freq;
+
 use lazy_static::lazy_static;
 use rand::Rng;
 use rand_distr::{Normal, Distribution, Bernoulli};
+#[cfg(feature = "rocket_okapi")]
+use rocket_okapi::okapi::schemars;
+#[cfg(feature = "rocket_okapi")]
+use rocket_okapi::okapi::schemars::JsonSchema;
+use serde::{Serialize, Deserialize};
 use statrs::distribution::Categorical;
 
-use crate::boxscore::BoxScore;
-use crate::team::FootballTeam;
-use crate::freq::ScoreFrequencyLookup;
+use crate::game::score::freq::ScoreFrequencyLookup;
+use crate::team::{DEFAULT_TEAM_NAME};
 
 // Home score simulator model weights
 const H_MEAN_COEF: f64 = 23.14578315_f64;
@@ -35,26 +41,172 @@ lazy_static!{
     };
 }
 
-/// # `BoxScoreSimulator` struct
+/// # `ScoreSimulatable` trait
 ///
-/// A `BoxScoreSimulator` generates an american football box score
+/// A `ScoreSimulatable` can return an offense and defense overall, which
+/// are the two values needed to generate the final score of a game
+pub trait ScoreSimulatable {
+    fn name(&self) -> &str { DEFAULT_TEAM_NAME }
+    fn defense_overall(&self) -> u32 { 50_u32 }
+    fn offense_overall(&self) -> u32 { 50_u32 }
+}
+
+/// # `FinalScore` struct
+///
+/// A `FinalScore` represents the final score result of a football game
+#[cfg_attr(feature = "rocket_okapi", derive(JsonSchema))]
+#[derive(Clone, Eq, PartialEq, Ord, PartialOrd, Debug, Default, Serialize, Deserialize)]
+pub struct FinalScore {
+    home_team: String,
+    home_score: i32,
+    away_team: String,
+    away_score: i32
+}
+
+impl FinalScore {
+    /// Constructor for the `FinalScore` struct in which each score
+    /// is defaulted to 0_i32, and each team name is defaulted to
+    /// the default team name.
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::game::score::FinalScore;
+    ///
+    /// let my_score = FinalScore::new();
+    /// ```
+    pub fn new() -> FinalScore {
+        FinalScore{
+            home_team: String::from(DEFAULT_TEAM_NAME),
+            home_score: 0_i32,
+            away_team: String::from(DEFAULT_TEAM_NAME),
+            away_score: 0_i32
+        }
+    }
+
+    /// Constructor for the `FinalScore` struct in which each
+    /// property is given as an argument.
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::game::score::FinalScore;
+    ///
+    /// let my_score = FinalScore::from_properties(
+    ///     "My Team A",
+    ///     24_i32,
+    ///     "My Team B",
+    ///     17_i32
+    /// );
+    /// ```
+    pub fn from_properties(home_team: &str, home_score: i32, away_team: &str, away_score: i32) -> Result<FinalScore, String> {
+        // Ensure home and away scores are in range [0, max)
+        if !home_score >= 0_i32 {
+            return Err(
+                format!(
+                    "Home score not in range [0, max): {}",
+                    home_score
+                )
+            )
+        }
+        if !away_score >= 0_i32 {
+            return Err(
+                format!(
+                    "Away score not in range [0, max): {}",
+                    away_score
+                )
+            )
+        }
+        Ok(
+            FinalScore{
+                home_team: String::from(home_team),
+                home_score: home_score,
+                away_team: String::from(away_team),
+                away_score: away_score
+            }
+        )
+    }
+
+    /// Getter for the home score property
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::game::score::FinalScore;
+    ///
+    /// let my_score = FinalScore::from_properties(
+    ///     "My Team A",
+    ///     24_i32,
+    ///     "My Team B",
+    ///     17_i32
+    /// ).unwrap();
+    /// let home_score = my_score.home_score();
+    /// println!("{}", home_score); // 24
+    /// ```
+    pub fn home_score(&self) -> i32 {
+        self.home_score
+    }
+
+    /// Getter for the away score property
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::game::score::FinalScore;
+    ///
+    /// let my_score = FinalScore::from_properties(
+    ///     "My Team A",
+    ///     24_i32,
+    ///     "My Team B",
+    ///     17_i32
+    /// ).unwrap();
+    /// let away_score = my_score.away_score();
+    /// println!("{}", away_score); // 17
+    /// ```
+    pub fn away_score(&self) -> i32 {
+        self.away_score
+    }
+}
+
+impl std::fmt::Display for FinalScore {
+    /// Format a `FinalScore` as a string.
+    ///
+    /// ### Example
+    ///
+    /// ```
+    /// use fbsim_core::game::score::FinalScore;
+    ///
+    /// let my_final_score = FinalScore::new();
+    /// println!("{}", my_final_score);
+    /// ```
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let score_str = format!(
+            "{} {} - {} {}",
+            self.home_team,
+            self.home_score,
+            self.away_team,
+            self.away_score
+        );
+        f.write_str(&score_str)
+    }
+}
+
+/// # `FinalScoreSimulator` struct
+///
+/// A `FinalScoreSimulator` generates an american football final score
 /// given the normalized skill differential (in range [0, 1]) of the
 /// home offense and the away defense, and vice versa, the away
 /// offense and the home defense.
 #[derive(Copy, Clone, PartialEq, PartialOrd, Debug, Default)]
-pub struct BoxScoreSimulator;
+pub struct FinalScoreSimulator;
 
-impl BoxScoreSimulator {
-    /// Constructor for the `BoxScoreSimulator` struct
+impl FinalScoreSimulator {
+    /// Constructor for the `FinalScoreSimulator` struct
     ///
     /// ### Example
     /// ```
-    /// use fbsim_core::sim::BoxScoreSimulator;
+    /// use fbsim_core::game::score::FinalScoreSimulator;
     ///
-    /// let my_box_score_gen = BoxScoreSimulator::new();
+    /// let my_sim = FinalScoreSimulator::new();
     /// ```
-    pub fn new() -> BoxScoreSimulator {
-        BoxScoreSimulator{}
+    pub fn new() -> FinalScoreSimulator {
+        FinalScoreSimulator{}
     }
 
     /// Gets the mean score parameter for the score generation
@@ -153,7 +305,7 @@ impl BoxScoreSimulator {
         Ok((self.gen_home_score(ha_norm_diff, rng), self.gen_away_score(ah_norm_diff, rng)))
     }
 
-    /// Filters the box score by score frequency.  The score's nearest
+    /// Filters the final score by score frequency.  The score's nearest
     /// neighbors and their frequency are retrieved to construct a probability
     /// mass function for a categorical distribution.  That distribution is
     /// then sampled for the real score.
@@ -176,38 +328,37 @@ impl BoxScoreSimulator {
         adj_score
     }
 
-    /// Simulates a game by generating a box score result
+    /// Simulates a game by generating a final score result
     ///
     /// ### Example
     /// ```
-    /// use fbsim_core::boxscore::BoxScore;
-    /// use fbsim_core::sim::BoxScoreSimulator;
+    /// use fbsim_core::game::score::{FinalScore, FinalScoreSimulator};
     /// use fbsim_core::team::FootballTeam;
     ///
     /// let home = FootballTeam::new();
     /// let away = FootballTeam::new();
-    /// let sim = BoxScoreSimulator::new();
+    /// let sim = FinalScoreSimulator::new();
     /// let mut rng = rand::thread_rng();
     /// let score = sim.sim(&home, &away, &mut rng).unwrap();
     /// println!("{}", score);
     /// ```
-    pub fn sim(&self, home_team: &FootballTeam, away_team: &FootballTeam, rng: &mut impl Rng) -> Result<BoxScore, String> {
+    pub fn sim(&self, home_team: &impl ScoreSimulatable, away_team: &impl ScoreSimulatable, rng: &mut impl Rng) -> Result<FinalScore, String> {
         // Calculate the normalized skill differentials
-        let ha_norm_diff: f64 = (home_team.offense_overall() - away_team.defense_overall() + 100) as f64 / 200_f64;
-        let ah_norm_diff: f64 = (away_team.offense_overall() - home_team.defense_overall() + 100) as f64 / 200_f64;
+        let ha_norm_diff: f64 = (home_team.offense_overall() as i32 - away_team.defense_overall() as i32 + 100_i32) as f64 / 200_f64;
+        let ah_norm_diff: f64 = (away_team.offense_overall() as i32 - home_team.defense_overall() as i32 + 100_i32) as f64 / 200_f64;
 
-        // Generate the box score, return error if error is encountered
+        // Generate the final score, return error if error is encountered
         let (home_score, away_score): (i32, i32) = match self.gen_score(ha_norm_diff, ah_norm_diff, rng) {
             Ok(v) => v,
             Err(e) => return Err(e)
         };
 
-        // Filter the box score by score frequency
+        // Filter the final score by score frequency
         let adj_home_score = self.filter_score(home_score, rng);
         let adj_away_score = self.filter_score(away_score, rng);
 
-        // Instantiate as a BoxScore
-        let box_score: BoxScore = BoxScore::from_properties(
+        // Instantiate as a FinalScore
+        let final_score: FinalScore = FinalScore::from_properties(
             home_team.name(),
             adj_home_score,
             away_team.name(),
@@ -216,7 +367,7 @@ impl BoxScoreSimulator {
 
         // If not a tie, then return as-is
         if adj_home_score != adj_away_score {
-            return Ok(box_score)
+            return Ok(final_score)
         }
 
         // If a tie is achieved after filtering, re-sim based on the skill
@@ -237,26 +388,69 @@ impl BoxScoreSimulator {
 
         // Re-sim and re-filter if needed
         if res {
-            // Generate the box score, return error if error is encountered
+            // Generate the final score, return error if error is encountered
             let (home_score_2, away_score_2): (i32, i32) = match self.gen_score(ha_norm_diff, ah_norm_diff, rng) {
                 Ok(v) => v,
                 Err(e) => return Err(e)
             };
 
-            // Filter the box score by score frequency
+            // Filter the final score by score frequency
             let adj_home_score_2 = self.filter_score(home_score_2, rng);
             let adj_away_score_2 = self.filter_score(away_score_2, rng);
 
-            // Instantiate as a BoxScore and return
-            let box_score_2: BoxScore = BoxScore::from_properties(
+            // Instantiate as a FinalScore and return
+            let final_score_2: FinalScore = FinalScore::from_properties(
                 home_team.name(),
                 adj_home_score_2,
                 away_team.name(),
                 adj_away_score_2
             ).unwrap();
-            return Ok(box_score_2)
+            return Ok(final_score_2)
         }
 
-        return Ok(box_score)
+        return Ok(final_score)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_final_score_from_properties() {
+        // Test home score OOB
+        let result_a = FinalScore::from_properties("Test Team A", -3, "Test Team B", 24);
+        let expected_a: Result<FinalScore, String> = Err(
+            String::from("Home score not in range [0, max): -3")
+        );
+        assert_eq!(
+            result_a,
+            expected_a
+        );
+
+        // Test away score OOB
+        let result_b = FinalScore::from_properties("Test Team A", 17, "Test Team B", -17);
+        let expected_b: Result<FinalScore, String> = Err(
+            String::from("Away score not in range [0, max): -17")
+        );
+        assert_eq!(
+            result_b,
+            expected_b
+        );
+
+        // Test both scores in range
+        let result_c = FinalScore::from_properties("Test Team A", 17, "Test Team B", 24);
+        let expected_c: Result<FinalScore, String> = Ok(
+            FinalScore{
+                home_team: String::from("Test Team A"),
+                home_score: 17,
+                away_team: String::from("Test Team B"),
+                away_score: 24
+            }
+        );
+        assert_eq!(
+            result_c,
+            expected_c
+        );
     }
 }
