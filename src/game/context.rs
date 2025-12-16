@@ -659,7 +659,7 @@ impl GameContext {
 
         // If end of 1st - 3rd quarter, increment quarter regardless
         // If end of 4th - OT, increment quarter only if tied
-        if (self.half_seconds > 900 && next_clock < 900) || (self.quarter == 2 && next_clock == 0) ||
+        if (self.half_seconds >= 900 && next_clock < 900) || (self.quarter == 2 && next_clock == 0) ||
             (self.quarter >= 4 && next_clock == 0 && self.next_score_tied(offense_score, defense_score)) {
             return self.quarter + 1;
         }

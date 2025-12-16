@@ -12,11 +12,11 @@ use crate::game::play::context::PlayContext;
 use crate::game::play::result::{PlayResult, PlayResultSimulator, ScoreResult};
 
 // Up-tempo probability regression
-const P_UP_TEMPO_INTR: f64 = -3.5395125211354683_f64;
+const P_UP_TEMPO_INTR: f64 = -4.5395125211354683_f64; // Adjusted -1
 const P_UP_TEMPO_COEF: f64 = 3.03267023_f64;
 
 // Normal between-play duration distribution parameters
-const MEAN_BETWEEN_PLAY_DURATION: f64 = 20_f64;
+const MEAN_BETWEEN_PLAY_DURATION: f64 = 25_f64; // Adjusted + 5
 const STD_BETWEEN_PLAY_DURATION: f64 = 5_f64;
 
 // Up-tempo between-play duration distribution parameters

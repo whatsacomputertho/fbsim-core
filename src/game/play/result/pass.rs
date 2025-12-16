@@ -78,7 +78,7 @@ const P_COMPLETE_INTR: f64 = 0.3039580511583472_f64;
 const P_COMPLETE_COEF: f64 = 0.40872763_f64;
 
 // Zero yards after catch probability regression
-const P_ZERO_YAC_INTR: f64 = 0.16761265601223527_f64;
+const P_ZERO_YAC_INTR: f64 = 0.46761265601223527_f64; // Adjusted + 0.3
 const P_ZERO_YAC_COEF: f64 = -0.06038915_f64;
 
 // Mean yards after catch regression

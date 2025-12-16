@@ -290,7 +290,7 @@ impl PlayResultSimulator for FieldGoalResultSimulator {
         // Determine if a touchdown occurred
         let touchdown: bool = blocked && (return_yards > safety_yards.abs());
         FieldGoalResult{
-            field_goal_distance: td_yards + 10,
+            field_goal_distance: td_yards + 17,
             return_yards: return_yards,
             play_duration: play_duration,
             made: made,
