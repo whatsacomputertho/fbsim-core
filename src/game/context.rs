@@ -836,12 +836,12 @@ impl GameContext {
 
         // Increment the yard line
         if self.home_possession ^ self.home_positive_direction {
-            match u32::try_from(self.yard_line as i32 - net_yards) {
+            match u32::try_from(0.max(100.min(self.yard_line as i32 - net_yards))) {
                 Ok(n) => n,
                 Err(_) => 0
             }
         } else {
-            match u32::try_from(self.yard_line as i32 + net_yards) {
+            match u32::try_from(0.max(100.min(self.yard_line as i32 + net_yards))) {
                 Ok(n) => n,
                 Err(_) => 0
             }
@@ -875,7 +875,7 @@ impl GameContext {
         let next_yl = self.next_yard_line(net_yards, touchback, kickoff_oob, end_of_half, offense_score, defense_score);
         if turnover {
             if self.home_possession ^ self.home_positive_direction {
-                return 10.min(100 - next_yl);
+                return 0.max(10.min(100_i32 - next_yl as i32));
             }
             return 10.min(next_yl);
         }
@@ -885,7 +885,7 @@ impl GameContext {
             if self.home_possession ^ self.home_positive_direction {
                 return 10.min(next_yl);
             }
-            return 10.min(100 - next_yl);
+            return 0.max(10.min(100_i32 - next_yl as i32));
         }
         let next_dist = self.distance as i32 - net_yards;
         match u32::try_from(next_dist) {
