@@ -188,7 +188,7 @@ impl BetweenPlayResultSimulator {
 
     /// Generates whether the defense calls timeout due to the defense not being set
     fn defense_get_set_timeout(&self, context: &PlayContext, norm_risk_taking: f64, rng: &mut impl Rng) -> bool {
-        if (context.defense_timeouts() <= 0) || (context.quarter() > 2) {
+        if (context.defense_timeouts() == 0) || (context.quarter() > 2) {
             return false;
         }
         let p_timeout: f64 = 1_f64.min(0_f64.max(
@@ -199,7 +199,7 @@ impl BetweenPlayResultSimulator {
 
     /// Generates whether the offense calls timeout to conserve clock
     fn offense_conserve_clock_timeout(&self, context: &PlayContext) -> bool {
-        if !context.clock_running() || (context.offense_timeouts() <= 0) {
+        if (!context.clock_running()) || (context.offense_timeouts() == 0) {
             return false;
         }
         if context.offense_conserve_clock() {
@@ -210,7 +210,7 @@ impl BetweenPlayResultSimulator {
 
     /// Generates whether the defense calls timeout to conserve clock
     fn defense_conserve_clock_timeout(&self, context: &PlayContext) -> bool {
-        if !context.clock_running() || (context.defense_timeouts() <= 0) {
+        if (!context.clock_running()) || (context.defense_timeouts() == 0) {
             return false;
         }
         if context.defense_conserve_clock() {
@@ -283,15 +283,23 @@ impl PlayResultSimulator for BetweenPlayResultSimulator {
         let critical_down: bool = play_context.critical_down();
 
         // Generate whether the defense calls timeout
-        let defense_timeout: bool = if defense_not_set || critical_down {
-            self.defense_get_set_timeout(&play_context, norm_defense_risk_taking, rng)
+        let defense_timeout: bool = if !last_play_turnover {
+            if defense_not_set || critical_down {
+                self.defense_get_set_timeout(&play_context, norm_defense_risk_taking, rng)
+            } else {
+                self.defense_conserve_clock_timeout(&play_context)
+            }
         } else {
-            self.defense_conserve_clock_timeout(&play_context)
+            false
         };
 
         // Generate whether the offense calls timeout
-        let offense_timeout: bool = if !defense_timeout {
-            self.offense_conserve_clock_timeout(&play_context)
+        let offense_timeout: bool = if !last_play_turnover {
+            if !defense_timeout {
+                self.offense_conserve_clock_timeout(&play_context)
+            } else {
+                false
+            }
         } else {
             false
         };
