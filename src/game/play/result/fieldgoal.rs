@@ -134,7 +134,7 @@ impl PlayResult for FieldGoalResult {
     }
 
     fn turnover(&self) -> bool {
-        !self.extra_point && self.blocked
+        !self.extra_point && (self.blocked || !self.made)
     }
 
     fn offense_score(&self) -> ScoreResult {
