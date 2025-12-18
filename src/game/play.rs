@@ -266,6 +266,7 @@ impl PlaySimulator {
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Ord, PartialOrd, Serialize, Deserialize)]
 pub enum DriveResult {
     None,
+    Punt,
     FieldGoal,
     Touchdown,
     Safety,
@@ -273,6 +274,30 @@ pub enum DriveResult {
     Fumble,
     Downs,
     EndOfHalf
+}
+
+impl std::fmt::Display for DriveResult {
+    /// Display a drive result as a human readable string
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::game::play::DriveResult;
+    /// 
+    /// println!("{}", DriveResult::None);
+    /// ```
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            DriveResult::None => f.write_str("In Progress"),
+            DriveResult::Punt => f.write_str("Punt"),
+            DriveResult::FieldGoal => f.write_str("Field Goal"),
+            DriveResult::Touchdown => f.write_str("Touchdown"),
+            DriveResult::Safety => f.write_str("Safety"),
+            DriveResult::Interception => f.write_str("Interception"),
+            DriveResult::Fumble => f.write_str("Fumble"),
+            DriveResult::Downs => f.write_str("Turnover on Downs"),
+            DriveResult::EndOfHalf => f.write_str("End of Half")
+        }
+    }
 }
 
 /// # `Drive` struct
@@ -451,6 +476,33 @@ impl Drive {
     }
 }
 
+impl std::fmt::Display for Drive {
+    /// Display a drive as a human readable string
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::game::play::Drive;
+    /// 
+    /// let my_drive = Drive::new();
+    /// println!("{}", my_drive);
+    /// ```
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let mut drive_str = format!(
+            "Result: {} | Passing: {}/{}, {} yards | Rushing: {} rush, {} yards",
+            self.result(),
+            self.pass_plays(),
+            self.completed_passes(),
+            self.passing_yards(),
+            self.run_plays(),
+            self.rushing_yards()
+        );
+        for play in self.plays() {
+            drive_str = format!("{}\n{}", drive_str, play);
+        }
+        f.write_str(&drive_str)
+    }
+}
+
 /// # `DriveSimulator` struct
 ///
 /// A `DriveSimulator` can simulate a drive given a context, returning an
@@ -517,6 +569,15 @@ impl DriveSimulator {
                 };
                 if field_goal {
                     result = DriveResult::FieldGoal;
+                }
+
+                // Punt
+                let punt: bool = match play_result {
+                    PlayTypeResult::Punt(_) => true,
+                    _ => false
+                };
+                if punt {
+                    result = DriveResult::Punt;
                 }
 
                 // Touchdown
