@@ -311,7 +311,7 @@ impl FieldGoalResultSimulator {
         let p_blocked_skill: f64 = P_BLOCKED_SKILL_INTR + (P_BLOCKED_SKILL_COEF * norm_diff_blocking);
         let p_blocked_yardline: f64 = (P_BLOCKED_YARD_LINE_INTR + (P_BLOCKED_YARD_LINE_COEF * yard_line as f64)).exp();
         let p_blocked: f64 = 1_f64.min(0_f64.max(
-            0.7_f64 * ((p_blocked_skill * 0.7_f64) + (p_blocked_yardline * 0.3_f64))
+            0.7_f64 * ((p_blocked_skill * 0.9_f64) + (p_blocked_yardline * 0.1_f64))
         ));
         rng.gen::<f64>() < p_blocked
     }
@@ -327,7 +327,7 @@ impl FieldGoalResultSimulator {
         let p_made_yardline: f64 = P_FIELD_GOAL_MADE_YARD_LINE_INTR + (P_FIELD_GOAL_MADE_YARD_LINE_COEF_1 * yard_line as f64) +
             (P_FIELD_GOAL_MADE_YARD_LINE_COEF_2 * yard_line.pow(2) as f64);
         let p_made: f64 = 1_f64.min(0_f64.max(
-            1.18_f64 * ((p_made_skill * 0.4_f64) + (p_made_yardline * 0.6_f64))
+            1.18_f64 * ((p_made_skill * 0.6_f64) + (p_made_yardline * 0.4_f64))
         ));
         rng.gen::<f64>() < p_made
     }
