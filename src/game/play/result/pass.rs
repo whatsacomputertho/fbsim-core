@@ -75,7 +75,7 @@ const SKEW_INT_RETURN_YARDS_COEF_3: f64 = 0.00000700818986_f64;
 
 // Completed pass probability regression
 const P_COMPLETE_INTR: f64 = 0.3039580511583472_f64;
-const P_COMPLETE_COEF: f64 = 0.40872763_f64;
+const P_COMPLETE_COEF: f64 = 0.60872763_f64; // Adjusted + 0.2
 
 // Zero yards after catch probability regression
 const P_ZERO_YAC_INTR: f64 = 0.46761265601223527_f64; // Adjusted + 0.3
