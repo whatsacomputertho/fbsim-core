@@ -4,7 +4,7 @@ use rocket_okapi::okapi::schemars;
 #[cfg(feature = "rocket_okapi")]
 use rocket_okapi::okapi::schemars::JsonSchema;
 use serde::{Serialize, Deserialize};
-use rand_distr::{SkewNormal, Normal, Distribution, Exp};
+use rand_distr::{SkewNormal, Normal, Distribution};
 
 use crate::game::context::{GameContext, GameContextBuilder};
 use crate::game::play::PlaySimulatable;
@@ -16,9 +16,9 @@ const P_UP_TEMPO_INTR: f64 = -4.5395125211354683_f64; // Adjusted -1
 const P_UP_TEMPO_COEF: f64 = 3.03267023_f64;
 
 // Normal between-play duration distribution parameters
-const MEAN_BETWEEN_PLAY_DURATION: f64 = 27_f64; // Adjusted + 7
+const MEAN_BETWEEN_PLAY_DURATION: f64 = 38_f64; // Adjusted + 18
 const STD_BETWEEN_PLAY_DURATION: f64 = 5_f64;
-const SKEW_BETWEEN_PLAY_DURATION: f64 = 7_f64; // Added skew
+const SKEW_BETWEEN_PLAY_DURATION: f64 = -7_f64; // Added skew
 
 // Up-tempo between-play duration distribution parameters
 const MEAN_UP_TEMPO_BETWEEN_PLAY_DURATION: f64 = 6_f64;
@@ -311,8 +311,7 @@ impl BetweenPlayResultSimulator {
     /// Generates the clock seconds which pass in-between plays
     fn duration(&self, context: &PlayContext, up_tempo: bool, rng: &mut impl Rng) -> u32 {
         if context.drain_clock() {
-            let noise: u32 = Exp::new(1_f64).unwrap().sample(rng).round().abs() as u32;
-            return 40 - noise;
+            return 40;
         }
         let duration = if up_tempo {
             Normal::new(MEAN_UP_TEMPO_BETWEEN_PLAY_DURATION, STD_UP_TEMPO_BETWEEN_PLAY_DURATION).unwrap().sample(rng).round()

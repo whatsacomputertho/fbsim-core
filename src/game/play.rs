@@ -474,6 +474,32 @@ impl Drive {
         }
         yards
     }
+
+    /// Get the total yards on the drive
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::game::play::Drive;
+    /// 
+    /// let my_drive = Drive::new();
+    /// let total_yards = my_drive.total_yards();
+    /// assert!(total_yards == 0);
+    /// ```
+    pub fn total_yards(&self) -> i32 {
+        let mut yards: i32 = 0;
+        for play in self.plays.iter() {
+            match play.result() {
+                PlayTypeResult::Run(res) => {
+                    yards += res.net_yards();
+                },
+                PlayTypeResult::Pass(res) => {
+                    yards += res.net_yards();
+                },
+                _ => continue
+            }
+        }
+        yards
+    }
 }
 
 impl std::fmt::Display for Drive {
@@ -488,7 +514,9 @@ impl std::fmt::Display for Drive {
     /// ```
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let mut drive_str = format!(
-            "Result: {} | Passing: {}/{}, {} yards | Rushing: {} rush, {} yards",
+            "{} plays, {} yards | Result: {} | Passing: {}/{}, {} yards | Rushing: {} rush, {} yards",
+            self.plays().len(),
+            self.total_yards(),
             self.result(),
             self.completed_passes(),
             self.pass_plays(),

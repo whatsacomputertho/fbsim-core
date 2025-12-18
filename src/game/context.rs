@@ -442,7 +442,7 @@ impl GameContext {
     pub fn clock_running(&self) -> bool {
         !(
             self.last_play_incomplete || self.last_play_timeout || self.next_play_extra_point ||
-            self.next_play_kickoff || self.last_play_kickoff || (
+            self.next_play_kickoff || self.last_play_kickoff || self.last_play_turnover || (
                 self.last_play_out_of_bounds && (
                     (self.quarter == 2 && self.half_seconds < 120) ||
                     (self.quarter >= 4 && self.half_seconds < 300)
