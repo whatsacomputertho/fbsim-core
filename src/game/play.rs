@@ -670,7 +670,7 @@ impl DriveSimulator {
                 if end_of_half {
                     result = DriveResult::EndOfHalf;
                 }
-            } else if result == DriveResult::Touchdown {
+            } else if touchdown {
                 extra_point_complete = true;
             }
 
