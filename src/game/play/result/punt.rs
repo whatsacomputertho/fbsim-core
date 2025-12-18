@@ -8,7 +8,7 @@ use rand_distr::{Normal, Distribution, Exp, SkewNormal};
 
 use crate::game::context::GameContext;
 use crate::game::play::PlaySimulatable;
-use crate::game::play::result::{PlayResult, PlayResultSimulator, ScoreResult};
+use crate::game::play::result::{PlayResult, PlayTypeResult, PlayResultSimulator, ScoreResult};
 
 // Punt block probability regression
 const P_BLOCK_INTR: f64 = -0.0010160286505995551_f64;
@@ -92,7 +92,7 @@ const PUNT_PLAY_DURATION_COEF: f64 = 0.09291598_f64;
 ///
 /// A `PuntResult` represents a result of a punt play
 #[cfg_attr(feature = "rocket_okapi", derive(JsonSchema))]
-#[derive(Clone, Eq, PartialEq, Ord, PartialOrd, Debug, Serialize, Deserialize)]
+#[derive(Clone, Copy, Eq, PartialEq, Ord, PartialOrd, Debug, Serialize, Deserialize)]
 pub struct PuntResult {
     fumble_return_yards: i32,
     punt_yards: i32,
@@ -244,9 +244,173 @@ impl PlayResult for PuntResult {
     fn next_play_extra_point(&self) -> bool {
         self.touchdown
     }
+}
 
-    fn summary(&self) -> String {
-        format!("{}", self)
+impl PuntResult {
+    /// Initialize a new punt result
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::game::play::result::punt::PuntResult;
+    /// 
+    /// let my_res = PuntResult::new();
+    /// ```
+    pub fn new() -> PuntResult {
+        PuntResult::default()
+    }
+
+    /// Get a punt result's play_duration property
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::game::play::result::punt::PuntResult;
+    /// 
+    /// let my_res = PuntResult::new();
+    /// let play_duration = my_res.play_duration();
+    /// assert!(play_duration == 0);
+    /// ```
+    pub fn play_duration(&self) -> u32 {
+        self.play_duration
+    }
+
+    /// Get a punt result's fumble_return_yards property
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::game::play::result::punt::PuntResult;
+    /// 
+    /// let my_res = PuntResult::new();
+    /// let fumble_return_yards = my_res.fumble_return_yards();
+    /// assert!(fumble_return_yards == 0);
+    /// ```
+    pub fn fumble_return_yards(&self) -> i32 {
+        self.fumble_return_yards
+    }
+
+    /// Get a punt result's punt_yards property
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::game::play::result::punt::PuntResult;
+    /// 
+    /// let my_res = PuntResult::new();
+    /// let punt_yards = my_res.punt_yards();
+    /// assert!(punt_yards == 0);
+    /// ```
+    pub fn punt_yards(&self) -> i32 {
+        self.punt_yards
+    }
+
+    /// Get a punt result's punt_return_yards property
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::game::play::result::punt::PuntResult;
+    /// 
+    /// let my_res = PuntResult::new();
+    /// let punt_return_yards = my_res.punt_return_yards();
+    /// assert!(punt_return_yards == 0);
+    /// ```
+    pub fn punt_return_yards(&self) -> i32 {
+        self.punt_return_yards
+    }
+
+    /// Get a punt result's blocked property
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::game::play::result::punt::PuntResult;
+    /// 
+    /// let my_res = PuntResult::new();
+    /// let blocked = my_res.blocked();
+    /// assert!(!blocked);
+    /// ```
+    pub fn blocked(&self) -> bool {
+        self.blocked
+    }
+
+    /// Get a punt result's touchback property
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::game::play::result::punt::PuntResult;
+    /// 
+    /// let my_res = PuntResult::new();
+    /// let touchback = my_res.touchback();
+    /// assert!(!touchback);
+    /// ```
+    pub fn touchback(&self) -> bool {
+        self.touchback
+    }
+
+    /// Get a punt result's out_of_bounds property
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::game::play::result::punt::PuntResult;
+    /// 
+    /// let my_res = PuntResult::new();
+    /// let out_of_bounds = my_res.out_of_bounds();
+    /// assert!(!out_of_bounds);
+    /// ```
+    pub fn out_of_bounds(&self) -> bool {
+        self.out_of_bounds
+    }
+
+    /// Get a punt result's fair_catch property
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::game::play::result::punt::PuntResult;
+    /// 
+    /// let my_res = PuntResult::new();
+    /// let fair_catch = my_res.fair_catch();
+    /// assert!(!fair_catch);
+    /// ```
+    pub fn fair_catch(&self) -> bool {
+        self.fair_catch
+    }
+
+    /// Get a punt result's muffed property
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::game::play::result::punt::PuntResult;
+    /// 
+    /// let my_res = PuntResult::new();
+    /// let muffed = my_res.muffed();
+    /// assert!(!muffed);
+    /// ```
+    pub fn muffed(&self) -> bool {
+        self.muffed
+    }
+
+    /// Get a punt result's fumble property
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::game::play::result::punt::PuntResult;
+    /// 
+    /// let my_res = PuntResult::new();
+    /// let fumble = my_res.fumble();
+    /// assert!(!fumble);
+    /// ```
+    pub fn fumble(&self) -> bool {
+        self.fumble
+    }
+
+    /// Get a punt result's touchdown property
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::game::play::result::punt::PuntResult;
+    /// 
+    /// let my_res = PuntResult::new();
+    /// let touchdown = my_res.touchdown();
+    /// assert!(!touchdown);
+    /// ```
+    pub fn touchdown(&self) -> bool {
+        self.touchdown
     }
 }
 
@@ -405,7 +569,7 @@ impl PlayResultSimulator for PuntResultSimulator {
     /// let mut rng = rand::thread_rng();
     /// let my_res = my_sim.sim(&my_off, &my_def, &my_context, &mut rng);
     /// ```
-    fn sim(&self, offense: &impl PlaySimulatable, defense: &impl PlaySimulatable, context: &GameContext, rng: &mut impl Rng) -> impl PlayResult {
+    fn sim(&self, offense: &impl PlaySimulatable, defense: &impl PlaySimulatable, context: &GameContext, rng: &mut impl Rng) -> PlayTypeResult {
         // Calculate normalized skill levels and skill diffs
         let norm_diff_blocking: f64 = 0.5_f64 + ((offense.offense().blocking() as f64 - defense.defense().blitzing() as f64) / 200_f64);
         let norm_diff_returning: f64 = 0.5_f64 + ((defense.defense().kick_returning() as f64 - offense.offense().kick_return_defense() as f64) / 200_f64);
@@ -492,7 +656,7 @@ impl PlayResultSimulator for PuntResultSimulator {
         // Calculate total yardage and play duration
         let total_yards: u32 = punt_distance.abs() as u32 + punt_return_yards.abs() as u32 + fumble_return_yards.abs() as u32;
         let play_duration: u32 = self.play_duration(total_yards, rng);
-        PuntResult{
+        let punt_res = PuntResult{
             fumble_return_yards: fumble_return_yards,
             punt_yards: punt_distance,
             punt_return_yards: punt_return_yards,
@@ -504,6 +668,7 @@ impl PlayResultSimulator for PuntResultSimulator {
             muffed: punt_muffed,
             fumble: fumble,
             touchdown: touchdown
-        }
+        };
+        PlayTypeResult::Punt(punt_res)
     }
 }

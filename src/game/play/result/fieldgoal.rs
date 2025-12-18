@@ -8,7 +8,7 @@ use rand_distr::{Distribution, Exp, SkewNormal};
 
 use crate::game::context::GameContext;
 use crate::game::play::PlaySimulatable;
-use crate::game::play::result::{PlayResult, PlayResultSimulator, ScoreResult};
+use crate::game::play::result::{PlayResult, PlayTypeResult, PlayResultSimulator, ScoreResult};
 
 // Field goal blocked skill-based regression
 const P_BLOCKED_SKILL_INTR: f64 = 0.013200206956159479_f64;
@@ -41,7 +41,7 @@ const FIELD_GOAL_NOT_BLOCKED_DURATION_SKEW: f64 = -0.440028_f64;
 ///
 /// A `FieldGoalResult` represents a result of a field goal
 #[cfg_attr(feature = "rocket_okapi", derive(JsonSchema))]
-#[derive(Clone, Eq, PartialEq, Ord, PartialOrd, Debug, Serialize, Deserialize)]
+#[derive(Clone, Copy, Eq, PartialEq, Ord, PartialOrd, Debug, Serialize, Deserialize)]
 pub struct FieldGoalResult {
     field_goal_distance: i32,
     return_yards: i32,
@@ -63,7 +63,7 @@ impl Default for FieldGoalResult {
     /// ```
     fn default() -> Self {
         FieldGoalResult{
-            field_goal_distance: 12,
+            field_goal_distance: 17,
             return_yards: 0,
             play_duration: 0,
             made: true,
@@ -134,7 +134,7 @@ impl PlayResult for FieldGoalResult {
     }
 
     fn turnover(&self) -> bool {
-        !self.extra_point && self.blocked
+        !self.extra_point && (self.blocked || !self.made)
     }
 
     fn offense_score(&self) -> ScoreResult {
@@ -172,9 +172,117 @@ impl PlayResult for FieldGoalResult {
     fn next_play_extra_point(&self) -> bool {
         !self.extra_point && self.blocked && self.touchdown
     }
+}
 
-    fn summary(&self) -> String {
-        format!("{}", self)
+impl FieldGoalResult {
+    /// Initialize a new field goal result
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::game::play::result::fieldgoal::FieldGoalResult;
+    /// 
+    /// let my_res = FieldGoalResult::new();
+    /// ```
+    pub fn new() -> FieldGoalResult {
+        FieldGoalResult::default()
+    }
+
+    /// Get a field goal result's field_goal_distance property
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::game::play::result::fieldgoal::FieldGoalResult;
+    /// 
+    /// let my_res = FieldGoalResult::new();
+    /// let field_goal_distance = my_res.field_goal_distance();
+    /// assert!(field_goal_distance == 17);
+    /// ```
+    pub fn field_goal_distance(&self) -> i32 {
+        self.field_goal_distance
+    }
+
+    /// Get a field goal result's return_yards property
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::game::play::result::fieldgoal::FieldGoalResult;
+    /// 
+    /// let my_res = FieldGoalResult::new();
+    /// let return_yards = my_res.return_yards();
+    /// assert!(return_yards == 0);
+    /// ```
+    pub fn return_yards(&self) -> i32 {
+        self.return_yards
+    }
+
+    /// Get a field goal result's play_duration property
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::game::play::result::fieldgoal::FieldGoalResult;
+    /// 
+    /// let my_res = FieldGoalResult::new();
+    /// let play_duration = my_res.play_duration();
+    /// assert!(play_duration == 0);
+    /// ```
+    pub fn play_duration(&self) -> u32 {
+        self.play_duration
+    }
+
+    /// Get a field goal result's made property
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::game::play::result::fieldgoal::FieldGoalResult;
+    /// 
+    /// let my_res = FieldGoalResult::new();
+    /// let made = my_res.made();
+    /// assert!(made);
+    /// ```
+    pub fn made(&self) -> bool {
+        self.made
+    }
+
+    /// Get a field goal result's blocked property
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::game::play::result::fieldgoal::FieldGoalResult;
+    /// 
+    /// let my_res = FieldGoalResult::new();
+    /// let blocked = my_res.blocked();
+    /// assert!(!blocked);
+    /// ```
+    pub fn blocked(&self) -> bool {
+        self.blocked
+    }
+
+    /// Get a field goal result's touchdown property
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::game::play::result::fieldgoal::FieldGoalResult;
+    /// 
+    /// let my_res = FieldGoalResult::new();
+    /// let touchdown = my_res.touchdown();
+    /// assert!(!touchdown);
+    /// ```
+    pub fn touchdown(&self) -> bool {
+        self.touchdown
+    }
+
+    /// Get a field goal result's extra_point property
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::game::play::result::fieldgoal::FieldGoalResult;
+    /// 
+    /// let my_res = FieldGoalResult::new();
+    /// let extra_point = my_res.extra_point();
+    /// assert!(extra_point);
+    /// ```
+    pub fn extra_point(&self) -> bool {
+        self.extra_point
     }
 }
 
@@ -260,7 +368,7 @@ impl PlayResultSimulator for FieldGoalResultSimulator {
     /// let mut rng = rand::thread_rng();
     /// let my_res = my_sim.sim(&my_off, &my_def, &my_context, &mut rng);
     /// ```
-    fn sim(&self, offense: &impl PlaySimulatable, defense: &impl PlaySimulatable, context: &GameContext, rng: &mut impl Rng) -> impl PlayResult {
+    fn sim(&self, offense: &impl PlaySimulatable, defense: &impl PlaySimulatable, context: &GameContext, rng: &mut impl Rng) -> PlayTypeResult {
         // Calculate normalized skill levels and skill diffs
         let norm_diff_blocking: f64 = 0.5_f64 + ((offense.offense().blocking() as f64 - defense.defense().blitzing() as f64) / 200_f64);
         let norm_kicking: f64 = offense.offense().field_goals() as f64 / 100_f64;
@@ -289,7 +397,7 @@ impl PlayResultSimulator for FieldGoalResultSimulator {
 
         // Determine if a touchdown occurred
         let touchdown: bool = blocked && (return_yards > safety_yards.abs());
-        FieldGoalResult{
+        let fg_res = FieldGoalResult{
             field_goal_distance: td_yards + 17,
             return_yards: return_yards,
             play_duration: play_duration,
@@ -297,6 +405,7 @@ impl PlayResultSimulator for FieldGoalResultSimulator {
             blocked: blocked,
             touchdown: touchdown,
             extra_point: *context.next_play_extra_point()
-        }
+        };
+        PlayTypeResult::FieldGoal(fg_res)
     }
 }

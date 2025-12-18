@@ -46,6 +46,9 @@ const P_GO_FOR_IT_COEF: f64 = 0.51602604_f64;
 const P_RUN_FOURTH_DOWN_INTR: f64 = 0.040592196833718536_f64;
 const P_RUN_FOURTH_DOWN_COEF: f64 = 0.05793641_f64;
 
+/// # `PlayCall` enum
+///
+/// Defines the various types of plays that can be run in football
 #[derive(PartialEq, Clone, Copy)]
 pub enum PlayCall {
     Run,

@@ -8,7 +8,7 @@ use rand_distr::{Normal, Distribution, Exp, SkewNormal};
 
 use crate::game::context::GameContext;
 use crate::game::play::PlaySimulatable;
-use crate::game::play::result::{PlayResult, PlayResultSimulator, ScoreResult};
+use crate::game::play::result::{PlayResult, PlayTypeResult, PlayResultSimulator, ScoreResult};
 
 // Pressure probability regression
 const P_PRESSURE_INTR: f64 = 0.271330308819705_f64;
@@ -107,7 +107,7 @@ const MEAN_PLAY_DURATION_COEF_2: f64 = -0.00056798_f64;
 ///
 /// A `PassResult` represents a result of a pass play
 #[cfg_attr(feature = "rocket_okapi", derive(JsonSchema))]
-#[derive(Clone, Eq, PartialEq, Ord, PartialOrd, Debug, Serialize, Deserialize)]
+#[derive(Clone, Copy, Eq, PartialEq, Ord, PartialOrd, Debug, Serialize, Deserialize)]
 pub struct PassResult {
     play_duration: u32,
     sack_yards_lost: i32,
@@ -264,9 +264,187 @@ impl PlayResult for PassResult {
     fn next_play_extra_point(&self) -> bool {
         self.touchdown
     }
+}
 
-    fn summary(&self) -> String {
-        format!("{}", self)
+impl PassResult {
+    /// Initialize a new pass result
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::game::play::result::pass::PassResult;
+    /// 
+    /// let my_res = PassResult::new();
+    /// ```
+    pub fn new() -> PassResult {
+        PassResult::default()
+    }
+
+    /// Get a pass result's play_duration property
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::game::play::result::pass::PassResult;
+    /// 
+    /// let my_res = PassResult::new();
+    /// let play_duration = my_res.play_duration();
+    /// assert!(play_duration == 0);
+    /// ```
+    pub fn play_duration(&self) -> u32 {
+        self.play_duration
+    }
+
+    /// Get a pass result's sack_yards_lost property
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::game::play::result::pass::PassResult;
+    /// 
+    /// let my_res = PassResult::new();
+    /// let sack_yards_lost = my_res.sack_yards_lost();
+    /// assert!(sack_yards_lost == 0);
+    /// ```
+    pub fn sack_yards_lost(&self) -> i32 {
+        self.sack_yards_lost
+    }
+
+    /// Get a pass result's pass_dist property
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::game::play::result::pass::PassResult;
+    /// 
+    /// let my_res = PassResult::new();
+    /// let pass_dist = my_res.pass_dist();
+    /// assert!(pass_dist == 0);
+    /// ```
+    pub fn pass_dist(&self) -> i32 {
+        self.pass_dist
+    }
+
+    /// Get a pass result's return_yards property
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::game::play::result::pass::PassResult;
+    /// 
+    /// let my_res = PassResult::new();
+    /// let return_yards = my_res.return_yards();
+    /// assert!(return_yards == 0);
+    /// ```
+    pub fn return_yards(&self) -> i32 {
+        self.return_yards
+    }
+
+    /// Get a pass result's yards_after_catch property
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::game::play::result::pass::PassResult;
+    /// 
+    /// let my_res = PassResult::new();
+    /// let yards_after_catch = my_res.yards_after_catch();
+    /// assert!(yards_after_catch == 0);
+    /// ```
+    pub fn yards_after_catch(&self) -> i32 {
+        self.yards_after_catch
+    }
+
+    /// Get a pass result's pressure property
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::game::play::result::pass::PassResult;
+    /// 
+    /// let my_res = PassResult::new();
+    /// let pressure = my_res.pressure();
+    /// assert!(!pressure);
+    /// ```
+    pub fn pressure(&self) -> bool {
+        self.pressure
+    }
+
+    /// Get a pass result's sack property
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::game::play::result::pass::PassResult;
+    /// 
+    /// let my_res = PassResult::new();
+    /// let sack = my_res.sack();
+    /// assert!(!sack);
+    /// ```
+    pub fn sack(&self) -> bool {
+        self.sack
+    }
+
+    /// Get a pass result's interception property
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::game::play::result::pass::PassResult;
+    /// 
+    /// let my_res = PassResult::new();
+    /// let interception = my_res.interception();
+    /// assert!(!interception);
+    /// ```
+    pub fn interception(&self) -> bool {
+        self.interception
+    }
+
+    /// Get a pass result's complete property
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::game::play::result::pass::PassResult;
+    /// 
+    /// let my_res = PassResult::new();
+    /// let complete = my_res.complete();
+    /// assert!(!complete);
+    /// ```
+    pub fn complete(&self) -> bool {
+        self.complete
+    }
+
+    /// Get a pass result's fumble property
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::game::play::result::pass::PassResult;
+    /// 
+    /// let my_res = PassResult::new();
+    /// let fumble = my_res.fumble();
+    /// assert!(!fumble);
+    /// ```
+    pub fn fumble(&self) -> bool {
+        self.fumble
+    }
+
+    /// Get a pass result's touchdown property
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::game::play::result::pass::PassResult;
+    /// 
+    /// let my_res = PassResult::new();
+    /// let touchdown = my_res.touchdown();
+    /// assert!(!touchdown);
+    /// ```
+    pub fn touchdown(&self) -> bool {
+        self.touchdown
+    }
+
+    /// Get a pass result's safety property
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::game::play::result::pass::PassResult;
+    /// 
+    /// let my_res = PassResult::new();
+    /// let safety = my_res.safety();
+    /// assert!(!safety);
+    /// ```
+    pub fn safety(&self) -> bool {
+        self.safety
     }
 }
 
@@ -411,7 +589,7 @@ impl PlayResultSimulator for PassResultSimulator {
     /// let mut rng = rand::thread_rng();
     /// let my_res = my_sim.sim(&my_off, &my_def, &my_context, &mut rng);
     /// ```
-    fn sim(&self, offense: &impl PlaySimulatable, defense: &impl PlaySimulatable, context: &GameContext, rng: &mut impl Rng) -> impl PlayResult {
+    fn sim(&self, offense: &impl PlaySimulatable, defense: &impl PlaySimulatable, context: &GameContext, rng: &mut impl Rng) -> PlayTypeResult {
         // Derive the normalized skill differentials for each team
         let norm_diff_blocking: f64 = 0.5_f64 + ((offense.offense().blocking() as f64 - defense.defense().blitzing() as f64) / 200_f64);
         let norm_diff_passing: f64 = 0.5_f64 + ((offense.offense().passing() as f64 - defense.defense().pass_defense() as f64) / 200_f64);
@@ -553,7 +731,7 @@ impl PlayResultSimulator for PassResultSimulator {
             yards_after_catch.abs() as u32 + fumble_return_yards.abs() as u32,
             rng
         );
-        PassResult{
+        let pass_res = PassResult{
             play_duration: play_duration,
             sack_yards_lost: sack_yards_lost,
             pass_dist: pass_distance,
@@ -566,6 +744,7 @@ impl PlayResultSimulator for PassResultSimulator {
             fumble: fumble,
             touchdown: touchdown,
             safety: safety
-        }
+        };
+        PlayTypeResult::Pass(pass_res)
     }
 }

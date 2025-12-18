@@ -4,20 +4,21 @@ use rocket_okapi::okapi::schemars;
 #[cfg(feature = "rocket_okapi")]
 use rocket_okapi::okapi::schemars::JsonSchema;
 use serde::{Serialize, Deserialize};
-use rand_distr::{Normal, Distribution, Exp};
+use rand_distr::{SkewNormal, Normal, Distribution};
 
 use crate::game::context::{GameContext, GameContextBuilder};
 use crate::game::play::PlaySimulatable;
 use crate::game::play::context::PlayContext;
-use crate::game::play::result::{PlayResult, PlayResultSimulator, ScoreResult};
+use crate::game::play::result::{PlayResult, PlayTypeResult, PlayResultSimulator, ScoreResult};
 
 // Up-tempo probability regression
 const P_UP_TEMPO_INTR: f64 = -4.5395125211354683_f64; // Adjusted -1
 const P_UP_TEMPO_COEF: f64 = 3.03267023_f64;
 
 // Normal between-play duration distribution parameters
-const MEAN_BETWEEN_PLAY_DURATION: f64 = 25_f64; // Adjusted + 5
+const MEAN_BETWEEN_PLAY_DURATION: f64 = 38_f64; // Adjusted + 18
 const STD_BETWEEN_PLAY_DURATION: f64 = 5_f64;
+const SKEW_BETWEEN_PLAY_DURATION: f64 = -7_f64; // Added skew
 
 // Up-tempo between-play duration distribution parameters
 const MEAN_UP_TEMPO_BETWEEN_PLAY_DURATION: f64 = 6_f64;
@@ -38,7 +39,7 @@ const P_GET_SET_TIMEOUT_COEF: f64 = 0.4_f64;
 /// A `BetweenPlayResult` represents any activity between plays, such as the
 /// clock running in-between plays & timeouts called after the play
 #[cfg_attr(feature = "rocket_okapi", derive(JsonSchema))]
-#[derive(Clone, Eq, PartialEq, Ord, PartialOrd, Debug, Serialize, Deserialize)]
+#[derive(Clone, Copy, Eq, PartialEq, Ord, PartialOrd, Debug, Serialize, Deserialize)]
 pub struct BetweenPlayResult {
     duration: u32,
     offense_timeout: bool,
@@ -135,9 +136,97 @@ impl PlayResult for BetweenPlayResult {
             .game_over(context.next_game_over(self.duration, off_score, def_score))
             .build()
     }
+}
 
-    fn summary(&self) -> String {
-        format!("{}", self)
+impl BetweenPlayResult {
+    /// Initialize a new between play result
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::game::play::result::betweenplay::BetweenPlayResult;
+    /// 
+    /// let my_res = BetweenPlayResult::new();
+    /// ```
+    pub fn new() -> BetweenPlayResult {
+        BetweenPlayResult::default()
+    }
+
+    /// Get a between play result's duration property
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::game::play::result::betweenplay::BetweenPlayResult;
+    /// 
+    /// let my_res = BetweenPlayResult::new();
+    /// let duration = my_res.duration();
+    /// ```
+    pub fn duration(&self) -> u32 {
+        self.duration
+    }
+
+    /// Get a between play result's offense_timeout property
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::game::play::result::betweenplay::BetweenPlayResult;
+    /// 
+    /// let my_res = BetweenPlayResult::new();
+    /// let offense_timeout = my_res.offense_timeout();
+    /// ```
+    pub fn offense_timeout(&self) -> bool {
+        self.offense_timeout
+    }
+
+    /// Get a between play result's defense_timeout property
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::game::play::result::betweenplay::BetweenPlayResult;
+    /// 
+    /// let my_res = BetweenPlayResult::new();
+    /// let defense_timeout = my_res.defense_timeout();
+    /// ```
+    pub fn defense_timeout(&self) -> bool {
+        self.defense_timeout
+    }
+
+    /// Get a between play result's up_tempo property
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::game::play::result::betweenplay::BetweenPlayResult;
+    /// 
+    /// let my_res = BetweenPlayResult::new();
+    /// let up_tempo = my_res.up_tempo();
+    /// ```
+    pub fn up_tempo(&self) -> bool {
+        self.up_tempo
+    }
+
+    /// Get a between play result's defense_not_set property
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::game::play::result::betweenplay::BetweenPlayResult;
+    /// 
+    /// let my_res = BetweenPlayResult::new();
+    /// let defense_not_set = my_res.defense_not_set();
+    /// ```
+    pub fn defense_not_set(&self) -> bool {
+        self.defense_not_set
+    }
+
+    /// Get a between play result's critical_down property
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::game::play::result::betweenplay::BetweenPlayResult;
+    /// 
+    /// let my_res = BetweenPlayResult::new();
+    /// let critical_down = my_res.critical_down();
+    /// ```
+    pub fn critical_down(&self) -> bool {
+        self.critical_down
     }
 }
 
@@ -222,15 +311,14 @@ impl BetweenPlayResultSimulator {
     /// Generates the clock seconds which pass in-between plays
     fn duration(&self, context: &PlayContext, up_tempo: bool, rng: &mut impl Rng) -> u32 {
         if context.drain_clock() {
-            let noise: u32 = Exp::new(1_f64).unwrap().sample(rng).round().abs() as u32;
-            return 40 - noise;
+            return 40;
         }
-        let duration_dist = if up_tempo {
-            Normal::new(MEAN_UP_TEMPO_BETWEEN_PLAY_DURATION, STD_UP_TEMPO_BETWEEN_PLAY_DURATION).unwrap()
+        let duration = if up_tempo {
+            Normal::new(MEAN_UP_TEMPO_BETWEEN_PLAY_DURATION, STD_UP_TEMPO_BETWEEN_PLAY_DURATION).unwrap().sample(rng).round()
         } else {
-            Normal::new(MEAN_BETWEEN_PLAY_DURATION, STD_BETWEEN_PLAY_DURATION).unwrap()
+            SkewNormal::new(MEAN_BETWEEN_PLAY_DURATION, STD_BETWEEN_PLAY_DURATION, SKEW_BETWEEN_PLAY_DURATION).unwrap().sample(rng).round()
         };
-        match u32::try_from(duration_dist.sample(rng).round() as i32) {
+        match u32::try_from(duration as i32) {
             Ok(n) => n,
             Err(_) => 0
         }
@@ -259,7 +347,7 @@ impl PlayResultSimulator for BetweenPlayResultSimulator {
     /// let mut rng = rand::thread_rng();
     /// let my_res = my_sim.sim(&my_off, &my_def, &my_context, &mut rng);
     /// ```
-    fn sim(&self, offense: &impl PlaySimulatable, defense: &impl PlaySimulatable, context: &GameContext, rng: &mut impl Rng) -> impl PlayResult {
+    fn sim(&self, offense: &impl PlaySimulatable, defense: &impl PlaySimulatable, context: &GameContext, rng: &mut impl Rng) -> PlayTypeResult {
         // Calculate normalized skill diffs, skill levels, context values
         let norm_defense_risk_taking: f64 = defense.coach().risk_taking() as f64 / 100_f64;
         let norm_offense_up_tempo: f64 = offense.coach().up_tempo() as f64 / 100_f64;
@@ -306,13 +394,14 @@ impl PlayResultSimulator for BetweenPlayResultSimulator {
         } else {
             0
         };
-        BetweenPlayResult{
+        let between_res = BetweenPlayResult{
             duration: between_play_duration,
             offense_timeout: offense_timeout,
             defense_timeout: defense_timeout,
             up_tempo: up_tempo,
             defense_not_set: defense_not_set,
             critical_down: critical_down
-        }
+        };
+        PlayTypeResult::BetweenPlay(between_res)
     }
 }

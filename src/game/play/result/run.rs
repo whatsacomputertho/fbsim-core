@@ -8,7 +8,7 @@ use rand_distr::{Normal, Distribution, Exp};
 
 use crate::game::context::GameContext;
 use crate::game::play::PlaySimulatable;
-use crate::game::play::result::{PlayResult, PlayResultSimulator, ScoreResult};
+use crate::game::play::result::{PlayResult, PlayTypeResult, PlayResultSimulator, ScoreResult};
 
 // Mean & std regression for standard rushing play
 const MEAN_YARDS_INTR: f64 = 3.0503791522871384_f64;
@@ -45,7 +45,7 @@ const P_FUMBLE_COEF: f64 = -0.05432772;
 ///
 /// A `RunResult` represents a result of a run play
 #[cfg_attr(feature = "rocket_okapi", derive(JsonSchema))]
-#[derive(Clone, Eq, PartialEq, Ord, PartialOrd, Debug, Serialize, Deserialize)]
+#[derive(Clone, Copy, Eq, PartialEq, Ord, PartialOrd, Debug, Serialize, Deserialize)]
 pub struct RunResult {
     yards_gained: i32,
     play_duration: u32,
@@ -166,9 +166,131 @@ impl PlayResult for RunResult {
     fn next_play_extra_point(&self) -> bool {
         self.touchdown
     }
+}
 
-    fn summary(&self) -> String {
-        format!("{}", self)
+impl RunResult {
+    /// Initialize a new run result
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::game::play::result::run::RunResult;
+    /// 
+    /// let my_res = RunResult::new();
+    /// ```
+    pub fn new() -> RunResult {
+        RunResult::default()
+    }
+
+    /// Get a run result's play_duration property
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::game::play::result::run::RunResult;
+    /// 
+    /// let my_res = RunResult::new();
+    /// let play_duration = my_res.play_duration();
+    /// assert!(play_duration == 0);
+    /// ```
+    pub fn play_duration(&self) -> u32 {
+        self.play_duration
+    }
+
+    /// Get a run result's yards_gained property
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::game::play::result::run::RunResult;
+    /// 
+    /// let my_res = RunResult::new();
+    /// let yards_gained = my_res.yards_gained();
+    /// assert!(yards_gained == 0);
+    /// ```
+    pub fn yards_gained(&self) -> i32 {
+        self.yards_gained
+    }
+
+    /// Get a run result's return_yards property
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::game::play::result::run::RunResult;
+    /// 
+    /// let my_res = RunResult::new();
+    /// let return_yards = my_res.return_yards();
+    /// assert!(return_yards == 0);
+    /// ```
+    pub fn return_yards(&self) -> i32 {
+        self.return_yards
+    }
+
+    /// Get a run result's fumble property
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::game::play::result::run::RunResult;
+    /// 
+    /// let my_res = RunResult::new();
+    /// let fumble = my_res.fumble();
+    /// assert!(!fumble);
+    /// ```
+    pub fn fumble(&self) -> bool {
+        self.fumble
+    }
+
+    /// Get a run result's out_of_bounds property
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::game::play::result::run::RunResult;
+    /// 
+    /// let my_res = RunResult::new();
+    /// let out_of_bounds = my_res.out_of_bounds();
+    /// assert!(!out_of_bounds);
+    /// ```
+    pub fn out_of_bounds(&self) -> bool {
+        self.out_of_bounds
+    }
+
+    /// Get a run result's touchdown property
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::game::play::result::run::RunResult;
+    /// 
+    /// let my_res = RunResult::new();
+    /// let touchdown = my_res.touchdown();
+    /// assert!(!touchdown);
+    /// ```
+    pub fn touchdown(&self) -> bool {
+        self.touchdown
+    }
+
+    /// Get a run result's safety property
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::game::play::result::run::RunResult;
+    /// 
+    /// let my_res = RunResult::new();
+    /// let safety = my_res.safety();
+    /// assert!(!safety);
+    /// ```
+    pub fn safety(&self) -> bool {
+        self.safety
+    }
+
+    /// Get a run result's scramble property
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::game::play::result::run::RunResult;
+    /// 
+    /// let my_res = RunResult::new();
+    /// let scramble = my_res.scramble();
+    /// assert!(!scramble);
+    /// ```
+    pub fn scramble(&self) -> bool {
+        self.scramble
     }
 }
 
@@ -264,7 +386,7 @@ impl PlayResultSimulator for RunResultSimulator {
     /// let mut rng = rand::thread_rng();
     /// let my_res = my_sim.sim(&my_off, &my_def, &my_context, &mut rng);
     /// ```
-    fn sim(&self, offense: &impl PlaySimulatable, defense: &impl PlaySimulatable, context: &GameContext, rng: &mut impl Rng) -> impl PlayResult {
+    fn sim(&self, offense: &impl PlaySimulatable, defense: &impl PlaySimulatable, context: &GameContext, rng: &mut impl Rng) -> PlayTypeResult {
         // Derive the normalized skill differentials for each team
         let norm_diff_rushing: f64 = 0.5_f64 + ((offense.offense().rushing() as f64 - defense.defense().rush_defense() as f64) / 200_f64);
         let norm_diff_turnovers: f64 = 0.5_f64 + ((offense.offense().turnovers() as f64 - defense.defense().turnovers() as f64) / 200_f64);
@@ -313,7 +435,7 @@ impl PlayResultSimulator for RunResultSimulator {
         };
 
         // Construct the run result
-        RunResult{
+        let run_res = RunResult{
             yards_gained: yards_gained,
             play_duration: self.play_duration(total_yards, rng),
             fumble: fumble,
@@ -322,6 +444,7 @@ impl PlayResultSimulator for RunResultSimulator {
             touchdown: touchdown,
             safety: safety,
             scramble: false
-        }
+        };
+        PlayTypeResult::Run(run_res)
     }
 }

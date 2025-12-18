@@ -8,7 +8,7 @@ use rand_distr::{Normal, Distribution, Exp, SkewNormal};
 
 use crate::game::context::GameContext;
 use crate::game::play::PlaySimulatable;
-use crate::game::play::result::{PlayResult, PlayResultSimulator, ScoreResult};
+use crate::game::play::result::{PlayResult, PlayTypeResult, PlayResultSimulator, ScoreResult};
 
 // Touchback probability regression
 const P_TOUCHBACK_INTR: f64 = 0.2528877428268531_f64;
@@ -19,7 +19,7 @@ const P_OOB_INTR: f64 = 0.013879833381776598_f64;
 const P_OOB_COEF: f64 = -0.01063523_f64;
 
 // Kickoff inside 20 probability
-const P_KICKOFF_INSIDE_20: f64 = 0.2_f64;
+const P_KICKOFF_INSIDE_20: f64 = 0.8_f64; // Adjusted +0.6
 
 // Kickoff inside 20 mean distance
 const MEAN_KICKOFF_INSIDE_20_DIST: f64 = 64.3_f64;
@@ -69,7 +69,7 @@ const KICKOFF_RETURN_PLAY_DURATION_COEF: f64 = 1.20326252_f64;
 ///
 /// A `KickoffResult` represents a result of a kickoff
 #[cfg_attr(feature = "rocket_okapi", derive(JsonSchema))]
-#[derive(Clone, Eq, PartialEq, Ord, PartialOrd, Debug, Serialize, Deserialize)]
+#[derive(Clone, Copy, Eq, PartialEq, Ord, PartialOrd, Debug, Serialize, Deserialize)]
 pub struct KickoffResult {
     kickoff_yards: i32,
     kick_return_yards: i32,
@@ -213,9 +213,145 @@ impl PlayResult for KickoffResult {
     fn next_play_extra_point(&self) -> bool {
         self.touchdown
     }
+}
 
-    fn summary(&self) -> String {
-        format!("{}", self)
+impl KickoffResult {
+    /// Initialize a new kickoff result
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::game::play::result::kickoff::KickoffResult;
+    /// 
+    /// let my_res = KickoffResult::new();
+    /// ```
+    pub fn new() -> KickoffResult {
+        KickoffResult::default()
+    }
+
+    /// Get a kickoff result's kickoff_yards property
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::game::play::result::kickoff::KickoffResult;
+    /// 
+    /// let my_res = KickoffResult::new();
+    /// let kickoff_yards = my_res.kickoff_yards();
+    /// assert!(kickoff_yards == 65);
+    /// ```
+    pub fn kickoff_yards(&self) -> i32 {
+        self.kickoff_yards
+    }
+
+    /// Get a kickoff result's kick_return_yards property
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::game::play::result::kickoff::KickoffResult;
+    /// 
+    /// let my_res = KickoffResult::new();
+    /// let kick_return_yards = my_res.kick_return_yards();
+    /// assert!(kick_return_yards == 0);
+    /// ```
+    pub fn kick_return_yards(&self) -> i32 {
+        self.kick_return_yards
+    }
+
+    /// Get a kickoff result's play_duration property
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::game::play::result::kickoff::KickoffResult;
+    /// 
+    /// let my_res = KickoffResult::new();
+    /// let play_duration = my_res.play_duration();
+    /// assert!(play_duration == 0);
+    /// ```
+    pub fn play_duration(&self) -> u32 {
+        self.play_duration
+    }
+
+    /// Get a kickoff result's fumble_return_yards property
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::game::play::result::kickoff::KickoffResult;
+    /// 
+    /// let my_res = KickoffResult::new();
+    /// let fumble_return_yards = my_res.fumble_return_yards();
+    /// assert!(fumble_return_yards == 0);
+    /// ```
+    pub fn fumble_return_yards(&self) -> i32 {
+        self.fumble_return_yards
+    }
+
+    /// Get a kickoff result's touchback property
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::game::play::result::kickoff::KickoffResult;
+    /// 
+    /// let my_res = KickoffResult::new();
+    /// let touchback = my_res.touchback();
+    /// assert!(touchback);
+    /// ```
+    pub fn touchback(&self) -> bool {
+        self.touchback
+    }
+
+    /// Get a kickoff result's out_of_bounds property
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::game::play::result::kickoff::KickoffResult;
+    /// 
+    /// let my_res = KickoffResult::new();
+    /// let out_of_bounds = my_res.out_of_bounds();
+    /// assert!(!out_of_bounds);
+    /// ```
+    pub fn out_of_bounds(&self) -> bool {
+        self.out_of_bounds
+    }
+
+    /// Get a kickoff result's fair_catch property
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::game::play::result::kickoff::KickoffResult;
+    /// 
+    /// let my_res = KickoffResult::new();
+    /// let fair_catch = my_res.fair_catch();
+    /// assert!(!fair_catch);
+    /// ```
+    pub fn fair_catch(&self) -> bool {
+        self.fair_catch
+    }
+
+    /// Get a kickoff result's fumble property
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::game::play::result::kickoff::KickoffResult;
+    /// 
+    /// let my_res = KickoffResult::new();
+    /// let fumble = my_res.fumble();
+    /// assert!(!fumble);
+    /// ```
+    pub fn fumble(&self) -> bool {
+        self.fumble
+    }
+
+    /// Get a kickoff result's touchdown property
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::game::play::result::kickoff::KickoffResult;
+    /// 
+    /// let my_res = KickoffResult::new();
+    /// let touchdown = my_res.touchdown();
+    /// assert!(!touchdown);
+    /// ```
+    pub fn touchdown(&self) -> bool {
+        self.touchdown
     }
 }
 
@@ -312,7 +448,7 @@ impl KickoffResultSimulator {
     fn play_duration(&self, total_yards: u32, rng: &mut impl Rng) -> u32 {
         let mean_duration: f64 = KICKOFF_RETURN_PLAY_DURATION_INTR + (KICKOFF_RETURN_PLAY_DURATION_COEF * total_yards as f64);
         let duration_dist = Normal::new(mean_duration, 2_f64).unwrap();
-        match u32::try_from(duration_dist.sample(rng).round() as i32) {
+        match u32::try_from(duration_dist.sample(rng).sqrt().round() as i32) {
             Ok(n) => n,
             Err(_) => 0
         }
@@ -341,7 +477,7 @@ impl PlayResultSimulator for KickoffResultSimulator {
     /// let mut rng = rand::thread_rng();
     /// let my_res = my_sim.sim(&my_off, &my_def, &my_context, &mut rng);
     /// ```
-    fn sim(&self, offense: &impl PlaySimulatable, defense: &impl PlaySimulatable, context: &GameContext, rng: &mut impl Rng) -> impl PlayResult {
+    fn sim(&self, offense: &impl PlaySimulatable, defense: &impl PlaySimulatable, context: &GameContext, rng: &mut impl Rng) -> PlayTypeResult {
         // Calculate normalized skill diffs & skill levels
         let norm_kicking: f64 = offense.offense().kickoffs() as f64 / 100_f64;
         let norm_diff_returning: f64 = 0.5_f64 + ((defense.defense().kick_returning() as f64 - offense.offense().kick_return_defense() as f64) / 200_f64);
@@ -417,7 +553,7 @@ impl PlayResultSimulator for KickoffResultSimulator {
             false
         };
 
-        KickoffResult{
+        let kickoff_res = KickoffResult{
             kickoff_yards: kickoff_distance,
             kick_return_yards: return_yards,
             play_duration: play_duration,
@@ -427,6 +563,7 @@ impl PlayResultSimulator for KickoffResultSimulator {
             fair_catch: fair_catch,
             fumble: fumble,
             touchdown: touchdown
-        }
+        };
+        PlayTypeResult::Kickoff(kickoff_res)
     }
 }
