@@ -683,7 +683,6 @@ impl DriveSimulator {
             plays.push(play);
             
             // Break the loop if necessary
-            println!("Result: {}", result);
             if result == DriveResult::None || !extra_point_complete {
                 prev_context = new_context
             } else {
