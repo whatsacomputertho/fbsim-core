@@ -886,6 +886,11 @@ impl GameContext {
                 return 10.min(next_yl);
             }
             return 0.max(10.min(100_i32 - next_yl as i32)) as u32;
+        } else if self.down == 4 {
+            if self.home_possession ^ self.home_positive_direction {
+                return 0.max(10.min(100_i32 - next_yl as i32)) as u32;
+            }
+            return 10.min(next_yl);
         }
         let next_dist = self.distance as i32 - net_yards;
         match u32::try_from(next_dist) {
@@ -980,7 +985,7 @@ impl GameContext {
             last_play_timeout: off_timeout || def_timeout,
             last_play_kickoff: result.kickoff(),
             next_play_extra_point: result.next_play_extra_point(),
-            next_play_kickoff: result.next_play_kickoff(),
+            next_play_kickoff: result.next_play_kickoff() || end_of_half,
             end_of_half: end_of_half,
             game_over: self.next_game_over(duration, off_score, def_score)
         }

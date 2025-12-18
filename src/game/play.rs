@@ -561,6 +561,7 @@ impl DriveSimulator {
             new_context = next_context;
 
             // Determine if a drive result occurred
+            let mut touchdown: bool = false;
             let result_was_none = result == DriveResult::None;
             if result_was_none {
                 let field_goal: bool = match play_result {
@@ -581,7 +582,7 @@ impl DriveSimulator {
                 }
 
                 // Touchdown
-                let touchdown: bool = play_result.offense_score() == ScoreResult::Touchdown ||
+                touchdown = play_result.offense_score() == ScoreResult::Touchdown ||
                     play_result.defense_score() == ScoreResult::Touchdown;
                 if touchdown {
                     result = DriveResult::Touchdown;
@@ -636,8 +637,8 @@ impl DriveSimulator {
                 }
 
                 // End of half
-                let end_of_half = (*prev_context.quarter() == 2 || *prev_context.quarter() >= 4) &&
-                    *prev_context.quarter() != *new_context.quarter();
+                let end_of_half = ((*prev_context.quarter() == 2 || *prev_context.quarter() >= 4) &&
+                    (*prev_context.quarter() != *new_context.quarter())) || *new_context.game_over();
                 if end_of_half {
                     result = DriveResult::EndOfHalf;
                 }
@@ -646,7 +647,7 @@ impl DriveSimulator {
             }
 
             // Check if the result changed to something other than a touchdown
-            if result_was_none && result != DriveResult::None && result != DriveResult::Touchdown {
+            if result_was_none && result != DriveResult::None && result != DriveResult::Touchdown && !touchdown {
                 extra_point_complete = true;
             }
 

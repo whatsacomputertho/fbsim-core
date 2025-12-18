@@ -19,7 +19,7 @@ const P_OOB_INTR: f64 = 0.013879833381776598_f64;
 const P_OOB_COEF: f64 = -0.01063523_f64;
 
 // Kickoff inside 20 probability
-const P_KICKOFF_INSIDE_20: f64 = 0.2_f64;
+const P_KICKOFF_INSIDE_20: f64 = 0.8_f64; // Adjusted +0.6
 
 // Kickoff inside 20 mean distance
 const MEAN_KICKOFF_INSIDE_20_DIST: f64 = 64.3_f64;
@@ -448,7 +448,7 @@ impl KickoffResultSimulator {
     fn play_duration(&self, total_yards: u32, rng: &mut impl Rng) -> u32 {
         let mean_duration: f64 = KICKOFF_RETURN_PLAY_DURATION_INTR + (KICKOFF_RETURN_PLAY_DURATION_COEF * total_yards as f64);
         let duration_dist = Normal::new(mean_duration, 2_f64).unwrap();
-        match u32::try_from(duration_dist.sample(rng).round() as i32) {
+        match u32::try_from(duration_dist.sample(rng).sqrt().round() as i32) {
             Ok(n) => n,
             Err(_) => 0
         }
