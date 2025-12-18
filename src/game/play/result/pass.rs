@@ -116,6 +116,7 @@ pub struct PassResult {
     yards_after_catch: i32,
     pressure: bool,
     sack: bool,
+    scramble: bool,
     interception: bool,
     complete: bool,
     fumble: bool,
@@ -141,6 +142,7 @@ impl Default for PassResult {
             yards_after_catch: 0,
             pressure: false,
             sack: false,
+            scramble: false,
             interception: false,
             complete: false,
             fumble: false,
@@ -375,6 +377,20 @@ impl PassResult {
     /// ```
     pub fn sack(&self) -> bool {
         self.sack
+    }
+
+    /// Get a pass result's scramble property
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::game::play::result::pass::PassResult;
+    /// 
+    /// let my_res = PassResult::new();
+    /// let scramble = my_res.scramble();
+    /// assert!(!scramble);
+    /// ```
+    pub fn scramble(&self) -> bool {
+        self.scramble
     }
 
     /// Get a pass result's interception property
@@ -739,6 +755,7 @@ impl PlayResultSimulator for PassResultSimulator {
             yards_after_catch: yards_after_catch,
             pressure: pressure,
             sack: sack,
+            scramble: scramble,
             interception: interception,
             complete: complete,
             fumble: fumble,
