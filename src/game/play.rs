@@ -11,7 +11,7 @@ use rand::Rng;
 
 use crate::game::context::GameContext;
 use crate::game::play::call::{PlayCallSimulator, PlayCall};
-use crate::game::play::result::{PlayResultSimulator, PlayResult, PlayTypeResult};
+use crate::game::play::result::{PlayResultSimulator, PlayResult, PlayTypeResult, ScoreResult};
 use crate::game::play::result::betweenplay::BetweenPlayResultSimulator;
 use crate::game::play::result::fieldgoal::FieldGoalResultSimulator;
 use crate::game::play::result::kickoff::KickoffResultSimulator;
@@ -91,6 +91,31 @@ impl Play {
     /// ```
     pub fn result(&self) -> &PlayTypeResult {
         &self.result
+    }
+
+    /// Borrow the play's game context
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::game::play::Play;
+    /// use fbsim_core::game::play::result::PlayTypeResult;
+    /// use fbsim_core::game::play::result::betweenplay::BetweenPlayResult;
+    /// use fbsim_core::game::play::result::pass::PassResult;
+    /// use fbsim_core::game::context::GameContext;
+    ///
+    /// // Initialize a game context
+    /// let my_context = GameContext::new();
+    ///
+    /// // Initialize a play type result
+    /// let my_res = PlayTypeResult::Pass(PassResult::new());
+    /// let my_between = PlayTypeResult::BetweenPlay(BetweenPlayResult::new());
+    ///
+    /// // Initialize a play and borrow its result
+    /// let my_play = Play::new(my_context, my_res, my_between);
+    /// let my_borrowed_context = my_play.context();
+    /// ```
+    pub fn context(&self) -> &GameContext {
+        &self.context
     }
 }
 
@@ -237,6 +262,8 @@ impl PlaySimulator {
 /// # `DriveResult` enum
 ///
 /// Enumerates the possible outcomes of a drive
+#[cfg_attr(feature = "rocket_okapi", derive(JsonSchema))]
+#[derive(Debug, Clone, Copy, Eq, PartialEq, Ord, PartialOrd, Serialize, Deserialize)]
 pub enum DriveResult {
     None,
     FieldGoal,
@@ -448,5 +475,131 @@ impl DriveSimulator {
         }
     }
 
-    // TODO: Simulate a drive
+    /// Simulate a drive
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::game::context::GameContext;
+    /// use fbsim_core::game::play::DriveSimulator;
+    /// use fbsim_core::team::FootballTeam;
+    ///
+    /// // Initialize home & away teams
+    /// let my_home = FootballTeam::new();
+    /// let my_away = FootballTeam::new();
+    ///
+    /// // Initialize a game context
+    /// let my_context = GameContext::new();
+    /// 
+    /// // Initialize a drive simulator & simulate a drive
+    /// let my_sim = DriveSimulator::new();
+    /// let mut rng = rand::thread_rng();
+    /// let (drive, next_context) = my_sim.sim(&my_home, &my_away, my_context, &mut rng);
+    /// ```
+    pub fn sim(&self, home: &FootballTeam, away: &FootballTeam, context: GameContext, rng: &mut impl Rng) -> (Drive, GameContext) {
+        let mut extra_point_complete: bool = false;
+        let mut drive: Drive = Drive::new();
+        let mut result: DriveResult = DriveResult::None;
+        let plays = drive.plays_mut();
+        let mut prev_context = context.clone();
+        let mut new_context: GameContext;
+        loop {
+            // Simulate a play
+            let (play, next_context) = self.play.sim(home, away, prev_context, rng);
+            let play_result = play.result();
+            new_context = next_context;
+
+            // Determine if a drive result occurred
+            let result_was_none = result == DriveResult::None;
+            if result_was_none {
+                let field_goal: bool = match play_result {
+                    PlayTypeResult::FieldGoal(res) => res.made(),
+                    _ => false
+                };
+                if field_goal {
+                    result = DriveResult::FieldGoal;
+                }
+
+                // Touchdown
+                let touchdown: bool = play_result.offense_score() == ScoreResult::Touchdown ||
+                    play_result.defense_score() == ScoreResult::Touchdown;
+                if touchdown {
+                    result = DriveResult::Touchdown;
+                }
+
+                // Safety
+                let safety: bool = play_result.defense_score() == ScoreResult::Safety;
+                if safety {
+                    result = DriveResult::Safety;
+                }
+
+                // Interception
+                let turnover = play_result.turnover();
+                let interception = if turnover {
+                    match play_result {
+                        PlayTypeResult::Pass(res) => res.interception(),
+                        _ => false
+                    }
+                } else {
+                    false
+                };
+                if interception {
+                    result = DriveResult::Interception;
+                }
+
+                // Fumble
+                let fumble = if turnover {
+                    match play_result {
+                        PlayTypeResult::Run(res) => res.fumble(),
+                        PlayTypeResult::Pass(res) => res.fumble(),
+                        PlayTypeResult::FieldGoal(res) => res.blocked(),
+                        PlayTypeResult::Punt(res) => res.fumble(),
+                        PlayTypeResult::Kickoff(res) => res.fumble(),
+                        PlayTypeResult::QbKneel(res) => res.fumble(),
+                        PlayTypeResult::QbSpike(res) => res.fumble(),
+                        _ => false
+                    }
+                } else {
+                    false
+                };
+                if fumble {
+                    result = DriveResult::Fumble;
+                }
+
+                // Downs
+                let prev_context = play.context();
+                let downs = *prev_context.down() == 4 && *new_context.down() == 1 && !turnover &&
+                    *prev_context.home_possession() != *new_context.home_possession() &&
+                    play_result.net_yards() < *prev_context.distance() as i32;
+                if downs {
+                    result = DriveResult::Downs;
+                }
+
+                // End of half
+                let end_of_half = (*prev_context.quarter() == 2 || *prev_context.quarter() >= 4) &&
+                    *prev_context.quarter() != *new_context.quarter();
+                if end_of_half {
+                    result = DriveResult::EndOfHalf;
+                }
+            } else if result == DriveResult::Touchdown {
+                extra_point_complete = true;
+            }
+
+            // Check if the result changed to something other than a touchdown
+            if result_was_none && result != DriveResult::None && result != DriveResult::Touchdown {
+                extra_point_complete = true;
+            }
+
+            // Add the play to the drive and update the previous context
+            plays.push(play);
+            
+            // Break the loop if necessary
+            if result == DriveResult::None || !extra_point_complete {
+                prev_context = new_context
+            } else {
+                let drive_res = drive.result_mut();
+                *drive_res = result;
+                return (drive, new_context)
+            }
+        }
+    }
 }
