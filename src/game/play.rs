@@ -490,8 +490,8 @@ impl std::fmt::Display for Drive {
         let mut drive_str = format!(
             "Result: {} | Passing: {}/{}, {} yards | Rushing: {} rush, {} yards",
             self.result(),
-            self.pass_plays(),
             self.completed_passes(),
+            self.pass_plays(),
             self.passing_yards(),
             self.run_plays(),
             self.rushing_yards()
