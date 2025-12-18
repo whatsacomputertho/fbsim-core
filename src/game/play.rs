@@ -582,6 +582,7 @@ impl DriveSimulator {
         let plays = drive.plays_mut();
         let mut prev_context = context.clone();
         let mut new_context: GameContext;
+        let mut touchdown: bool = false;
         loop {
             // Simulate a play
             let (play, next_context) = self.play.sim(home, away, prev_context, rng);
@@ -589,7 +590,6 @@ impl DriveSimulator {
             new_context = next_context;
 
             // Determine if a drive result occurred
-            let mut touchdown: bool = false;
             let result_was_none = result == DriveResult::None;
             if result_was_none {
                 let field_goal: bool = match play_result {
