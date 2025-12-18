@@ -11,7 +11,7 @@ use crate::game::play::PlaySimulatable;
 use crate::game::play::result::{PlayResult, PlayTypeResult, PlayResultSimulator, ScoreResult};
 
 // Mean & std regression for standard rushing play
-const MEAN_YARDS_INTR: f64 = 2.5503791522871384_f64; // adjusted -0.5
+const MEAN_YARDS_INTR: f64 = 2.2503791522871384_f64; // adjusted -0.8
 const MEAN_YARDS_COEF: f64 = 0.82550597_f64; // adjusted + 0.5
 const STD_YARDS_INTR: f64 = 4.053915588534795_f64;
 const STD_YARDS_COEF_1: f64 = 0.2487578_f64;
@@ -19,7 +19,7 @@ const STD_YARDS_COEF_2: f64 = 0.0593874_f64;
 
 // Mean & std regression for big, non-TD rushing play
 const MEAN_BP_YARDS_INTR: f64 = 12.781025340879893_f64; // adjusted -3
-const MEAN_BP_YARDS_COEF: f64 = 9.32805521_f64; // adjusted +3
+const MEAN_BP_YARDS_COEF: f64 = 12.32805521_f64; // adjusted +6
 const STD_BP_YARDS_INTR: f64 = 10.014877063200005_f64;
 const STD_BP_YARDS_COEF_1: f64 = -3.82403981_f64;
 const STD_BP_YARDS_COEF_2: f64 = 7.60215528_f64;
