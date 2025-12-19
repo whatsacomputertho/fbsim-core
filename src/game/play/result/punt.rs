@@ -451,7 +451,7 @@ impl PuntResultSimulator {
             ).exp() + P_PUNT_INSIDE_20_YARD_LINE_PARAM_4
         ); // Logistic curve fit
         let p_inside_20: f64 = 1_f64.min(0_f64.max(
-            ((p_inside_20_skill * 0.4) + (p_inside_20_yardline * 0.6)) * 1.18
+            ((p_inside_20_skill * 0.5) + (p_inside_20_yardline * 0.5)) * 1.18
         )); // Weighted average
         rng.gen::<f64>() < p_inside_20
     }
