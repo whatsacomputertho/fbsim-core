@@ -23,7 +23,7 @@ const P_SCRAMBLE_INTR: f64 = 0.004914770911025865_f64;
 const P_SCRAMBLE_COEF: f64 = 0.13433329_f64;
 
 // Short pass probability regression
-const P_SHORT_PASS_INTR: f64 = 0.8410555875020549_f64;
+const P_SHORT_PASS_INTR: f64 = 0.9010555875020549_f64; // Adjusted + 0.06
 const P_SHORT_PASS_COEF_1: f64 = -0.0054862949_f64;
 const P_SHORT_PASS_COEF_2: f64 = 0.000050472999_f64;
 
@@ -75,7 +75,7 @@ const SKEW_INT_RETURN_YARDS_COEF_3: f64 = 0.00000700818986_f64;
 
 // Completed pass probability regression
 const P_COMPLETE_INTR: f64 = 0.3039580511583472_f64;
-const P_COMPLETE_COEF: f64 = 0.40872763_f64;
+const P_COMPLETE_COEF: f64 = 0.55872763_f64; // Adjusted + 0.15
 
 // Zero yards after catch probability regression
 const P_ZERO_YAC_INTR: f64 = 0.46761265601223527_f64; // Adjusted + 0.3
@@ -116,6 +116,7 @@ pub struct PassResult {
     yards_after_catch: i32,
     pressure: bool,
     sack: bool,
+    scramble: bool,
     interception: bool,
     complete: bool,
     fumble: bool,
@@ -141,6 +142,7 @@ impl Default for PassResult {
             yards_after_catch: 0,
             pressure: false,
             sack: false,
+            scramble: false,
             interception: false,
             complete: false,
             fumble: false,
@@ -375,6 +377,20 @@ impl PassResult {
     /// ```
     pub fn sack(&self) -> bool {
         self.sack
+    }
+
+    /// Get a pass result's scramble property
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::game::play::result::pass::PassResult;
+    /// 
+    /// let my_res = PassResult::new();
+    /// let scramble = my_res.scramble();
+    /// assert!(!scramble);
+    /// ```
+    pub fn scramble(&self) -> bool {
+        self.scramble
     }
 
     /// Get a pass result's interception property
@@ -739,6 +755,7 @@ impl PlayResultSimulator for PassResultSimulator {
             yards_after_catch: yards_after_catch,
             pressure: pressure,
             sack: sack,
+            scramble: scramble,
             interception: interception,
             complete: complete,
             fumble: fumble,

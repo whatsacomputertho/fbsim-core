@@ -11,15 +11,15 @@ use crate::game::play::PlaySimulatable;
 use crate::game::play::result::{PlayResult, PlayTypeResult, PlayResultSimulator, ScoreResult};
 
 // Mean & std regression for standard rushing play
-const MEAN_YARDS_INTR: f64 = 3.0503791522871384_f64;
-const MEAN_YARDS_COEF: f64 = 0.32550597_f64;
+const MEAN_YARDS_INTR: f64 = 2.2503791522871384_f64; // adjusted -0.8
+const MEAN_YARDS_COEF: f64 = 0.92550597_f64; // adjusted + 0.6
 const STD_YARDS_INTR: f64 = 4.053915588534795_f64;
 const STD_YARDS_COEF_1: f64 = 0.2487578_f64;
 const STD_YARDS_COEF_2: f64 = 0.0593874_f64;
 
 // Mean & std regression for big, non-TD rushing play
-const MEAN_BP_YARDS_INTR: f64 = 15.781025340879893_f64;
-const MEAN_BP_YARDS_COEF: f64 = 6.32805521_f64;
+const MEAN_BP_YARDS_INTR: f64 = 12.781025340879893_f64; // adjusted -3
+const MEAN_BP_YARDS_COEF: f64 = 16.32805521_f64; // adjusted +10
 const STD_BP_YARDS_INTR: f64 = 10.014877063200005_f64;
 const STD_BP_YARDS_COEF_1: f64 = -3.82403981_f64;
 const STD_BP_YARDS_COEF_2: f64 = 7.60215528_f64;
@@ -316,13 +316,13 @@ impl RunResultSimulator {
 
     /// Generates whether this is a big rushing play
     fn big_play(&self, norm_diff_rushing: f64, rng: &mut impl Rng) -> bool {
-        let p_big_play: f64 = 1_f64.min(0_f64.max(P_BP_INTR + (P_BP_COEF * norm_diff_rushing)));
+        let p_big_play: f64 = 1_f64.min(0_f64.max((P_BP_INTR + (P_BP_COEF * norm_diff_rushing)).exp()));
         rng.gen::<f64>() < p_big_play
     }
 
     /// Generates whether this is a big play touchdown
     fn big_play_touchdown(&self, norm_diff_rushing: f64, rng: &mut impl Rng) -> bool {
-        let p_bp_td: f64 = 1_f64.min(0_f64.max(P_BP_TD_INTR + (P_BP_TD_COEF * norm_diff_rushing)));
+        let p_bp_td: f64 = 1_f64.min(0_f64.max((P_BP_TD_INTR + (P_BP_TD_COEF * norm_diff_rushing)).exp()));
         rng.gen::<f64>() < p_bp_td
     }
 
