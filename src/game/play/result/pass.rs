@@ -570,7 +570,7 @@ impl PassResultSimulator {
         let mean_short_pass_dist: f64 = MEAN_SHORT_PASS_DIST_INTR + (MEAN_SHORT_PASS_DIST_COEF_1 * yard_line as f64) + (MEAN_SHORT_PASS_DIST_COEF_2 * yard_line.pow(2) as f64) + (MEAN_SHORT_PASS_DIST_COEF_3 * yard_line.pow(3) as f64);
         let std_short_pass_dist: f64 = STD_SHORT_PASS_DIST_INTR + (STD_SHORT_PASS_DIST_COEF_1 * yard_line as f64) + (STD_SHORT_PASS_DIST_COEF_2 * yard_line.pow(2) as f64) + (STD_SHORT_PASS_DIST_COEF_3 * yard_line.pow(3) as f64);
         let short_pass_dist = Normal::new(mean_short_pass_dist, std_short_pass_dist).unwrap();
-        -2_i32.max(short_pass_dist.sample(rng).round() as i32)
+        (short_pass_dist.sample(rng).round() as i32).max(-2)
     }
 
     /// Generates the distance of a deep pass
