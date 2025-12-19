@@ -600,13 +600,13 @@ impl PassResultSimulator {
     fn complete(&self, norm_diff_passing: f64, pass_dist: i32, rng: &mut impl Rng) -> bool {
         let p_complete_skill: f64 = P_COMPLETE_INTR + (P_COMPLETE_COEF * norm_diff_passing as f64);
         let p_complete_yl: f64 = P_COMPLETE_DIST_INTR + (P_COMPLETE_DIST_COEF * pass_dist as f64);
-        let p_complete: f64 = 1.0_f64.min(
+        let p_complete: f64 = 0.8_f64.min((
             (
                 (
                     ((p_complete_yl * 0.3) + (p_complete_skill * 0.7)).ln() + 1.0
                 ).max(0.01).ln() + 1.0
-            ).max(0.01)
-        );
+            ).max(0.01).ln() + 1.5
+        ).max(0.01));
         rng.gen::<f64>() < p_complete
     }
 
