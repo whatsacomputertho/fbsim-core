@@ -605,7 +605,7 @@ impl PassResultSimulator {
                 (
                     ((p_complete_yl * 0.3) + (p_complete_skill * 0.7)).ln() + 1.0
                 ).max(0.01).ln() + 1.0
-            ).max(0.01).ln() + 1.5
+            ).max(0.01).ln() + 1.6
         ).max(0.01));
         rng.gen::<f64>() < p_complete
     }
