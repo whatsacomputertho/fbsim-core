@@ -66,7 +66,7 @@ const P_MUFFED_PUNT_INTR: f64 = 0.036855240326056096_f64;
 const P_MUFFED_PUNT_COEF: f64 = -0.02771741_f64;
 
 // Mean relative punt return yards regression
-const MEAN_REL_RETURN_YARDS_INTR: f64 = -0.0370321871_f64; // Adjusted - 0.02
+const MEAN_REL_RETURN_YARDS_INTR: f64 = -0.0770321871_f64; // Adjusted - 0.02
 const MEAN_REL_RETURN_YARDS_COEF_1: f64 = -0.02282631_f64;
 const MEAN_REL_RETURN_YARDS_COEF_2: f64 = 0.28982747_f64;
 
