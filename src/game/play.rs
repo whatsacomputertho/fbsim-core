@@ -93,6 +93,31 @@ impl Play {
         &self.result
     }
 
+    /// Borrow the post-play result
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::game::play::Play;
+    /// use fbsim_core::game::play::result::PlayTypeResult;
+    /// use fbsim_core::game::play::result::betweenplay::BetweenPlayResult;
+    /// use fbsim_core::game::play::result::pass::PassResult;
+    /// use fbsim_core::game::context::GameContext;
+    ///
+    /// // Initialize a game context
+    /// let my_context = GameContext::new();
+    ///
+    /// // Initialize a play type result
+    /// let my_res = PlayTypeResult::Pass(PassResult::new());
+    /// let my_between = PlayTypeResult::BetweenPlay(BetweenPlayResult::new());
+    ///
+    /// // Initialize a play and borrow its result
+    /// let my_play = Play::new(my_context, my_res, my_between);
+    /// let my_borrowed_post_play = my_play.post_play();
+    /// ```
+    pub fn post_play(&self) -> &PlayTypeResult {
+        &self.post_play
+    }
+
     /// Borrow the play's game context
     ///
     /// ### Example

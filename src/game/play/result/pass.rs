@@ -18,9 +18,26 @@ const P_PRESSURE_COEF: f64 = -0.21949841_f64;
 const P_SACK_INTR: f64 = 0.10898853099029118_f64;
 const P_SACK_COEF: f64 = -0.08144463_f64;
 
+// Sack yards lost distribution
+const MEAN_SACK_YARDS: f64 = 6.703931;
+const STD_SACK_YARDS: f64 = 3.640892;
+
 // Scramble probability regression
 const P_SCRAMBLE_INTR: f64 = 0.004914770911025865_f64;
 const P_SCRAMBLE_COEF: f64 = 0.13433329_f64;
+
+// Mean scramble yards regression
+const MEAN_SCRAMBLE_YARDS_INTR: f64 = 6.313938741503718_f64;
+const MEAN_SCRAMBLE_YARDS_COEF: f64 = 1.61219979_f64;
+
+// Std scramble yards regression
+const STD_SCRAMBLE_YARDS_INTR: f64 = 4.974662775900808_f64;
+const STD_SCRAMBLE_YARDS_COEF: f64 = 2.92020782_f64;
+
+// Skew scramble yards regression
+const SKEW_SCRAMBLE_YARDS_INTR: f64 = 4.836766323216999_f64;
+const SKEW_SCRAMBLE_YARDS_COEF_1: f64 = -12.22272275_f64;
+const SKEW_SCRAMBLE_YARDS_COEF_2: f64 = 11.66478691_f64;
 
 // Short pass probability regression
 const P_SHORT_PASS_INTR: f64 = 0.9010555875020549_f64; // Adjusted + 0.06
@@ -74,8 +91,12 @@ const SKEW_INT_RETURN_YARDS_COEF_2: f64 = -0.000720407529_f64;
 const SKEW_INT_RETURN_YARDS_COEF_3: f64 = 0.00000700818986_f64;
 
 // Completed pass probability regression
-const P_COMPLETE_INTR: f64 = 0.3039580511583472_f64;
-const P_COMPLETE_COEF: f64 = 0.55872763_f64; // Adjusted + 0.15
+const P_COMPLETE_INTR: f64 = 0.6353317321473931_f64;
+const P_COMPLETE_COEF: f64 = 0.09651794_f64;
+
+// Completed pass probability regression (pass distance based)
+const P_COMPLETE_DIST_INTR: f64 = 0.7706457923470589_f64;
+const P_COMPLETE_DIST_COEF: f64 = -0.00670494_f64;
 
 // Zero yards after catch probability regression
 const P_ZERO_YAC_INTR: f64 = 0.46761265601223527_f64; // Adjusted + 0.3
@@ -111,6 +132,7 @@ const MEAN_PLAY_DURATION_COEF_2: f64 = -0.00056798_f64;
 pub struct PassResult {
     play_duration: u32,
     sack_yards_lost: i32,
+    scramble_yards: i32,
     pass_dist: i32,
     return_yards: i32,
     yards_after_catch: i32,
@@ -137,6 +159,7 @@ impl Default for PassResult {
         PassResult{
             play_duration: 0,
             sack_yards_lost: 0,
+            scramble_yards: 0,
             pass_dist: 0,
             return_yards: 0,
             yards_after_catch: 0,
@@ -174,7 +197,12 @@ impl std::fmt::Display for PassResult {
         } else {
             String::from("")
         };
-        let catch_str = if !self.pressure || (self.pressure && !self.sack) {
+        let scramble_str = if self.scramble {
+            format!(" QB scrambles for {} yards", self.scramble_yards)
+        } else {
+            String::from("")
+        };
+        let catch_str = if !self.pressure || (self.pressure && !(self.sack || self.scramble)) {
             let pass_prefix = format!(" Pass {} yards", self.pass_dist);
             if self.interception {
                 format!("{} INTERCEPTED, returned {} yards.", pass_prefix, self.return_yards)
@@ -186,7 +214,7 @@ impl std::fmt::Display for PassResult {
         } else {
             String::from("")
         };
-        let fumble_str = if self.complete && self.fumble {
+        let fumble_str = if self.scramble || (self.complete && self.fumble) {
             format!(" FUMBLE recovered by the defense, returned {} yards", self.return_yards)
         } else {
             String::from("")
@@ -199,8 +227,9 @@ impl std::fmt::Display for PassResult {
             ""
         };
         let pass_str = format!(
-            "{}{}{}{}",
+            "{}{}{}{}{}",
             &pressure_str,
+            &scramble_str,
             &catch_str,
             &fumble_str,
             score_str
@@ -222,7 +251,7 @@ impl PlayResult for PassResult {
         if self.complete {
             self.pass_dist + self.yards_after_catch - (self.return_yards + self.sack_yards_lost)
         } else {
-            -1 * (self.return_yards + self.sack_yards_lost)
+            self.scramble_yards - (self.return_yards + self.sack_yards_lost)
         }
     }
 
@@ -252,7 +281,7 @@ impl PlayResult for PassResult {
     fn defense_timeout(&self) -> bool { false }
 
     fn incomplete(&self) -> bool {
-        !(self.complete || self.sack)
+        !(self.complete || self.sack || self.scramble)
     }
 
     fn out_of_bounds(&self) -> bool { false }
@@ -307,6 +336,20 @@ impl PassResult {
     /// ```
     pub fn sack_yards_lost(&self) -> i32 {
         self.sack_yards_lost
+    }
+
+    /// Get a pass result's scramble yards property
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::game::play::result::pass::PassResult;
+    /// 
+    /// let my_res = PassResult::new();
+    /// let scramble_yards = my_res.scramble_yards();
+    /// assert!(scramble_yards == 0);
+    /// ```
+    pub fn scramble_yards(&self) -> i32 {
+        self.scramble_yards
     }
 
     /// Get a pass result's pass_dist property
@@ -496,10 +539,22 @@ impl PassResultSimulator {
         rng.gen::<f64>() < p_sack
     }
 
+    fn sack_yards_lost(&self, rng: &mut impl Rng) -> i32 {
+        Normal::new(MEAN_SACK_YARDS, STD_SACK_YARDS).unwrap().sample(rng).round() as i32
+    }
+
     /// Generates whether the quarterback scrambled while under pressure
     fn scramble(&self, norm_scrambling: f64, rng: &mut impl Rng) -> bool {
         let p_scramble: f64 = 1_f64.min(0_f64.max(P_SCRAMBLE_INTR + (P_SCRAMBLE_COEF * norm_scrambling)));
         rng.gen::<f64>() < p_scramble
+    }
+
+    fn scramble_yards(&self, norm_diff_scrambling: f64, rng: &mut impl Rng) -> i32 {
+        let mean_scramble_yards: f64 = MEAN_SCRAMBLE_YARDS_INTR + (MEAN_SCRAMBLE_YARDS_COEF * norm_diff_scrambling);
+        let std_scramble_yards: f64 = STD_SCRAMBLE_YARDS_INTR + (STD_SCRAMBLE_YARDS_COEF * norm_diff_scrambling);
+        let skew_scramble_yards: f64 = SKEW_SCRAMBLE_YARDS_INTR + (SKEW_SCRAMBLE_YARDS_COEF_1 * norm_diff_scrambling) + (SKEW_SCRAMBLE_YARDS_COEF_2 * norm_diff_scrambling.powi(2));
+        let scramble_yards_dist = SkewNormal::new(mean_scramble_yards, std_scramble_yards, skew_scramble_yards).unwrap();
+        scramble_yards_dist.sample(rng).round() as i32
     }
 
     /// Generates whether the quarterback threw a short pass
@@ -515,7 +570,7 @@ impl PassResultSimulator {
         let mean_short_pass_dist: f64 = MEAN_SHORT_PASS_DIST_INTR + (MEAN_SHORT_PASS_DIST_COEF_1 * yard_line as f64) + (MEAN_SHORT_PASS_DIST_COEF_2 * yard_line.pow(2) as f64) + (MEAN_SHORT_PASS_DIST_COEF_3 * yard_line.pow(3) as f64);
         let std_short_pass_dist: f64 = STD_SHORT_PASS_DIST_INTR + (STD_SHORT_PASS_DIST_COEF_1 * yard_line as f64) + (STD_SHORT_PASS_DIST_COEF_2 * yard_line.pow(2) as f64) + (STD_SHORT_PASS_DIST_COEF_3 * yard_line.pow(3) as f64);
         let short_pass_dist = Normal::new(mean_short_pass_dist, std_short_pass_dist).unwrap();
-        short_pass_dist.sample(rng).round() as i32
+        -2_i32.max(short_pass_dist.sample(rng).round() as i32)
     }
 
     /// Generates the distance of a deep pass
@@ -542,8 +597,16 @@ impl PassResultSimulator {
     }
 
     /// Generates whether the quarterback threw a complete pass
-    fn complete(&self, norm_diff_passing: f64, rng: &mut impl Rng) -> bool {
-        let p_complete: f64 = 1_f64.min(0_f64.max(P_COMPLETE_INTR + (P_COMPLETE_COEF * norm_diff_passing as f64)));
+    fn complete(&self, norm_diff_passing: f64, pass_dist: i32, rng: &mut impl Rng) -> bool {
+        let p_complete_skill: f64 = P_COMPLETE_INTR + (P_COMPLETE_COEF * norm_diff_passing as f64);
+        let p_complete_yl: f64 = P_COMPLETE_DIST_INTR + (P_COMPLETE_DIST_COEF * pass_dist as f64);
+        let p_complete: f64 = 1.0_f64.min((
+            (
+                (
+                    ((p_complete_yl * 0.3) + (p_complete_skill * 0.7)).ln() + 1.0
+                ).max(0.01).ln() + 1.0
+            ).max(0.01).ln() + 1.3
+        ).max(0.01));
         rng.gen::<f64>() < p_complete
     }
 
@@ -611,6 +674,7 @@ impl PlayResultSimulator for PassResultSimulator {
         let norm_diff_passing: f64 = 0.5_f64 + ((offense.offense().passing() as f64 - defense.defense().pass_defense() as f64) / 200_f64);
         let norm_diff_receiving: f64 = 0.5_f64 + ((offense.offense().receiving() as f64 - defense.defense().coverage() as f64) / 200_f64);
         let norm_diff_turnovers: f64 = 0.5_f64 + ((offense.offense().turnovers() as f64 - defense.defense().turnovers() as f64) / 200_f64);
+        let norm_diff_scrambling: f64 = 0.5_f64 + ((offense.offense().scrambling() as f64 - defense.defense().rush_defense() as f64) / 200_f64);
         let norm_scrambling: f64 = offense.offense().scrambling() as f64 / 100_f64;
         let td_yards = context.yards_to_touchdown();
         let yard_line = match u32::try_from(td_yards) {
@@ -632,7 +696,7 @@ impl PlayResultSimulator for PassResultSimulator {
 
         // Generate sack yards lost
         let sack_yards_lost: i32 = if sack {
-            3 // TODO: Implement
+            self.sack_yards_lost(rng)
         } else {
             0
         };
@@ -651,7 +715,12 @@ impl PlayResultSimulator for PassResultSimulator {
             false
         };
 
-        // TODO: Implement scramble model
+        // Generate scramble yards if scramble occurred
+        let scramble_yards: i32 = if scramble {
+            self.scramble_yards(norm_diff_scrambling, rng)
+        } else {
+            0
+        };
 
         // Generate whether a short pass occurred
         let pass: bool = !pressure || (pressure && !(sack || scramble));
@@ -687,7 +756,7 @@ impl PlayResultSimulator for PassResultSimulator {
 
         // Generate whether the pass was complete
         let complete: bool = if pass && !interception {
-            self.complete(norm_diff_passing, rng)
+            self.complete(norm_diff_passing, pass_distance, rng)
         } else {
             false
         };
@@ -727,7 +796,7 @@ impl PlayResultSimulator for PassResultSimulator {
         };
 
         // Generate whether a fumble occurred
-        let fumble: bool = if complete && !touchdown {
+        let fumble: bool = if (scramble || complete) && !touchdown {
             self.fumble(rng)
         } else {
             false
@@ -750,6 +819,7 @@ impl PlayResultSimulator for PassResultSimulator {
         let pass_res = PassResult{
             play_duration: play_duration,
             sack_yards_lost: sack_yards_lost,
+            scramble_yards: scramble_yards,
             pass_dist: pass_distance,
             return_yards: return_yards,
             yards_after_catch: yards_after_catch,
