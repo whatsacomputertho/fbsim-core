@@ -85,7 +85,7 @@ const P_FUMBLE_INTR: f64 = 0.0460047101408259_f64;
 const P_FUMBLE_COEF: f64 = -0.04389777_f64;
 
 // Punt play duration regression
-const PUNT_PLAY_DURATION_INTR: f64 = 5.2792296_f64;
+const PUNT_PLAY_DURATION_INTR: f64 = 8.2792296_f64; // Adjusted + 3
 const PUNT_PLAY_DURATION_COEF: f64 = 0.09291598_f64;
 
 /// # `PuntResult` struct

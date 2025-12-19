@@ -25,7 +25,7 @@ const STD_BP_YARDS_COEF_1: f64 = -3.82403981_f64;
 const STD_BP_YARDS_COEF_2: f64 = 7.60215528_f64;
 
 // Mean regresion for play duration
-const MEAN_DURATION_INTR: f64 = 5.32135821_f64;
+const MEAN_DURATION_INTR: f64 = 8.32135821_f64; // Adjusted + 3
 const MEAN_DURATION_COEF_1: f64 = 0.11343699_f64;
 const MEAN_DURATION_COEF_2: f64 = -0.00056798_f64;
 

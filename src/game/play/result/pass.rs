@@ -120,7 +120,7 @@ const SKEW_YAC_COEF: f64 = -0.10326043_f64;
 const P_FUMBLE: f64 = 0.1_f64;
 
 // Mean play duration regression
-const MEAN_PLAY_DURATION_INTR: f64 = 5.32135821_f64;
+const MEAN_PLAY_DURATION_INTR: f64 = 8.32135821_f64; // Adjusted + 3
 const MEAN_PLAY_DURATION_COEF_1: f64 = 0.11343699_f64;
 const MEAN_PLAY_DURATION_COEF_2: f64 = -0.00056798_f64;
 
