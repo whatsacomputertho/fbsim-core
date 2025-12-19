@@ -40,7 +40,7 @@ const SKEW_SCRAMBLE_YARDS_COEF_1: f64 = -12.22272275_f64;
 const SKEW_SCRAMBLE_YARDS_COEF_2: f64 = 11.66478691_f64;
 
 // Short pass probability regression
-const P_SHORT_PASS_INTR: f64 = 0.8010555875020549_f64; // Adjusted -0.04
+const P_SHORT_PASS_INTR: f64 = 0.8410555875020549_f64;
 const P_SHORT_PASS_COEF_1: f64 = -0.0054862949_f64;
 const P_SHORT_PASS_COEF_2: f64 = 0.000050472999_f64;
 
@@ -605,7 +605,7 @@ impl PassResultSimulator {
                 (
                     ((p_complete_yl * 0.3) + (p_complete_skill * 0.7)).ln() + 1.0
                 ).max(0.01).ln() + 1.0
-            ).max(0.01).ln() + 1.6
+            ).max(0.01).ln() + 1.3
         ).max(0.01));
         rng.gen::<f64>() < p_complete
     }
