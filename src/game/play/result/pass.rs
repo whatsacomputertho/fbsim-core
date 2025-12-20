@@ -117,7 +117,8 @@ const SKEW_YAC_INTR: f64 = 3.0784534230008083_f64;
 const SKEW_YAC_COEF: f64 = -0.10326043_f64;
 
 // Fumble probability
-const P_FUMBLE: f64 = 0.1_f64;
+const P_FUMBLE_INTR: f64 = 0.05_f64;
+const P_FUMBLE_COEF: f64 = -0.08_f64;
 
 // Mean play duration regression
 const MEAN_PLAY_DURATION_INTR: f64 = 8.32135821_f64; // Adjusted + 3
@@ -626,8 +627,9 @@ impl PassResultSimulator {
     }
 
     /// Generates whether a fumble occurred
-    fn fumble(&self, rng: &mut impl Rng) -> bool {
-        rng.gen::<f64>() < P_FUMBLE
+    fn fumble(&self, norm_diff_turnovers: f64, rng: &mut impl Rng) -> bool {
+        let p_fumble: f64 = 0.001_f64.max(P_FUMBLE_INTR + (P_FUMBLE_COEF * norm_diff_turnovers));
+        rng.gen::<f64>() < p_fumble
     }
 
     /// Generates the fumble recovery return yards
@@ -797,7 +799,7 @@ impl PlayResultSimulator for PassResultSimulator {
 
         // Generate whether a fumble occurred
         let fumble: bool = if (scramble || complete) && !touchdown {
-            self.fumble(rng)
+            self.fumble(norm_diff_turnovers, rng)
         } else {
             false
         };

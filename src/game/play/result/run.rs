@@ -39,7 +39,7 @@ const P_BP_COEF: f64 = 0.82863208;
 
 // Fumble probability regression
 const P_FUMBLE_INTR: f64 = 0.04932479844415921;
-const P_FUMBLE_COEF: f64 = -0.05432772;
+const P_FUMBLE_COEF: f64 = -0.08432772;
 
 /// # `RunResult` struct
 ///
@@ -354,7 +354,7 @@ impl RunResultSimulator {
 
     /// Generates whether a fumble occurred on the play
     fn fumble(&self, norm_diff_turnovers: f64, rng: &mut impl Rng) -> bool {
-        let p_fumble: f64 = 1_f64.min(0_f64.max(P_FUMBLE_INTR + (P_FUMBLE_COEF * norm_diff_turnovers)));
+        let p_fumble: f64 = 1_f64.min(0.001_f64.max(P_FUMBLE_INTR + (P_FUMBLE_COEF * norm_diff_turnovers)));
         rng.gen::<f64>() < p_fumble
     }
 
