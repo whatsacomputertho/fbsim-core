@@ -3,7 +3,7 @@ use rand::Rng;
 use rocket_okapi::okapi::schemars;
 #[cfg(feature = "rocket_okapi")]
 use rocket_okapi::okapi::schemars::JsonSchema;
-use serde::{Serialize, Deserialize};
+use serde::{Serialize, Deserialize, Deserializer};
 use rand_distr::{Normal, Distribution, Exp, SkewNormal};
 
 use crate::game::context::GameContext;
@@ -51,13 +51,13 @@ const MEAN_SHORT_PASS_DIST_COEF_2: f64 = -0.00118944537_f64;
 const MEAN_SHORT_PASS_DIST_COEF_3: f64 = 0.00000662934811_f64;
 
 // Std short pass distance regression
-const STD_SHORT_PASS_DIST_INTR: f64 = 3.365933454906047_f64;
+const STD_SHORT_PASS_DIST_INTR: f64 = 3.265933454906047_f64; // Adjusted -0.1
 const STD_SHORT_PASS_DIST_COEF_1: f64 = 0.130891269_f64;
 const STD_SHORT_PASS_DIST_COEF_2: f64 = -0.00237804912_f64;
 const STD_SHORT_PASS_DIST_COEF_3: f64 = 0.0000127875476_f64;
 
 // Mean deep pass distance regression
-const MEAN_DEEP_PASS_DIST_INTR: f64 = 2.405519456054698_f64;
+const MEAN_DEEP_PASS_DIST_INTR: f64 = 2.005519456054698_f64; // Adjusted -0.4
 const MEAN_DEEP_PASS_DIST_COEF_1: f64 = 1.23979494_f64;
 const MEAN_DEEP_PASS_DIST_COEF_2: f64 = -0.0204279438_f64;
 const MEAN_DEEP_PASS_DIST_COEF_3: f64 = 0.000106455687_f64;
@@ -68,9 +68,12 @@ const STD_DEEP_PASS_DIST_COEF_1: f64 = 0.277596854_f64;
 const STD_DEEP_PASS_DIST_COEF_2: f64 = -0.00120030840_f64;
 const STD_DEEP_PASS_DIST_COEF_3: f64 = -0.00000553839342_f64;
 
+// Interception return probability
+const P_INTERCEPTION_RETURN: f64 = 0.05_f64;
+
 // Interception probability regression
-const P_INTERCEPTION_INTR: f64 = 0.05628420712097409_f64;
-const P_INTERCEPTION_COEF: f64 = -0.06021105_f64;
+const P_INTERCEPTION_INTR: f64 = 0.04028420712097409_f64; // Adjusted -0.016
+const P_INTERCEPTION_COEF: f64 = -0.10021105_f64; // Adjusted -0.04
 
 // Mean interception return yards regression
 const MEAN_INT_RETURN_YARDS_INTR: f64 = 11.952396063360451_f64;
@@ -96,7 +99,7 @@ const P_COMPLETE_COEF: f64 = 0.09651794_f64;
 
 // Completed pass probability regression (pass distance based)
 const P_COMPLETE_DIST_INTR: f64 = 0.7706457923470589_f64;
-const P_COMPLETE_DIST_COEF: f64 = -0.00670494_f64;
+const P_COMPLETE_DIST_COEF: f64 = -0.00870494_f64; // Adjusted -0.002
 
 // Zero yards after catch probability regression
 const P_ZERO_YAC_INTR: f64 = 0.46761265601223527_f64; // Adjusted + 0.3
@@ -125,11 +128,193 @@ const MEAN_PLAY_DURATION_INTR: f64 = 8.32135821_f64; // Adjusted + 3
 const MEAN_PLAY_DURATION_COEF_1: f64 = 0.11343699_f64;
 const MEAN_PLAY_DURATION_COEF_2: f64 = -0.00056798_f64;
 
+/// # `PassResultRaw` struct
+///
+/// A `PassResultRaw` is a `PassResult` before its properties have been
+/// validated
+#[cfg_attr(feature = "rocket_okapi", derive(JsonSchema))]
+#[derive(Clone, Copy, Eq, PartialEq, Ord, PartialOrd, Debug, Serialize, Deserialize)]
+pub struct PassResultRaw {
+    play_duration: u32,
+    sack_yards_lost: i32,
+    scramble_yards: i32,
+    pass_dist: i32,
+    return_yards: i32,
+    yards_after_catch: i32,
+    pressure: bool,
+    sack: bool,
+    scramble: bool,
+    interception: bool,
+    complete: bool,
+    fumble: bool,
+    touchdown: bool,
+    safety: bool
+}
+
+impl PassResultRaw {
+    pub fn validate(&self) -> Result<(), String> {
+        // Ensure play duration is not greater than 100
+        if self.play_duration > 100 {
+            return Err(
+                format!(
+                    "Play duration is not in range [0, 100]: {}",
+                    self.play_duration
+                )
+            )
+        }
+
+        // Ensure sack yards lost are in range [-100, 100]
+        if self.sack_yards_lost.abs() > 100 {
+            return Err(
+                format!(
+                    "Sack yards lost is not in range [-100, 100]: {}",
+                    self.sack_yards_lost
+                )
+            )
+        }
+
+        // Ensure sack yards lost is zero if sack did not occur
+        if !self.sack && self.sack_yards_lost != 0 {
+            return Err(
+                format!(
+                    "Sack did not occur but sack yards lost was nonzero: {}",
+                    self.sack_yards_lost
+                )
+            )
+        }
+
+        // Ensure the scramble yards are in range [-100, 100]
+        if self.scramble_yards.abs() > 100 {
+            return Err(
+                format!(
+                    "Scramble yards is not in range [-100, 100]: {}",
+                    self.scramble_yards
+                )
+            )
+        }
+
+        // Ensure scramble yards is zero if no scramble occurred
+        if !self.scramble && self.scramble_yards != 0 {
+            return Err(
+                format!(
+                    "QB did not scramble, but scramble yards were nonzero: {}",
+                    self.scramble_yards
+                )
+            )
+        }
+
+        // Ensure the pass distance is in range [-100, 100]
+        if self.pass_dist.abs() > 100 {
+            return Err(
+                format!(
+                    "Pass distance is not in range [-100, 100]: {}",
+                    self.pass_dist
+                )
+            )
+        }
+
+        // Ensure the pass distance is zero if no pass occurred
+        if (self.scramble || self.sack) && self.pass_dist != 0 {
+            return Err(
+                format!(
+                    "Pass did not occur but pass distance was nonzero: {}",
+                    self.pass_dist
+                )
+            )
+        }
+
+        // Ensure the yards after catch is in range [-100, 100]
+        if self.yards_after_catch.abs() > 100 {
+            return Err(
+                format!(
+                    "Yards after catch is not in range [-100, 100]: {}",
+                    self.yards_after_catch
+                )
+            )
+        }
+
+        // Ensure the yards after catch is zero if no pass occurred
+        if (self.scramble || self.sack) && self.yards_after_catch != 0 {
+            return Err(
+                format!(
+                    "Pass did not occur but yards after catch was nonzero: {}",
+                    self.yards_after_catch
+                )
+            )
+        }
+
+        // Ensure return yards is in range [-100, 100]
+        if self.return_yards.abs() > 100 {
+            return Err(
+                format!(
+                    "Return yards is not in range [-100, 100]: {}",
+                    self.return_yards
+                )
+            )
+        }
+
+        // Ensure return yards is zero if no fumble or interception
+        if !(self.fumble || self.interception) && self.return_yards != 0 {
+            return Err(
+                format!(
+                    "Turnover did not occur but return yards were nonzero: {}",
+                    self.return_yards
+                )
+            )
+        }
+
+        // Ensure if there is a sack, there is also a pressure
+        if self.sack && !self.pressure {
+            return Err(
+                String::from("Cannot have a sack without a pressure")
+            )
+        }
+
+        // Ensure if there is a sack, there is not also a scramble, int, or completion
+        if self.sack && (self.scramble || self.interception || self.complete) {
+            return Err(
+                format!(
+                    "Cannot have both sack and scramble ({}), interception ({}), or completion ({})",
+                    self.scramble, self.interception, self.complete
+                )
+            )
+        }
+
+        // Ensure if there is a scramble, there is not also an interception or completed pass
+        if self.scramble && (self.interception || self.complete) {
+            return Err(
+                format!(
+                    "Cannot have both scramble and interception ({}) or completion ({})",
+                    self.interception, self.complete
+                )
+            )
+        }
+
+        // Ensure if there is an interception, there is not also a fumble or completed pass
+        if self.interception && (self.fumble || self.complete) {
+            return Err(
+                format!(
+                    "Cannot have both interception and fumble ({}) or completion ({})",
+                    self.fumble, self.complete
+                )
+            )
+        }
+
+        // Ensure there is not both a safety and a touchdown
+        if self.touchdown && self.safety {
+            return Err(
+                String::from("Cannot have both a touchdown and a safety")
+            )
+        }
+        Ok(())
+    }
+}
+
 /// # `PassResult` struct
 ///
 /// A `PassResult` represents a result of a pass play
 #[cfg_attr(feature = "rocket_okapi", derive(JsonSchema))]
-#[derive(Clone, Copy, Eq, PartialEq, Ord, PartialOrd, Debug, Serialize, Deserialize)]
+#[derive(Clone, Copy, Eq, PartialEq, Ord, PartialOrd, Debug, Serialize)]
 pub struct PassResult {
     play_duration: u32,
     sack_yards_lost: i32,
@@ -145,6 +330,49 @@ pub struct PassResult {
     fumble: bool,
     touchdown: bool,
     safety: bool
+}
+
+impl TryFrom<PassResultRaw> for PassResult {
+    type Error = String;
+
+    fn try_from(item: PassResultRaw) -> Result<Self, Self::Error> {
+        // Validate the raw between play result
+        match item.validate() {
+            Ok(()) => (),
+            Err(error) => return Err(error),
+        };
+
+        // If valid, then convert
+        Ok(
+            PassResult{
+                play_duration: item.play_duration,
+                sack_yards_lost: item.sack_yards_lost,
+                scramble_yards: item.scramble_yards,
+                pass_dist: item.pass_dist,
+                return_yards: item.return_yards,
+                yards_after_catch: item.yards_after_catch,
+                pressure: item.pressure,
+                sack: item.sack,
+                scramble: item.scramble,
+                interception: item.interception,
+                complete: item.complete,
+                fumble: item.fumble,
+                touchdown: item.touchdown,
+                safety: item.safety
+            }
+        )
+    }
+}
+
+impl<'de> Deserialize<'de> for PassResult {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        // Only deserialize if the conversion from raw succeeds
+        let raw = PassResultRaw::deserialize(deserializer)?;
+        PassResult::try_from(raw).map_err(serde::de::Error::custom)
+    }
 }
 
 impl Default for PassResult {
@@ -215,7 +443,7 @@ impl std::fmt::Display for PassResult {
         } else {
             String::from("")
         };
-        let fumble_str = if self.scramble || (self.complete && self.fumble) {
+        let fumble_str = if (self.scramble || self.complete) && self.fumble {
             format!(" FUMBLE recovered by the defense, returned {} yards", self.return_yards)
         } else {
             String::from("")
@@ -508,6 +736,345 @@ impl PassResult {
     }
 }
 
+/// # `PassResultBuilder` struct
+///
+/// A `PassResultBuilder` is a builder pattern implementation for the
+/// `PassResult` struct
+#[cfg_attr(feature = "rocket_okapi", derive(JsonSchema))]
+#[derive(Clone, Copy, Eq, PartialEq, Ord, PartialOrd, Debug, Serialize)]
+pub struct PassResultBuilder {
+    play_duration: u32,
+    sack_yards_lost: i32,
+    scramble_yards: i32,
+    pass_dist: i32,
+    return_yards: i32,
+    yards_after_catch: i32,
+    pressure: bool,
+    sack: bool,
+    scramble: bool,
+    interception: bool,
+    complete: bool,
+    fumble: bool,
+    touchdown: bool,
+    safety: bool
+}
+
+impl Default for PassResultBuilder {
+    /// Default constructor for the PassResultBuilder class
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::game::play::result::pass::PassResultBuilder;
+    /// 
+    /// let my_result = PassResultBuilder::default();
+    /// ```
+    fn default() -> Self {
+        PassResultBuilder{
+            play_duration: 0,
+            sack_yards_lost: 0,
+            scramble_yards: 0,
+            pass_dist: 0,
+            return_yards: 0,
+            yards_after_catch: 0,
+            pressure: false,
+            sack: false,
+            scramble: false,
+            interception: false,
+            complete: false,
+            fumble: false,
+            touchdown: false,
+            safety: false
+        }
+    }
+}
+
+impl PassResultBuilder {
+    /// Initialize a new PassResultBuilder
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::game::play::result::pass::PassResultBuilder;
+    /// 
+    /// let my_builder = PassResultBuilder::new();
+    /// ```
+    pub fn new() -> PassResultBuilder {
+        PassResultBuilder::default()
+    }
+
+    /// Set the play_duration property
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::game::play::result::pass::PassResultBuilder;
+    /// 
+    /// let my_result = PassResultBuilder::new()
+    ///     .play_duration(10)
+    ///     .build()
+    ///     .unwrap();
+    /// assert!(my_result.play_duration() == 10);
+    /// ```
+    pub fn play_duration(mut self, play_duration: u32) -> Self {
+        self.play_duration = play_duration;
+        self
+    }
+
+    /// Set the sack_yards_lost property
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::game::play::result::pass::PassResultBuilder;
+    /// 
+    /// let my_result = PassResultBuilder::new()
+    ///     .pressure(true)
+    ///     .sack(true)
+    ///     .sack_yards_lost(10)
+    ///     .build()
+    ///     .unwrap();
+    /// assert!(my_result.sack_yards_lost() == 10);
+    /// ```
+    pub fn sack_yards_lost(mut self, sack_yards_lost: i32) -> Self {
+        self.sack_yards_lost = sack_yards_lost;
+        self
+    }
+
+    /// Set the scramble_yards property
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::game::play::result::pass::PassResultBuilder;
+    /// 
+    /// let my_result = PassResultBuilder::new()
+    ///     .scramble(true)
+    ///     .scramble_yards(10)
+    ///     .build()
+    ///     .unwrap();
+    /// assert!(my_result.scramble_yards() == 10);
+    /// ```
+    pub fn scramble_yards(mut self, scramble_yards: i32) -> Self {
+        self.scramble_yards = scramble_yards;
+        self
+    }
+
+    /// Set the pass_dist property
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::game::play::result::pass::PassResultBuilder;
+    /// 
+    /// let my_result = PassResultBuilder::new()
+    ///     .pass_dist(17)
+    ///     .build()
+    ///     .unwrap();
+    /// assert!(my_result.pass_dist() == 17);
+    /// ```
+    pub fn pass_dist(mut self, pass_dist: i32) -> Self {
+        self.pass_dist = pass_dist;
+        self
+    }
+
+    /// Set the return_yards property
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::game::play::result::pass::PassResultBuilder;
+    /// 
+    /// let my_result = PassResultBuilder::new()
+    ///     .interception(true)
+    ///     .return_yards(3)
+    ///     .build()
+    ///     .unwrap();
+    /// assert!(my_result.return_yards() == 3);
+    /// ```
+    pub fn return_yards(mut self, return_yards: i32) -> Self {
+        self.return_yards = return_yards;
+        self
+    }
+
+    /// Set the yards_after_catch property
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::game::play::result::pass::PassResultBuilder;
+    /// 
+    /// let my_result = PassResultBuilder::new()
+    ///     .yards_after_catch(7)
+    ///     .build()
+    ///     .unwrap();
+    /// assert!(my_result.yards_after_catch() == 7);
+    /// ```
+    pub fn yards_after_catch(mut self, yards_after_catch: i32) -> Self {
+        self.yards_after_catch = yards_after_catch;
+        self
+    }
+
+    /// Set the pressure property
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::game::play::result::pass::PassResultBuilder;
+    /// 
+    /// let my_result = PassResultBuilder::new()
+    ///     .pressure(true)
+    ///     .build()
+    ///     .unwrap();
+    /// assert!(my_result.pressure());
+    /// ```
+    pub fn pressure(mut self, pressure: bool) -> Self {
+        self.pressure = pressure;
+        self
+    }
+
+    /// Set the sack property
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::game::play::result::pass::PassResultBuilder;
+    /// 
+    /// let my_result = PassResultBuilder::new()
+    ///     .pressure(true)
+    ///     .sack(true)
+    ///     .build()
+    ///     .unwrap();
+    /// assert!(my_result.sack());
+    /// ```
+    pub fn sack(mut self, sack: bool) -> Self {
+        self.sack = sack;
+        self
+    }
+
+    /// Set the scramble property
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::game::play::result::pass::PassResultBuilder;
+    /// 
+    /// let my_result = PassResultBuilder::new()
+    ///     .scramble(true)
+    ///     .build()
+    ///     .unwrap();
+    /// assert!(my_result.scramble());
+    /// ```
+    pub fn scramble(mut self, scramble: bool) -> Self {
+        self.scramble = scramble;
+        self
+    }
+
+    /// Set the interception property
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::game::play::result::pass::PassResultBuilder;
+    /// 
+    /// let my_result = PassResultBuilder::new()
+    ///     .interception(true)
+    ///     .build()
+    ///     .unwrap();
+    /// assert!(my_result.interception());
+    /// ```
+    pub fn interception(mut self, interception: bool) -> Self {
+        self.interception = interception;
+        self
+    }
+
+    /// Set the complete property
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::game::play::result::pass::PassResultBuilder;
+    /// 
+    /// let my_result = PassResultBuilder::new()
+    ///     .complete(true)
+    ///     .build()
+    ///     .unwrap();
+    /// assert!(my_result.complete());
+    /// ```
+    pub fn complete(mut self, complete: bool) -> Self {
+        self.complete = complete;
+        self
+    }
+
+    /// Set the fumble property
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::game::play::result::pass::PassResultBuilder;
+    /// 
+    /// let my_result = PassResultBuilder::new()
+    ///     .fumble(true)
+    ///     .build()
+    ///     .unwrap();
+    /// assert!(my_result.fumble());
+    /// ```
+    pub fn fumble(mut self, fumble: bool) -> Self {
+        self.fumble = fumble;
+        self
+    }
+
+    /// Set the touchdown property
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::game::play::result::pass::PassResultBuilder;
+    /// 
+    /// let my_result = PassResultBuilder::new()
+    ///     .touchdown(true)
+    ///     .build()
+    ///     .unwrap();
+    /// assert!(my_result.touchdown());
+    /// ```
+    pub fn touchdown(mut self, touchdown: bool) -> Self {
+        self.touchdown = touchdown;
+        self
+    }
+
+    /// Set the safety property
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::game::play::result::pass::PassResultBuilder;
+    /// 
+    /// let my_result = PassResultBuilder::new()
+    ///     .safety(true)
+    ///     .build()
+    ///     .unwrap();
+    /// assert!(my_result.safety());
+    /// ```
+    pub fn safety(mut self, safety: bool) -> Self {
+        self.safety = safety;
+        self
+    }
+
+    /// Build the PassResult
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::game::play::result::pass::PassResultBuilder;
+    /// 
+    /// let my_result = PassResultBuilder::new()
+    ///     .build()
+    ///     .unwrap();
+    /// ```
+    pub fn build(self) -> Result<PassResult, String> {
+        let raw = PassResultRaw{
+            play_duration: self.play_duration,
+            sack_yards_lost: self.sack_yards_lost,
+            scramble_yards: self.scramble_yards,
+            pass_dist: self.pass_dist,
+            return_yards: self.return_yards,
+            yards_after_catch: self.yards_after_catch,
+            pressure: self.pressure,
+            sack: self.sack,
+            scramble: self.scramble,
+            interception: self.interception,
+            complete: self.complete,
+            fumble: self.fumble,
+            touchdown: self.touchdown,
+            safety: self.safety
+        };
+        PassResult::try_from(raw)
+    }
+}
+
 /// # `PassResultSimulator` struct
 ///
 /// A `PassResultSimulator` represents a simulator which can produce a result of a pass play
@@ -590,6 +1157,9 @@ impl PassResultSimulator {
 
     /// Generates the interception return yards
     fn interception_return_yards(&self, yard_line: u32, rng: &mut impl Rng) -> i32 {
+        if rng.gen::<f64>() >= P_INTERCEPTION_RETURN {
+            return 0_i32;
+        }
         let mean_int_return_yards: f64 = MEAN_INT_RETURN_YARDS_INTR + (MEAN_INT_RETURN_YARDS_COEF_1 * yard_line as f64) + (MEAN_INT_RETURN_YARDS_COEF_2 * yard_line.pow(2) as f64) + (MEAN_INT_RETURN_YARDS_COEF_3 * yard_line.pow(3) as f64);
         let std_int_return_yards: f64 = STD_INT_RETURN_YARDS_INTR + (STD_INT_RETURN_YARDS_COEF_1 * yard_line as f64) + (STD_INT_RETURN_YARDS_COEF_2 * yard_line.pow(2) as f64) + (STD_INT_RETURN_YARDS_COEF_3 * yard_line.pow(3) as f64);
         let skew_int_return_yards: f64 = SKEW_INT_RETURN_YARDS_INTR + (SKEW_INT_RETURN_YARDS_COEF_1 * yard_line as f64) + (SKEW_INT_RETURN_YARDS_COEF_2 * yard_line.pow(2) as f64) + (SKEW_INT_RETURN_YARDS_COEF_3 * yard_line.pow(3) as f64);
@@ -606,7 +1176,7 @@ impl PassResultSimulator {
                 (
                     ((p_complete_yl * 0.3) + (p_complete_skill * 0.7)).ln() + 1.0
                 ).max(0.01).ln() + 1.0
-            ).max(0.01).ln() + 1.3
+            ).max(0.01).ln() + 1.23
         ).max(0.01));
         rng.gen::<f64>() < p_complete
     }
@@ -724,6 +1294,9 @@ impl PlayResultSimulator for PassResultSimulator {
             0
         };
 
+        // Check whether an interception return TD occurred
+        let mut touchdown: bool = scramble && (scramble_yards > td_yards);
+
         // Generate whether a short pass occurred
         let pass: bool = !pressure || (pressure && !(sack || scramble));
         let short_pass: bool = if pass {
@@ -754,7 +1327,11 @@ impl PlayResultSimulator for PassResultSimulator {
         };
 
         // Check whether an interception return TD occurred
-        let mut touchdown: bool = interception && ((int_return_yards * -1) < safety_yards);
+        touchdown = if !touchdown {
+            interception && ((int_return_yards * -1) < safety_yards)
+        } else {
+            touchdown
+        };
 
         // Generate whether the pass was complete
         let complete: bool = if pass && !interception {
@@ -814,8 +1391,8 @@ impl PlayResultSimulator for PassResultSimulator {
         // Generate return yards, yards gained, play duration
         let return_yards: i32 = int_return_yards + fumble_return_yards;
         let play_duration: u32 = self.play_duration(
-            sack_yards_lost.abs() as u32 + pass_distance.abs() as u32 + int_return_yards.abs() as u32 +
-            yards_after_catch.abs() as u32 + fumble_return_yards.abs() as u32,
+            sack_yards_lost.abs() as u32 + pass_distance.abs() as u32 + scramble_yards.abs() as u32 +
+            int_return_yards.abs() as u32 + yards_after_catch.abs() as u32 + fumble_return_yards.abs() as u32,
             rng
         );
         let pass_res = PassResult{

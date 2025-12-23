@@ -2,13 +2,83 @@
 use rocket_okapi::okapi::schemars;
 #[cfg(feature = "rocket_okapi")]
 use rocket_okapi::okapi::schemars::JsonSchema;
-use serde::{Serialize, Deserialize};
+use serde::{Serialize, Deserialize, Deserializer};
+
+/// # `FootballTeamDefenseRaw` struct
+///
+/// A `FootballTeamDefenseRaw` is a `FootballTeamDefense` before its properties
+/// have been validated
+#[cfg_attr(feature = "rocket_okapi", derive(JsonSchema))]
+#[derive(Clone, Eq, PartialEq, Ord, PartialOrd, Debug, Default, Serialize, Deserialize)]
+pub struct FootballTeamDefenseRaw {
+    blitzing: u32,
+    rush_defense: u32,
+    pass_defense: u32,
+    coverage: u32,
+    turnovers: u32,
+    kick_returning: u32
+}
+
+impl FootballTeamDefenseRaw {
+    pub fn validate(&self) -> Result<(), String> {
+        // Ensure each property is no greater than 100
+        if self.blitzing > 100 {
+            return Err(
+                format!(
+                    "Blitzing attribute is out of range [0, 100]: {}",
+                    self.blitzing
+                )
+            )
+        }
+        if self.rush_defense > 100 {
+            return Err(
+                format!(
+                    "Rush defense attribute is out of range [0, 100]: {}",
+                    self.rush_defense
+                )
+            )
+        }
+        if self.pass_defense > 100 {
+            return Err(
+                format!(
+                    "Pass defense attribute is out of range [0, 100]: {}",
+                    self.pass_defense
+                )
+            )
+        }
+        if self.coverage > 100 {
+            return Err(
+                format!(
+                    "Coverage attribute is out of range [0, 100]: {}",
+                    self.coverage
+                )
+            )
+        }
+        if self.turnovers > 100 {
+            return Err(
+                format!(
+                    "Turnovers attribute is out of range [0, 100]: {}",
+                    self.turnovers
+                )
+            )
+        }
+        if self.kick_returning > 100 {
+            return Err(
+                format!(
+                    "Kick returning attribute is out of range [0, 100]: {}",
+                    self.kick_returning
+                )
+            )
+        }
+        Ok(())
+    }
+}
 
 /// # `FootballTeamDefense` struct
 ///
 /// A `FootballTeamDefense` represents a football team defense
 #[cfg_attr(feature = "rocket_okapi", derive(JsonSchema))]
-#[derive(Clone, Eq, PartialEq, Ord, PartialOrd, Debug, Default, Serialize, Deserialize)]
+#[derive(Clone, Eq, PartialEq, Ord, PartialOrd, Debug, Serialize)]
 pub struct FootballTeamDefense {
     blitzing: u32,
     rush_defense: u32,
@@ -16,6 +86,62 @@ pub struct FootballTeamDefense {
     coverage: u32,
     turnovers: u32,
     kick_returning: u32
+}
+
+impl TryFrom<FootballTeamDefenseRaw> for FootballTeamDefense {
+    type Error = String;
+
+    fn try_from(item: FootballTeamDefenseRaw) -> Result<Self, Self::Error> {
+        // Validate the raw coach
+        match item.validate() {
+            Ok(()) => (),
+            Err(error) => return Err(error),
+        };
+
+        // If valid, then convert
+        Ok(
+            FootballTeamDefense{
+                blitzing: item.blitzing,
+                rush_defense: item.rush_defense,
+                pass_defense: item.pass_defense,
+                coverage: item.coverage,
+                turnovers: item.turnovers,
+                kick_returning: item.kick_returning
+            }
+        )
+    }
+}
+
+impl<'de> Deserialize<'de> for FootballTeamDefense {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        // Only deserialize if the conversion from raw succeeds
+        let raw = FootballTeamDefenseRaw::deserialize(deserializer)?;
+        FootballTeamDefense::try_from(raw).map_err(serde::de::Error::custom)
+    }
+}
+
+impl Default for FootballTeamDefense {
+    /// Default constructor for the FootballTeamDefense class
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::team::defense::FootballTeamDefense;
+    /// 
+    /// let my_defense = FootballTeamDefense::default();
+    /// ```
+    fn default() -> Self {
+        FootballTeamDefense{
+            blitzing: 50_u32,
+            rush_defense: 50_u32,
+            pass_defense: 50_u32,
+            coverage: 50_u32,
+            turnovers: 50_u32,
+            kick_returning: 50_u32
+        }
+    }
 }
 
 impl FootballTeamDefense {
@@ -29,14 +155,7 @@ impl FootballTeamDefense {
     /// let my_defense = FootballTeamDefense::new();
     /// ```
     pub fn new() -> FootballTeamDefense {
-        FootballTeamDefense{
-            blitzing: 50_u32,
-            rush_defense: 50_u32,
-            pass_defense: 50_u32,
-            coverage: 50_u32,
-            turnovers: 50_u32,
-            kick_returning: 50_u32
-        }
+        FootballTeamDefense::default()
     }
 
     /// Constructor for the `FootballTeamDefense` struct in which each
@@ -50,60 +169,15 @@ impl FootballTeamDefense {
     /// assert!(my_defense.overall() == 20_u32);
     /// ```
     pub fn from_overall(overall: u32) -> Result<FootballTeamDefense, String> {
-        if overall > 100_u32 {
-            return Err(format!("Overall not in range [0, 100]: {}", overall))
-        }
-        Ok(
-            FootballTeamDefense{
-                blitzing: overall,
-                rush_defense: overall,
-                pass_defense: overall,
-                coverage: overall,
-                turnovers: overall,
-                kick_returning: overall
-            }
-        )
-    }
-
-    /// Constructor for the `FootballTeamDefense` struct in which each
-    /// property is given as an argument.
-    ///
-    /// ### Example
-    /// ```
-    /// use fbsim_core::team::defense::FootballTeamDefense;
-    ///
-    /// let my_defense = FootballTeamDefense::from_properties(0, 20, 40, 60, 80, 100);
-    /// ```
-    pub fn from_properties(blitzing: u32, rush_defense: u32, pass_defense: u32, coverage: u32, turnovers: u32, kick_returning: u32) -> Result<FootballTeamDefense, String> {
-        // Ensure each skill level is in range
-        if blitzing > 100_u32 {
-            return Err(format!("Blitzing not in range [0, 100]: {}", blitzing))
-        }
-        if rush_defense > 100_u32 {
-            return Err(format!("Rush defense not in range [0, 100]: {}", rush_defense))
-        }
-        if pass_defense > 100_u32 {
-            return Err(format!("Pass defense not in range [0, 100]: {}", pass_defense))
-        }
-        if coverage > 100_u32 {
-            return Err(format!("Coverage not in range [0, 100]: {}", coverage))
-        }
-        if turnovers > 100_u32 {
-            return Err(format!("Turnovers not in range [0, 100]: {}",turnovers))
-        }
-        if kick_returning > 100_u32 {
-            return Err(format!("Kick returning not in range [0, 100]: {}", kick_returning))
-        }
-        Ok(
-            FootballTeamDefense{
-                blitzing: blitzing,
-                rush_defense: rush_defense,
-                pass_defense: pass_defense,
-                coverage: coverage,
-                turnovers: turnovers,
-                kick_returning: kick_returning
-            }
-        )
+        let raw = FootballTeamDefenseRaw{
+            blitzing: overall,
+            rush_defense: overall,
+            pass_defense: overall,
+            coverage: overall,
+            turnovers: overall,
+            kick_returning: overall
+        };
+        FootballTeamDefense::try_from(raw)
     }
 
     /// Calculate the defense's overall rating
@@ -207,5 +281,185 @@ impl FootballTeamDefense {
     /// ```
     pub fn kick_returning(&self) -> u32 {
         self.kick_returning
+    }
+}
+
+/// # `FootballTeamDefenseBuilder` struct
+///
+/// A `FootballTeamDefenseBuilder` implements the builder pattern for the
+/// `FootballTeamDefense` struct
+#[cfg_attr(feature = "rocket_okapi", derive(JsonSchema))]
+#[derive(Clone, Eq, PartialEq, Ord, PartialOrd, Debug, Serialize)]
+pub struct FootballTeamDefenseBuilder {
+    blitzing: u32,
+    rush_defense: u32,
+    pass_defense: u32,
+    coverage: u32,
+    turnovers: u32,
+    kick_returning: u32
+}
+
+impl Default for FootballTeamDefenseBuilder {
+    /// Default constructor for the FootballTeamDefenseBuilder class
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::team::defense::FootballTeamDefenseBuilder;
+    /// 
+    /// let my_defense_builder = FootballTeamDefenseBuilder::default();
+    /// ```
+    fn default() -> Self {
+        FootballTeamDefenseBuilder{
+            blitzing: 50_u32,
+            rush_defense: 50_u32,
+            pass_defense: 50_u32,
+            coverage: 50_u32,
+            turnovers: 50_u32,
+            kick_returning: 50_u32
+        }
+    }
+}
+
+impl FootballTeamDefenseBuilder {
+    /// Initialize a new defense builder
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::team::defense::FootballTeamDefenseBuilder;
+    ///
+    /// let mut my_defense_builder = FootballTeamDefenseBuilder::new();
+    /// ```
+    pub fn new() -> FootballTeamDefenseBuilder {
+        FootballTeamDefenseBuilder::default()
+    }
+
+    /// Set the blitzing property
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::team::defense::{FootballTeamDefense, FootballTeamDefenseBuilder};
+    /// 
+    /// let my_defense = FootballTeamDefenseBuilder::new()
+    ///     .blitzing(60)
+    ///     .build()
+    ///     .unwrap();
+    /// assert!(my_defense.blitzing() == 60);
+    /// ```
+    pub fn blitzing(mut self, blitzing: u32) -> Self {
+        self.blitzing = blitzing;
+        self
+    }
+
+    /// Set the rush defense property
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::team::defense::{FootballTeamDefense, FootballTeamDefenseBuilder};
+    /// 
+    /// let my_defense = FootballTeamDefenseBuilder::new()
+    ///     .rush_defense(60)
+    ///     .build()
+    ///     .unwrap();
+    /// assert!(my_defense.rush_defense() == 60);
+    /// ```
+    pub fn rush_defense(mut self, rush_defense: u32) -> Self {
+        self.rush_defense = rush_defense;
+        self
+    }
+
+    /// Set the pass defense property
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::team::defense::{FootballTeamDefense, FootballTeamDefenseBuilder};
+    /// 
+    /// let my_defense = FootballTeamDefenseBuilder::new()
+    ///     .pass_defense(60)
+    ///     .build()
+    ///     .unwrap();
+    /// assert!(my_defense.pass_defense() == 60);
+    /// ```
+    pub fn pass_defense(mut self, pass_defense: u32) -> Self {
+        self.pass_defense = pass_defense;
+        self
+    }
+
+    /// Set the coverage property
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::team::defense::{FootballTeamDefense, FootballTeamDefenseBuilder};
+    /// 
+    /// let my_defense = FootballTeamDefenseBuilder::new()
+    ///     .coverage(60)
+    ///     .build()
+    ///     .unwrap();
+    /// assert!(my_defense.coverage() == 60);
+    /// ```
+    pub fn coverage(mut self, coverage: u32) -> Self {
+        self.coverage = coverage;
+        self
+    }
+
+    /// Set the turnovers property
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::team::defense::{FootballTeamDefense, FootballTeamDefenseBuilder};
+    /// 
+    /// let my_defense = FootballTeamDefenseBuilder::new()
+    ///     .turnovers(60)
+    ///     .build()
+    ///     .unwrap();
+    /// assert!(my_defense.turnovers() == 60);
+    /// ```
+    pub fn turnovers(mut self, turnovers: u32) -> Self {
+        self.turnovers = turnovers;
+        self
+    }
+
+    /// Set the kick returning property
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::team::defense::{FootballTeamDefense, FootballTeamDefenseBuilder};
+    /// 
+    /// let my_defense = FootballTeamDefenseBuilder::new()
+    ///     .kick_returning(60)
+    ///     .build()
+    ///     .unwrap();
+    /// assert!(my_defense.kick_returning() == 60);
+    /// ```
+    pub fn kick_returning(mut self, kick_returning: u32) -> Self {
+        self.kick_returning = kick_returning;
+        self
+    }
+
+    /// Build the defense
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::team::defense::{FootballTeamDefense, FootballTeamDefenseBuilder};
+    /// 
+    /// let my_defense = FootballTeamDefenseBuilder::new()
+    ///     .blitzing(40)
+    ///     .rush_defense(45)
+    ///     .pass_defense(50)
+    ///     .coverage(55)
+    ///     .turnovers(60)
+    ///     .kick_returning(65)
+    ///     .build()
+    ///     .unwrap();
+    /// ```
+    pub fn build(self) -> Result<FootballTeamDefense, String> {
+        let raw = FootballTeamDefenseRaw{
+            blitzing: self.blitzing,
+            rush_defense: self.rush_defense,
+            pass_defense: self.pass_defense,
+            coverage: self.coverage,
+            turnovers: self.turnovers,
+            kick_returning: self.kick_returning
+        };
+        FootballTeamDefense::try_from(raw)
     }
 }

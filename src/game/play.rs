@@ -235,12 +235,12 @@ impl PlaySimulator {
     /// ```
     pub fn sim(&self, home: &FootballTeam, away: &FootballTeam, context: GameContext, rng: &mut impl Rng) -> (Play, GameContext) {
         // Determine the play call
-        let play_call = if *context.next_play_extra_point() {
+        let play_call = if context.next_play_extra_point() {
             PlayCall::ExtraPoint
-        } else if *context.next_play_kickoff() {
+        } else if context.next_play_kickoff() {
             PlayCall::Kickoff
         } else {
-            if *context.home_possession() {
+            if context.home_possession() {
                 self.playcall.sim(home, &context, rng)
             } else {
                 self.playcall.sim(away, &context, rng)
@@ -248,7 +248,7 @@ impl PlaySimulator {
         };
 
         // Simulate the play
-        let result = if *context.home_possession() {
+        let result = if context.home_possession() {
             match play_call {
                 PlayCall::Run => self.run.sim(home, away, &context, rng),
                 PlayCall::Pass => self.pass.sim(home, away, &context, rng),
@@ -274,7 +274,7 @@ impl PlaySimulator {
         let next_context = result.next_context(&context);
 
         // Simulate between plays
-        let between_res = if *context.home_possession() {
+        let between_res = if context.home_possession() {
             self.betweenplay.sim(home, away, &next_context, rng)
         } else {
             self.betweenplay.sim(away, home, &next_context, rng)
@@ -293,6 +293,7 @@ pub enum DriveResult {
     None,
     Punt,
     FieldGoal,
+    FieldGoalMissed,
     Touchdown,
     Safety,
     Interception,
@@ -315,6 +316,7 @@ impl std::fmt::Display for DriveResult {
             DriveResult::None => f.write_str("In Progress"),
             DriveResult::Punt => f.write_str("Punt"),
             DriveResult::FieldGoal => f.write_str("Field Goal"),
+            DriveResult::FieldGoalMissed => f.write_str("Missed Field Goal"),
             DriveResult::Touchdown => f.write_str("Touchdown"),
             DriveResult::Safety => f.write_str("Safety"),
             DriveResult::Interception => f.write_str("Interception"),
@@ -328,6 +330,7 @@ impl std::fmt::Display for DriveResult {
 /// # `Drive` struct
 ///
 /// A `Drive` represents the outcome of a drive
+#[derive(Clone, Eq, PartialEq, Ord, PartialOrd, Debug, Serialize, Deserialize)]
 pub struct Drive {
     plays: Vec<Play>,
     result: DriveResult
@@ -624,6 +627,13 @@ impl DriveSimulator {
                 if field_goal {
                     result = DriveResult::FieldGoal;
                 }
+                let field_goal_missed: bool = match play_result {
+                    PlayTypeResult::FieldGoal(res) => res.missed(),
+                    _ => false
+                };
+                if field_goal_missed {
+                    result = DriveResult::FieldGoalMissed;
+                }
 
                 // Punt
                 let punt: bool = match play_result {
@@ -682,16 +692,16 @@ impl DriveSimulator {
 
                 // Downs
                 let prev_context = play.context();
-                let downs = *prev_context.down() == 4 && *new_context.down() == 1 && !turnover &&
-                    *prev_context.home_possession() != *new_context.home_possession() &&
-                    play_result.net_yards() < *prev_context.distance() as i32;
+                let downs = prev_context.down() == 4 && new_context.down() == 1 && !turnover &&
+                    prev_context.home_possession() != new_context.home_possession() &&
+                    play_result.net_yards() < prev_context.distance() as i32;
                 if downs {
                     result = DriveResult::Downs;
                 }
 
                 // End of half
-                let end_of_half = ((*prev_context.quarter() == 2 || *prev_context.quarter() >= 4) &&
-                    (*prev_context.quarter() != *new_context.quarter())) || *new_context.game_over();
+                let end_of_half = ((prev_context.quarter() == 2 || prev_context.quarter() >= 4) &&
+                    (prev_context.quarter() != new_context.quarter())) || new_context.game_over();
                 if end_of_half {
                     result = DriveResult::EndOfHalf;
                 }
