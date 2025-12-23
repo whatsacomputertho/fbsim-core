@@ -2,16 +2,227 @@
 use rocket_okapi::okapi::schemars;
 #[cfg(feature = "rocket_okapi")]
 use rocket_okapi::okapi::schemars::JsonSchema;
-use serde::{Serialize, Deserialize};
+use serde::{Serialize, Deserialize, Deserializer};
 
 use crate::game::play::context::PlayContext;
 use crate::game::play::result::{ScoreResult, PlayResult};
+
+/// # `GameContextRaw` struct
+///
+/// A `GameContextRaw` is a `GameContext` before its properties have been
+/// validated
+#[cfg_attr(feature = "rocket_okapi", derive(JsonSchema))]
+#[derive(Clone, Eq, PartialEq, Ord, PartialOrd, Debug, Serialize, Deserialize)]
+pub struct GameContextRaw {
+    home_team_short: String,
+    away_team_short: String,
+    quarter: u32,
+    half_seconds: u32,
+    down: u32,
+    distance: u32,
+    yard_line: u32,
+    home_score: u32,
+    away_score: u32,
+    home_timeouts: u32,
+    away_timeouts: u32,
+    home_positive_direction: bool,
+    home_opening_kickoff: bool,
+    home_possession: bool,
+    last_play_turnover: bool,
+    last_play_incomplete: bool,
+    last_play_out_of_bounds: bool,
+    last_play_timeout: bool,
+    last_play_kickoff: bool,
+    last_play_punt: bool,
+    next_play_extra_point: bool,
+    next_play_kickoff: bool,
+    end_of_half: bool,
+    game_over: bool
+}
+
+impl GameContextRaw {
+    pub fn validate(&self) -> Result<(), String> {
+        // Ensure each team acronym is no longer than 4 characters
+        if self.home_team_short.len() > 4 {
+            return Err(
+                format!(
+                    "Home team short name is longer than 4 characters: {}",
+                    self.home_team_short
+                )
+            )
+        }
+        if self.away_team_short.len() > 4 {
+            return Err(
+                format!(
+                    "Away team short name is longer than 4 characters: {}",
+                    self.away_team_short
+                )
+            )
+        }
+
+        // Ensure half seconds is no greater than 1800 (15 mins)
+        if self.half_seconds > 1800 {
+            return Err(
+                format!(
+                    "Half seconds is not in range [0, 1800]: {}",
+                    self.half_seconds
+                )
+            )
+        }
+
+        // Ensure half seconds is not less than 900 if quarter is odd and less than 4
+        if self.half_seconds < 900 && self.quarter % 2 == 1 && self.quarter < 4 {
+            return Err(
+                format!(
+                    "Half seconds is not in range [900, 1800] for quarter {}: {}",
+                    self.quarter,
+                    self.half_seconds
+                )
+            )
+        }
+
+        // Ensure half seconds is not greater than 900 if quarter is even or greater than 4
+        if self.half_seconds > 900 && (self.quarter % 2 == 0 || self.quarter > 4) {
+            return Err(
+                format!(
+                    "Half seconds is not in range [0, 900] for quarter {}: {}",
+                    self.quarter,
+                    self.half_seconds
+                )
+            )
+        }
+
+        // Ensure down is no greater than 4
+        if self.down > 4 {
+            return Err(
+                format!(
+                    "Down is not in range [0, 4]: {}",
+                    self.down
+                )
+            )
+        }
+
+        // Ensure yard line is no greater than 100
+        if self.yard_line > 100 {
+            return Err(
+                format!(
+                    "Yard line is not in range [0, 100]: {}",
+                    self.yard_line
+                )
+            )
+        }
+
+        // Ensure distance is no greater than the remaining yards
+        let remaining_yards: u32 = if self.home_possession ^ self.home_positive_direction {
+            self.yard_line
+        } else {
+            100_u32 - self.yard_line
+        };
+        if self.distance > remaining_yards {
+            return Err(
+                format!(
+                    "Distance was greater than yards remaining to touchdown: {} > {}",
+                    self.distance,
+                    remaining_yards
+                )
+            )
+        }
+
+        // Ensure home and away timeouts are no greater than 3
+        if self.home_timeouts > 3 {
+            return Err(
+                format!(
+                    "Home timeouts is not in range [0, 3]: {}",
+                    self.home_timeouts
+                )
+            )
+        }
+        if self.away_timeouts > 3 {
+            return Err(
+                format!(
+                    "Away timeouts is not in range [0, 3]: {}",
+                    self.away_timeouts
+                )
+            )
+        }
+
+        // Ensure no invalid last play scenarios
+        if self.last_play_incomplete && self.last_play_out_of_bounds {
+            return Err(
+                String::from("Invalid combination of last play scenarios: Incomplete & out of bounds")
+            )
+        }
+        if self.last_play_kickoff && self.last_play_timeout {
+            return Err(
+                String::from("Invalid combination of last play scenarios: Kickoff & timeout")
+            )
+        }
+        if self.last_play_punt && self.last_play_timeout {
+            return Err(
+                String::from("Invalid combination of last play scenarios: Punt & timeout")
+            )
+        }
+        if self.last_play_punt && self.last_play_kickoff {
+            return Err(
+                String::from("Invalid combination of last play scenarios: Punt & kickoff")
+            )
+        }
+
+        // Ensure no invalid next play scenarios
+        if self.next_play_extra_point && self.next_play_kickoff {
+            return Err(
+                String::from("Invalid combination of next play scenarios: Kickoff & extra point")
+            )
+        }
+
+        // Ensure half is not over if quarter is odd and less than 4
+        if self.end_of_half && (self.quarter == 1 || (self.quarter == 3 && self.half_seconds < 1800)) {
+            return Err(
+                format!(
+                    "Cannot end half during quarter: {}",
+                    self.quarter
+                )
+            )
+        }
+
+        // Ensure half is not over if there is still time left
+        if self.end_of_half && self.half_seconds != 1800 && self.half_seconds != 600 && self.half_seconds > 0 {
+            return Err(
+                format!(
+                    "End of half but nonzero half seconds: {}",
+                    self.half_seconds
+                )
+            )
+        }
+
+        // Ensure game is not over if quarter is less than 4
+        if self.game_over && self.quarter < 4 {
+            return Err(
+                format!(
+                    "Cannot end game during quarter: {}",
+                    self.quarter
+                )
+            )
+        }
+
+        // Ensure game is not over if there is still time left
+        if self.game_over && self.half_seconds > 0 {
+            return Err(
+                format!(
+                    "End of game but nonzero half seconds: {}",
+                    self.half_seconds
+                )
+            )
+        }
+        Ok(())
+    }
+}
 
 /// # `GameContext` struct
 ///
 /// A `GameContext` represents a game scenario
 #[cfg_attr(feature = "rocket_okapi", derive(JsonSchema))]
-#[derive(Clone, Eq, PartialEq, Ord, PartialOrd, Debug, Serialize, Deserialize)]
+#[derive(Clone, Eq, PartialEq, Ord, PartialOrd, Debug, Serialize)]
 pub struct GameContext {
     home_team_short: String,
     away_team_short: String,
@@ -32,6 +243,7 @@ pub struct GameContext {
     last_play_out_of_bounds: bool,
     last_play_timeout: bool,
     last_play_kickoff: bool,
+    last_play_punt: bool,
     next_play_extra_point: bool,
     next_play_kickoff: bool,
     end_of_half: bool,
@@ -68,11 +280,65 @@ impl Default for GameContext {
             last_play_out_of_bounds: false,
             last_play_timeout: false,
             last_play_kickoff: false,
+            last_play_punt: false,
             next_play_extra_point: false,
             next_play_kickoff: true,
             end_of_half: false,
             game_over: false
         }
+    }
+}
+
+impl TryFrom<GameContextRaw> for GameContext {
+    type Error = String;
+
+    fn try_from(item: GameContextRaw) -> Result<Self, Self::Error> {
+        // Validate the raw game context
+        match item.validate() {
+            Ok(()) => (),
+            Err(error) => return Err(error),
+        };
+
+        // If valid, then convert
+        Ok(
+            GameContext{
+                home_team_short: item.home_team_short,
+                away_team_short: item.away_team_short,
+                quarter: item.quarter,
+                half_seconds: item.half_seconds,
+                down: item.down,
+                distance: item.distance,
+                yard_line: item.yard_line,
+                home_score: item.home_score,
+                away_score: item.away_score,
+                home_timeouts: item.home_timeouts,
+                away_timeouts: item.away_timeouts,
+                home_positive_direction: item.home_positive_direction,
+                home_opening_kickoff: item.home_opening_kickoff,
+                home_possession: item.home_possession,
+                last_play_turnover: item.last_play_turnover,
+                last_play_incomplete: item.last_play_incomplete,
+                last_play_out_of_bounds: item.last_play_out_of_bounds,
+                last_play_timeout: item.last_play_timeout,
+                last_play_kickoff: item.last_play_kickoff,
+                last_play_punt: item.last_play_punt,
+                next_play_extra_point: item.next_play_extra_point,
+                next_play_kickoff: item.next_play_kickoff,
+                end_of_half: item.end_of_half,
+                game_over: item.game_over
+            }
+        )
+    }
+}
+
+impl<'de> Deserialize<'de> for GameContext {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        // Only deserialize if the conversion from raw succeeds
+        let raw = GameContextRaw::deserialize(deserializer)?;
+        GameContext::try_from(raw).map_err(serde::de::Error::custom)
     }
 }
 
@@ -125,10 +391,10 @@ impl GameContext {
     /// 
     /// let my_context = GameContext::new();
     /// let quarter = my_context.quarter();
-    /// assert!(*quarter == 1);
+    /// assert!(quarter == 1);
     /// ```
-    pub fn quarter(&self) -> &u32 {
-        &self.quarter
+    pub fn quarter(&self) -> u32 {
+        self.quarter
     }
 
     /// Borrow the GameContext half_seconds property
@@ -139,10 +405,10 @@ impl GameContext {
     /// 
     /// let my_context = GameContext::new();
     /// let half_seconds = my_context.half_seconds();
-    /// assert!(*half_seconds == 1800);
+    /// assert!(half_seconds == 1800);
     /// ```
-    pub fn half_seconds(&self) -> &u32 {
-        &self.half_seconds
+    pub fn half_seconds(&self) -> u32 {
+        self.half_seconds
     }
 
     /// Borrow the GameContext down property
@@ -153,10 +419,10 @@ impl GameContext {
     /// 
     /// let my_context = GameContext::new();
     /// let down = my_context.down();
-    /// assert!(*down == 0);
+    /// assert!(down == 0);
     /// ```
-    pub fn down(&self) -> &u32 {
-        &self.down
+    pub fn down(&self) -> u32 {
+        self.down
     }
 
     /// Borrow the GameContext distance property
@@ -167,10 +433,10 @@ impl GameContext {
     /// 
     /// let my_context = GameContext::new();
     /// let distance = my_context.distance();
-    /// assert!(*distance == 10);
+    /// assert!(distance == 10);
     /// ```
-    pub fn distance(&self) -> &u32 {
-        &self.distance
+    pub fn distance(&self) -> u32 {
+        self.distance
     }
 
     /// Borrow the GameContext yard_line property
@@ -181,10 +447,10 @@ impl GameContext {
     /// 
     /// let my_context = GameContext::new();
     /// let yard_line = my_context.yard_line();
-    /// assert!(*yard_line == 35);
+    /// assert!(yard_line == 35);
     /// ```
-    pub fn yard_line(&self) -> &u32 {
-        &self.yard_line
+    pub fn yard_line(&self) -> u32 {
+        self.yard_line
     }
 
     /// Borrow the GameContext home_score property
@@ -195,10 +461,10 @@ impl GameContext {
     /// 
     /// let my_context = GameContext::new();
     /// let home_score = my_context.home_score();
-    /// assert!(*home_score == 0);
+    /// assert!(home_score == 0);
     /// ```
-    pub fn home_score(&self) -> &u32 {
-        &self.home_score
+    pub fn home_score(&self) -> u32 {
+        self.home_score
     }
 
     /// Borrow the GameContext away_score property
@@ -209,10 +475,10 @@ impl GameContext {
     /// 
     /// let my_context = GameContext::new();
     /// let away_score = my_context.away_score();
-    /// assert!(*away_score == 0);
+    /// assert!(away_score == 0);
     /// ```
-    pub fn away_score(&self) -> &u32 {
-        &self.away_score
+    pub fn away_score(&self) -> u32 {
+        self.away_score
     }
 
     /// Borrow the GameContext home_timeouts property
@@ -223,10 +489,10 @@ impl GameContext {
     /// 
     /// let my_context = GameContext::new();
     /// let home_timeouts = my_context.home_timeouts();
-    /// assert!(*home_timeouts == 3);
+    /// assert!(home_timeouts == 3);
     /// ```
-    pub fn home_timeouts(&self) -> &u32 {
-        &self.home_timeouts
+    pub fn home_timeouts(&self) -> u32 {
+        self.home_timeouts
     }
 
     /// Borrow the GameContext away_timeouts property
@@ -237,10 +503,10 @@ impl GameContext {
     /// 
     /// let my_context = GameContext::new();
     /// let away_timeouts = my_context.away_timeouts();
-    /// assert!(*away_timeouts == 3);
+    /// assert!(away_timeouts == 3);
     /// ```
-    pub fn away_timeouts(&self) -> &u32 {
-        &self.away_timeouts
+    pub fn away_timeouts(&self) -> u32 {
+        self.away_timeouts
     }
 
     /// Borrow the GameContext home_possession property
@@ -251,10 +517,10 @@ impl GameContext {
     /// 
     /// let my_context = GameContext::new();
     /// let home_possession = my_context.home_possession();
-    /// assert!(*home_possession);
+    /// assert!(home_possession);
     /// ```
-    pub fn home_possession(&self) -> &bool {
-        &self.home_possession
+    pub fn home_possession(&self) -> bool {
+        self.home_possession
     }
 
     /// Borrow the GameContext home_positive_direction property
@@ -265,10 +531,10 @@ impl GameContext {
     /// 
     /// let my_context = GameContext::new();
     /// let home_positive_direction = my_context.home_positive_direction();
-    /// assert!(*home_positive_direction);
+    /// assert!(home_positive_direction);
     /// ```
-    pub fn home_positive_direction(&self) -> &bool {
-        &self.home_positive_direction
+    pub fn home_positive_direction(&self) -> bool {
+        self.home_positive_direction
     }
 
     /// Borrow the GameContext home_opening_kickoff property
@@ -279,10 +545,10 @@ impl GameContext {
     /// 
     /// let my_context = GameContext::new();
     /// let home_opening_kickoff = my_context.home_opening_kickoff();
-    /// assert!(*home_opening_kickoff);
+    /// assert!(home_opening_kickoff);
     /// ```
-    pub fn home_opening_kickoff(&self) -> &bool {
-        &self.home_opening_kickoff
+    pub fn home_opening_kickoff(&self) -> bool {
+        self.home_opening_kickoff
     }
 
     /// Borrow the GameContext last_play_turnover property
@@ -293,10 +559,10 @@ impl GameContext {
     /// 
     /// let my_context = GameContext::new();
     /// let last_play_turnover = my_context.last_play_turnover();
-    /// assert!(!*last_play_turnover);
+    /// assert!(!last_play_turnover);
     /// ```
-    pub fn last_play_turnover(&self) -> &bool {
-        &self.last_play_turnover
+    pub fn last_play_turnover(&self) -> bool {
+        self.last_play_turnover
     }
 
     /// Borrow the GameContext last_play_incomplete property
@@ -307,10 +573,10 @@ impl GameContext {
     /// 
     /// let my_context = GameContext::new();
     /// let last_play_incomplete = my_context.last_play_incomplete();
-    /// assert!(!*last_play_incomplete);
+    /// assert!(!last_play_incomplete);
     /// ```
-    pub fn last_play_incomplete(&self) -> &bool {
-        &self.last_play_incomplete
+    pub fn last_play_incomplete(&self) -> bool {
+        self.last_play_incomplete
     }
 
     /// Borrow the GameContext last_play_out_of_bounds property
@@ -321,10 +587,10 @@ impl GameContext {
     /// 
     /// let my_context = GameContext::new();
     /// let last_play_out_of_bounds = my_context.last_play_out_of_bounds();
-    /// assert!(!*last_play_out_of_bounds);
+    /// assert!(!last_play_out_of_bounds);
     /// ```
-    pub fn last_play_out_of_bounds(&self) -> &bool {
-        &self.last_play_out_of_bounds
+    pub fn last_play_out_of_bounds(&self) -> bool {
+        self.last_play_out_of_bounds
     }
 
     /// Borrow the GameContext last_play_kickoff property
@@ -335,10 +601,24 @@ impl GameContext {
     /// 
     /// let my_context = GameContext::new();
     /// let last_play_kickoff = my_context.last_play_kickoff();
-    /// assert!(!*last_play_kickoff);
+    /// assert!(!last_play_kickoff);
     /// ```
-    pub fn last_play_kickoff(&self) -> &bool {
-        &self.last_play_kickoff
+    pub fn last_play_kickoff(&self) -> bool {
+        self.last_play_kickoff
+    }
+
+    /// Borrow the GameContext last_play_punt property
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::game::context::GameContext;
+    /// 
+    /// let my_context = GameContext::new();
+    /// let last_play_punt = my_context.last_play_punt();
+    /// assert!(!last_play_punt);
+    /// ```
+    pub fn last_play_punt(&self) -> bool {
+        self.last_play_punt
     }
 
     /// Borrow the GameContext last_play_timeout property
@@ -349,10 +629,10 @@ impl GameContext {
     /// 
     /// let my_context = GameContext::new();
     /// let last_play_timeout = my_context.last_play_timeout();
-    /// assert!(!*last_play_timeout);
+    /// assert!(!last_play_timeout);
     /// ```
-    pub fn last_play_timeout(&self) -> &bool {
-        &self.last_play_timeout
+    pub fn last_play_timeout(&self) -> bool {
+        self.last_play_timeout
     }
 
     /// Borrow the GameContext next_play_kickoff property
@@ -363,10 +643,10 @@ impl GameContext {
     /// 
     /// let my_context = GameContext::new();
     /// let next_play_kickoff = my_context.next_play_kickoff();
-    /// assert!(*next_play_kickoff);
+    /// assert!(next_play_kickoff);
     /// ```
-    pub fn next_play_kickoff(&self) -> &bool {
-        &self.next_play_kickoff
+    pub fn next_play_kickoff(&self) -> bool {
+        self.next_play_kickoff
     }
 
     /// Borrow the GameContext next_play_extra_point property
@@ -377,10 +657,10 @@ impl GameContext {
     /// 
     /// let my_context = GameContext::new();
     /// let next_play_extra_point = my_context.next_play_extra_point();
-    /// assert!(!*next_play_extra_point);
+    /// assert!(!next_play_extra_point);
     /// ```
-    pub fn next_play_extra_point(&self) -> &bool {
-        &self.next_play_extra_point
+    pub fn next_play_extra_point(&self) -> bool {
+        self.next_play_extra_point
     }
 
     /// Borrow the GameContext end_of_half property
@@ -391,10 +671,10 @@ impl GameContext {
     /// 
     /// let my_context = GameContext::new();
     /// let end_of_half = my_context.end_of_half();
-    /// assert!(!*end_of_half);
+    /// assert!(!end_of_half);
     /// ```
-    pub fn end_of_half(&self) -> &bool {
-        &self.end_of_half
+    pub fn end_of_half(&self) -> bool {
+        self.end_of_half
     }
 
     /// Borrow the GameContext game_over property
@@ -405,13 +685,22 @@ impl GameContext {
     /// 
     /// let my_context = GameContext::new();
     /// let game_over = my_context.game_over();
-    /// assert!(!*game_over);
+    /// assert!(!game_over);
     /// ```
-    pub fn game_over(&self) -> &bool {
-        &self.game_over
+    pub fn game_over(&self) -> bool {
+        self.game_over
     }
 
     /// Get the number of timeouts the defense has left
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::game::context::GameContext;
+    /// 
+    /// let my_context = GameContext::new();
+    /// let defense_timeouts = my_context.defense_timeouts();
+    /// assert!(defense_timeouts == 3);
+    /// ```
     pub fn defense_timeouts(&self) -> u32 {
         if self.home_possession {
             self.away_timeouts
@@ -421,6 +710,15 @@ impl GameContext {
     }
 
     /// Get the number of timeouts the offense has left
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::game::context::GameContext;
+    /// 
+    /// let my_context = GameContext::new();
+    /// let offense_timeouts = my_context.offense_timeouts();
+    /// assert!(offense_timeouts == 3);
+    /// ```
     pub fn offense_timeouts(&self) -> u32 {
         if self.home_possession {
             self.home_timeouts
@@ -442,7 +740,8 @@ impl GameContext {
     pub fn clock_running(&self) -> bool {
         !(
             self.last_play_incomplete || self.last_play_timeout || self.next_play_extra_point ||
-            self.next_play_kickoff || self.last_play_kickoff || self.last_play_turnover || (
+            self.next_play_kickoff || self.last_play_kickoff || self.last_play_punt || self.last_play_turnover ||
+            (
                 self.last_play_out_of_bounds && (
                     (self.quarter == 2 && self.half_seconds < 120) ||
                     (self.quarter >= 4 && self.half_seconds < 300)
@@ -551,10 +850,10 @@ impl GameContext {
     /// use fbsim_core::game::play::result::ScoreResult;
     /// 
     /// let my_context = GameContext::new();
-    /// let half_seconds = my_context.next_half_seconds(10, ScoreResult::None, ScoreResult::None);
+    /// let half_seconds = my_context.next_half_seconds(10, false, false, ScoreResult::None, ScoreResult::None);
     /// assert!(half_seconds == 1790);
     /// ```
-    pub fn next_half_seconds(&self, play_duration: u32, offense_score: ScoreResult, defense_score: ScoreResult) -> u32 {
+    pub fn next_half_seconds(&self, play_duration: u32, end_of_half: bool, post_play_end_of_half: bool, offense_score: ScoreResult, defense_score: ScoreResult) -> u32 {
         let next_clock = match u32::try_from(self.half_seconds as i32 - play_duration as i32) {
             Ok(n) => n,
             Err(_) => 0
@@ -565,8 +864,13 @@ impl GameContext {
             return 900;
         }
 
-        // If end of half, return to 1800 seconds
-        if self.quarter == 2 && next_clock == 0 {
+        // If end of half, return 0 seconds
+        if end_of_half {
+            return 0;
+        }
+
+        // If start of second half, return to 1800 seconds
+        if (post_play_end_of_half && self.quarter < 4) || (self.end_of_half && self.quarter == 2) {
             return 1800;
         }
 
@@ -591,8 +895,8 @@ impl GameContext {
     /// use fbsim_core::game::play::result::ScoreResult;
     /// 
     /// let my_context = GameContext::new();
-    /// let game_over = my_context.next_game_over(10, ScoreResult::None, ScoreResult::None);
-    /// assert!(!game_over);
+    /// let end_of_half = my_context.next_end_of_half(10, ScoreResult::None, ScoreResult::None);
+    /// assert!(!end_of_half);
     /// ```
     pub fn next_end_of_half(&self, play_duration: u32, offense_score: ScoreResult, defense_score: ScoreResult) -> bool {
         let next_clock = match u32::try_from(self.half_seconds as i32 - play_duration as i32) {
@@ -675,15 +979,15 @@ impl GameContext {
     /// use fbsim_core::game::play::result::ScoreResult;
     /// 
     /// let my_context = GameContext::new();
-    /// let next_home_positive_direction = my_context.next_home_positive_direction(10, ScoreResult::None, ScoreResult::None);
+    /// let next_home_positive_direction = my_context.next_home_positive_direction(10, false, ScoreResult::None, ScoreResult::None);
     /// assert!(next_home_positive_direction);
     /// ```
-    pub fn next_home_positive_direction(&self, play_duration: u32, offense_score: ScoreResult, defense_score: ScoreResult) -> bool {
+    pub fn next_home_positive_direction(&self, play_duration: u32, end_of_half: bool, offense_score: ScoreResult, defense_score: ScoreResult) -> bool {
         let qtr = self.next_quarter(play_duration, offense_score, defense_score);
 
         // Flip the field if end of quarter
         let home_dir = self.home_positive_direction;
-        if self.quarter != qtr {
+        if self.quarter != qtr || end_of_half {
             return !home_dir;
         }
         home_dir
@@ -697,10 +1001,15 @@ impl GameContext {
     /// use fbsim_core::game::play::result::ScoreResult;
     /// 
     /// let my_context = GameContext::new();
-    /// let down = my_context.next_down(10, true, ScoreResult::None, ScoreResult::None);
+    /// let down = my_context.next_down(10, true, false, ScoreResult::None, ScoreResult::None);
     /// assert!(down == 1);
     /// ```
-    pub fn next_down(&self, net_yards: i32, turnover: bool, offense_score: ScoreResult, defense_score: ScoreResult) -> u32 {
+    pub fn next_down(&self, net_yards: i32, turnover: bool, end_of_half: bool, offense_score: ScoreResult, defense_score: ScoreResult) -> u32 {
+        // If this is the end of the half, next play is a kickoff
+        if end_of_half {
+            return 0;
+        }
+
         // If the result was for an extra point or 2 point conversion, next play is always a kickoff
         if self.next_play_extra_point {
             return 0;
@@ -763,7 +1072,7 @@ impl GameContext {
     pub fn next_home_possession(&self, net_yards: i32, turnover: bool, end_of_half: bool, offense_score: ScoreResult, defense_score: ScoreResult) -> bool {
         // If end of half, possession goes to whomever received the opening kickoff
         if end_of_half {
-            return !self.home_opening_kickoff;
+            return self.home_opening_kickoff;
         }
 
         // Change possession on successful kickoffs, defensive TDs, turnovers
@@ -796,54 +1105,109 @@ impl GameContext {
     /// use fbsim_core::game::play::result::ScoreResult;
     /// 
     /// let my_context = GameContext::new();
-    /// let yard_line = my_context.next_yard_line(10, false, false, false, ScoreResult::None, ScoreResult::None);
+    /// let yard_line = my_context.next_yard_line(0, 10, false, false, false, ScoreResult::None, ScoreResult::None);
     /// assert!(yard_line == 45);
     /// ```
-    pub fn next_yard_line(&self, net_yards: i32, touchback: bool, kickoff_oob: bool, end_of_half: bool, offense_score: ScoreResult, defense_score: ScoreResult) -> u32 {
-        // Kickoff after PAT, field goals, safeties, end of half
-        if self.next_play_extra_point || defense_score == ScoreResult::Safety || offense_score == ScoreResult::FieldGoal || end_of_half {
-            if self.home_possession ^ self.home_positive_direction {
-                return 65;
-            }
-            return 35;
-        }
-
-        // Extra point after touchdowns
-        if offense_score == ScoreResult::Touchdown {
-            if self.home_possession ^ self.home_positive_direction {
-                return 2;
-            }
-            return 98;
-        } else if defense_score == ScoreResult::Touchdown {
-            if self.home_possession ^ self.home_positive_direction {
-                return 98;
-            }
-            return 2;
-        }
-
-        // Touchbacks and kickoffs out of bounds
-        if touchback {
-            if self.home_possession ^ self.home_positive_direction {
-                return 25;
-            }
-            return 75;
-        } else if kickoff_oob {
-            if self.home_possession ^ self.home_positive_direction {
+    pub fn next_yard_line(&self, play_duration: u32, net_yards: i32, touchback: bool, kickoff_oob: bool, end_of_half: bool, offense_score: ScoreResult, defense_score: ScoreResult) -> u32 {
+        // Kickoff and flip the field at the end of the half
+        if end_of_half {
+            if self.home_opening_kickoff ^ self.home_positive_direction {
                 return 35;
             }
             return 65;
         }
 
+        // Kickoff after PAT, field goals, safeties
+        let qtr = self.next_quarter(play_duration, offense_score, defense_score);
+        let end_of_quarter = qtr != self.quarter;
+        if self.next_play_extra_point || defense_score == ScoreResult::Safety || offense_score == ScoreResult::FieldGoal {
+            let next_yl = if self.home_possession ^ self.home_positive_direction {
+                65
+            } else {
+                35
+            };
+            let eoq_yl = if end_of_quarter {
+                100 - next_yl
+            } else {
+                next_yl
+            };
+            return eoq_yl;
+        }
+
+        // Extra point after touchdowns
+        if offense_score == ScoreResult::Touchdown {
+            let next_yl = if self.home_possession ^ self.home_positive_direction {
+                2
+            } else {
+                98
+            };
+            let eoq_yl = if end_of_quarter {
+                100 - next_yl
+            } else {
+                next_yl
+            };
+            return eoq_yl;
+        } else if defense_score == ScoreResult::Touchdown {
+            let next_yl = if self.home_possession ^ self.home_positive_direction {
+                98
+            } else {
+                2
+            };
+            let eoq_yl = if end_of_quarter {
+                100 - next_yl
+            } else {
+                next_yl
+            };
+            return eoq_yl;
+        }
+
+        // Touchbacks and kickoffs out of bounds
+        if touchback {
+            let next_yl = if self.home_possession ^ self.home_positive_direction {
+                25
+            } else {
+                75
+            };
+            let eoq_yl = if end_of_quarter {
+                100 - next_yl
+            } else {
+                next_yl
+            };
+            return eoq_yl;
+        } else if kickoff_oob {
+            let next_yl = if self.home_possession ^ self.home_positive_direction {
+                35
+            } else {
+                65
+            };
+            let eoq_yl = if end_of_quarter {
+                100 - next_yl
+            } else {
+                next_yl
+            };
+            return eoq_yl;
+        }
+
         // Increment the yard line
         if self.home_possession ^ self.home_positive_direction {
-            match u32::try_from(0.max(100.min(self.yard_line as i32 - net_yards))) {
+            let next_yl = match u32::try_from(0.max(100.min(self.yard_line as i32 - net_yards))) {
                 Ok(n) => n,
                 Err(_) => 0
+            };
+            if end_of_quarter {
+                100 - next_yl
+            } else {
+                next_yl
             }
         } else {
-            match u32::try_from(0.max(100.min(self.yard_line as i32 + net_yards))) {
+            let next_yl = match u32::try_from(0.max(100.min(self.yard_line as i32 + net_yards))) {
                 Ok(n) => n,
                 Err(_) => 0
+            };
+            if end_of_quarter {
+                100 - next_yl
+            } else {
+                next_yl
             }
         }
     }
@@ -856,12 +1220,12 @@ impl GameContext {
     /// use fbsim_core::game::play::result::ScoreResult;
     /// 
     /// let my_context = GameContext::new();
-    /// let distance = my_context.next_distance(10, true, false, false, false, ScoreResult::None, ScoreResult::None);
+    /// let distance = my_context.next_distance(0, 10, true, false, false, false, false, ScoreResult::None, ScoreResult::None);
     /// assert!(distance == 10);
     /// ```
-    pub fn next_distance(&self, net_yards: i32, turnover: bool, touchback: bool, kickoff_oob: bool, end_of_half: bool, offense_score: ScoreResult, defense_score: ScoreResult) -> u32 {
+    pub fn next_distance(&self, play_duration: u32, net_yards: i32, turnover: bool, touchback: bool, kickoff_oob: bool, end_of_half: bool, between_play: bool, offense_score: ScoreResult, defense_score: ScoreResult) -> u32 {
         // Kickoff after PAT, field goals, safeties, end of half
-        if self.next_play_extra_point || defense_score == ScoreResult::Safety || offense_score == ScoreResult::FieldGoal || end_of_half {
+        if self.next_play_extra_point || end_of_half || defense_score == ScoreResult::Safety || offense_score == ScoreResult::FieldGoal {
             return 10;
         }
 
@@ -872,8 +1236,15 @@ impl GameContext {
 
         // If a turnover occurred, determine the distance based on the defense's direction
         // Note it will always be a first down after a turnover
-        let next_yl = self.next_yard_line(net_yards, touchback, kickoff_oob, end_of_half, offense_score, defense_score);
-        if turnover {
+        let qtr = self.next_quarter(play_duration, offense_score, defense_score);
+        let end_of_quarter = qtr != self.quarter;
+        let mut next_yl = self.next_yard_line(play_duration, net_yards, touchback, kickoff_oob, false, offense_score, defense_score);
+        next_yl = if end_of_quarter {
+            100 - next_yl
+        } else {
+            next_yl
+        };
+        if turnover || (self.next_play_kickoff && !between_play) {
             if self.home_possession ^ self.home_positive_direction {
                 return 0.max(10.min(100_i32 - next_yl as i32)) as u32;
             }
@@ -886,7 +1257,7 @@ impl GameContext {
                 return 10.min(next_yl);
             }
             return 0.max(10.min(100_i32 - next_yl as i32)) as u32;
-        } else if self.down == 4 {
+        } else if self.down == 4 && !between_play {
             if self.home_possession ^ self.home_positive_direction {
                 return 0.max(10.min(100_i32 - next_yl as i32)) as u32;
             }
@@ -906,11 +1277,11 @@ impl GameContext {
     /// use fbsim_core::game::context::GameContext;
     /// 
     /// let my_context = GameContext::new();
-    /// let next_home_timeouts = my_context.next_home_timeouts(true, false, false);
+    /// let next_home_timeouts = my_context.next_home_timeouts(true, false);
     /// assert!(next_home_timeouts == 2);
     /// ```
-    pub fn next_home_timeouts(&self, offense_timeout: bool, defense_timeout: bool, end_of_half: bool) -> u32 {
-        if end_of_half {
+    pub fn next_home_timeouts(&self, offense_timeout: bool, defense_timeout: bool) -> u32 {
+        if self.end_of_half {
             return 3; // Reset at end of half
         }
         let home_tos = self.home_timeouts;
@@ -933,11 +1304,11 @@ impl GameContext {
     /// use fbsim_core::game::context::GameContext;
     /// 
     /// let my_context = GameContext::new();
-    /// let next_away_timeouts = my_context.next_away_timeouts(false, true, false);
+    /// let next_away_timeouts = my_context.next_away_timeouts(false, true);
     /// assert!(next_away_timeouts == 2);
     /// ```
-    pub fn next_away_timeouts(&self, offense_timeout: bool, defense_timeout: bool, end_of_half: bool) -> u32 {
-        if end_of_half {
+    pub fn next_away_timeouts(&self, offense_timeout: bool, defense_timeout: bool) -> u32 {
+        if self.end_of_half {
             return 3; // Reset at end of half
         }
         let away_tos = self.away_timeouts;
@@ -963,20 +1334,30 @@ impl GameContext {
         let kickoff_oob = result.kickoff() && result.out_of_bounds();
         let off_timeout = result.offense_timeout();
         let def_timeout = result.defense_timeout();
-        let end_of_half = self.next_end_of_half(duration, off_score, def_score);
-        GameContext{
+        let next_play_extra_point = result.next_play_extra_point();
+        let end_of_half = if self.end_of_half {
+            false
+        } else {
+            self.next_end_of_half(duration, off_score, def_score) && !(next_play_extra_point)
+        };
+        let next_quarter = if end_of_half {
+            self.quarter()
+        } else {
+            self.next_quarter(duration, off_score, def_score)
+        };
+        let raw = GameContextRaw{
             home_team_short: self.home_team_short.clone(),
             away_team_short: self.away_team_short.clone(),
-            quarter: self.next_quarter(duration, off_score, def_score),
-            half_seconds: self.next_half_seconds(duration, off_score, def_score),
-            down: self.next_down(net_yards, turnover, off_score, def_score),
-            distance: self.next_distance(net_yards, turnover, touchback, kickoff_oob, end_of_half, off_score, def_score),
-            yard_line: self.next_yard_line(net_yards, touchback, kickoff_oob, end_of_half, off_score, def_score),
+            quarter: next_quarter,
+            half_seconds: self.next_half_seconds(duration, end_of_half, false, off_score, def_score),
+            down: self.next_down(net_yards, turnover, false, off_score, def_score),
+            distance: self.next_distance(duration, net_yards, turnover, touchback, kickoff_oob, end_of_half, false, off_score, def_score),
+            yard_line: self.next_yard_line(duration, net_yards, touchback, kickoff_oob, end_of_half, off_score, def_score),
             home_score: self.next_home_score(off_score, def_score),
             away_score: self.next_away_score(off_score, def_score),
-            home_timeouts: self.next_home_timeouts(off_timeout, def_timeout, end_of_half),
-            away_timeouts: self.next_away_timeouts(off_timeout, def_timeout, end_of_half),
-            home_positive_direction: self.next_home_positive_direction(duration, off_score, def_score),
+            home_timeouts: self.next_home_timeouts(off_timeout, def_timeout),
+            away_timeouts: self.next_away_timeouts(off_timeout, def_timeout),
+            home_positive_direction: self.next_home_positive_direction(duration, end_of_half, off_score, def_score),
             home_opening_kickoff: self.home_opening_kickoff,
             home_possession: self.next_home_possession(net_yards, turnover, end_of_half, off_score, def_score),
             last_play_turnover: turnover,
@@ -984,11 +1365,13 @@ impl GameContext {
             last_play_out_of_bounds: result.out_of_bounds(),
             last_play_timeout: off_timeout || def_timeout,
             last_play_kickoff: result.kickoff(),
-            next_play_extra_point: result.next_play_extra_point(),
-            next_play_kickoff: result.next_play_kickoff() || end_of_half,
+            last_play_punt: result.punt(),
+            next_play_extra_point: next_play_extra_point,
+            next_play_kickoff: result.next_play_kickoff() || (end_of_half && !next_play_extra_point),
             end_of_half: end_of_half,
             game_over: self.next_game_over(duration, off_score, def_score)
-        }
+        };
+        GameContext::try_from(raw).unwrap()
     }
 }
 
@@ -1049,6 +1432,7 @@ pub struct GameContextBuilder {
     last_play_out_of_bounds: bool,
     last_play_timeout: bool,
     last_play_kickoff: bool,
+    last_play_punt: bool,
     next_play_extra_point: bool,
     next_play_kickoff: bool,
     end_of_half: bool,
@@ -1085,6 +1469,7 @@ impl Default for GameContextBuilder {
             last_play_out_of_bounds: false,
             last_play_timeout: false,
             last_play_kickoff: false,
+            last_play_punt: false,
             next_play_extra_point: false,
             next_play_kickoff: true,
             end_of_half: false,
@@ -1114,7 +1499,8 @@ impl GameContextBuilder {
     /// 
     /// let my_context = GameContextBuilder::new()
     ///     .home_team_short("TEST")
-    ///     .build();
+    ///     .build()
+    ///     .unwrap();
     /// assert!(my_context.home_team_short() == "TEST");
     /// ```
     pub fn home_team_short(mut self, home_team_short: &str) -> Self {
@@ -1130,7 +1516,8 @@ impl GameContextBuilder {
     /// 
     /// let my_context = GameContextBuilder::new()
     ///     .away_team_short("TEST")
-    ///     .build();
+    ///     .build()
+    ///     .unwrap();
     /// assert!(my_context.away_team_short() == "TEST");
     /// ```
     pub fn away_team_short(mut self, away_team_short: &str) -> Self {
@@ -1146,8 +1533,10 @@ impl GameContextBuilder {
     /// 
     /// let my_context = GameContextBuilder::new()
     ///     .quarter(2)
-    ///     .build();
-    /// assert!(*my_context.quarter() == 2);
+    ///     .half_seconds(800)
+    ///     .build()
+    ///     .unwrap();
+    /// assert!(my_context.quarter() == 2);
     /// ```
     pub fn quarter(mut self, quarter: u32) -> Self {
         self.quarter = quarter;
@@ -1162,8 +1551,10 @@ impl GameContextBuilder {
     /// 
     /// let my_context = GameContextBuilder::new()
     ///     .half_seconds(100)
-    ///     .build();
-    /// assert!(*my_context.half_seconds() == 100);
+    ///     .quarter(4)
+    ///     .build()
+    ///     .unwrap();
+    /// assert!(my_context.half_seconds() == 100);
     /// ```
     pub fn half_seconds(mut self, half_seconds: u32) -> Self {
         self.half_seconds = half_seconds;
@@ -1178,8 +1569,9 @@ impl GameContextBuilder {
     /// 
     /// let my_context = GameContextBuilder::new()
     ///     .down(4)
-    ///     .build();
-    /// assert!(*my_context.down() == 4);
+    ///     .build()
+    ///     .unwrap();
+    /// assert!(my_context.down() == 4);
     /// ```
     pub fn down(mut self, down: u32) -> Self {
         self.down = down;
@@ -1194,8 +1586,9 @@ impl GameContextBuilder {
     /// 
     /// let my_context = GameContextBuilder::new()
     ///     .distance(7)
-    ///     .build();
-    /// assert!(*my_context.distance() == 7);
+    ///     .build()
+    ///     .unwrap();
+    /// assert!(my_context.distance() == 7);
     /// ```
     pub fn distance(mut self, distance: u32) -> Self {
         self.distance = distance;
@@ -1210,8 +1603,9 @@ impl GameContextBuilder {
     /// 
     /// let my_context = GameContextBuilder::new()
     ///     .yard_line(50)
-    ///     .build();
-    /// assert!(*my_context.yard_line() == 50);
+    ///     .build()
+    ///     .unwrap();
+    /// assert!(my_context.yard_line() == 50);
     /// ```
     pub fn yard_line(mut self, yard_line: u32) -> Self {
         self.yard_line = yard_line;
@@ -1226,8 +1620,9 @@ impl GameContextBuilder {
     /// 
     /// let my_context = GameContextBuilder::new()
     ///     .home_score(21)
-    ///     .build();
-    /// assert!(*my_context.home_score() == 21);
+    ///     .build()
+    ///     .unwrap();
+    /// assert!(my_context.home_score() == 21);
     /// ```
     pub fn home_score(mut self, home_score: u32) -> Self {
         self.home_score = home_score;
@@ -1242,8 +1637,9 @@ impl GameContextBuilder {
     /// 
     /// let my_context = GameContextBuilder::new()
     ///     .away_score(14)
-    ///     .build();
-    /// assert!(*my_context.away_score() == 14);
+    ///     .build()
+    ///     .unwrap();
+    /// assert!(my_context.away_score() == 14);
     /// ```
     pub fn away_score(mut self, away_score: u32) -> Self {
         self.away_score = away_score;
@@ -1258,8 +1654,9 @@ impl GameContextBuilder {
     /// 
     /// let my_context = GameContextBuilder::new()
     ///     .home_timeouts(2)
-    ///     .build();
-    /// assert!(*my_context.home_timeouts() == 2);
+    ///     .build()
+    ///     .unwrap();
+    /// assert!(my_context.home_timeouts() == 2);
     /// ```
     pub fn home_timeouts(mut self, home_timeouts: u32) -> Self {
         self.home_timeouts = home_timeouts;
@@ -1274,8 +1671,9 @@ impl GameContextBuilder {
     /// 
     /// let my_context = GameContextBuilder::new()
     ///     .away_timeouts(2)
-    ///     .build();
-    /// assert!(*my_context.away_timeouts() == 2);
+    ///     .build()
+    ///     .unwrap();
+    /// assert!(my_context.away_timeouts() == 2);
     /// ```
     pub fn away_timeouts(mut self, away_timeouts: u32) -> Self {
         self.away_timeouts = away_timeouts;
@@ -1290,8 +1688,9 @@ impl GameContextBuilder {
     /// 
     /// let my_context = GameContextBuilder::new()
     ///     .home_positive_direction(false)
-    ///     .build();
-    /// assert!(*my_context.home_positive_direction() == false);
+    ///     .build()
+    ///     .unwrap();
+    /// assert!(my_context.home_positive_direction() == false);
     /// ```
     pub fn home_positive_direction(mut self, home_positive_direction: bool) -> Self {
         self.home_positive_direction = home_positive_direction;
@@ -1306,8 +1705,9 @@ impl GameContextBuilder {
     /// 
     /// let my_context = GameContextBuilder::new()
     ///     .home_opening_kickoff(false)
-    ///     .build();
-    /// assert!(*my_context.home_opening_kickoff() == false);
+    ///     .build()
+    ///     .unwrap();
+    /// assert!(my_context.home_opening_kickoff() == false);
     /// ```
     pub fn home_opening_kickoff(mut self, home_opening_kickoff: bool) -> Self {
         self.home_opening_kickoff = home_opening_kickoff;
@@ -1322,8 +1722,9 @@ impl GameContextBuilder {
     /// 
     /// let my_context = GameContextBuilder::new()
     ///     .home_possession(false)
-    ///     .build();
-    /// assert!(*my_context.home_possession() == false);
+    ///     .build()
+    ///     .unwrap();
+    /// assert!(my_context.home_possession() == false);
     /// ```
     pub fn home_possession(mut self, home_possession: bool) -> Self {
         self.home_possession = home_possession;
@@ -1338,8 +1739,9 @@ impl GameContextBuilder {
     /// 
     /// let my_context = GameContextBuilder::new()
     ///     .last_play_turnover(true)
-    ///     .build();
-    /// assert!(*my_context.last_play_turnover() == true);
+    ///     .build()
+    ///     .unwrap();
+    /// assert!(my_context.last_play_turnover() == true);
     /// ```
     pub fn last_play_turnover(mut self, last_play_turnover: bool) -> Self {
         self.last_play_turnover = last_play_turnover;
@@ -1354,8 +1756,9 @@ impl GameContextBuilder {
     /// 
     /// let my_context = GameContextBuilder::new()
     ///     .last_play_incomplete(true)
-    ///     .build();
-    /// assert!(*my_context.last_play_incomplete() == true);
+    ///     .build()
+    ///     .unwrap();
+    /// assert!(my_context.last_play_incomplete() == true);
     /// ```
     pub fn last_play_incomplete(mut self, last_play_incomplete: bool) -> Self {
         self.last_play_incomplete = last_play_incomplete;
@@ -1370,8 +1773,9 @@ impl GameContextBuilder {
     /// 
     /// let my_context = GameContextBuilder::new()
     ///     .last_play_out_of_bounds(true)
-    ///     .build();
-    /// assert!(*my_context.last_play_out_of_bounds() == true);
+    ///     .build()
+    ///     .unwrap();
+    /// assert!(my_context.last_play_out_of_bounds() == true);
     /// ```
     pub fn last_play_out_of_bounds(mut self, last_play_out_of_bounds: bool) -> Self {
         self.last_play_out_of_bounds = last_play_out_of_bounds;
@@ -1386,8 +1790,9 @@ impl GameContextBuilder {
     /// 
     /// let my_context = GameContextBuilder::new()
     ///     .last_play_timeout(true)
-    ///     .build();
-    /// assert!(*my_context.last_play_timeout() == true);
+    ///     .build()
+    ///     .unwrap();
+    /// assert!(my_context.last_play_timeout() == true);
     /// ```
     pub fn last_play_timeout(mut self, last_play_timeout: bool) -> Self {
         self.last_play_timeout = last_play_timeout;
@@ -1402,11 +1807,29 @@ impl GameContextBuilder {
     /// 
     /// let my_context = GameContextBuilder::new()
     ///     .last_play_kickoff(true)
-    ///     .build();
-    /// assert!(*my_context.last_play_kickoff() == true);
+    ///     .build()
+    ///     .unwrap();
+    /// assert!(my_context.last_play_kickoff() == true);
     /// ```
     pub fn last_play_kickoff(mut self, last_play_kickoff: bool) -> Self {
         self.last_play_kickoff = last_play_kickoff;
+        self
+    }
+    
+    /// Set the last play punt property
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::game::context::{GameContext, GameContextBuilder};
+    /// 
+    /// let my_context = GameContextBuilder::new()
+    ///     .last_play_punt(true)
+    ///     .build()
+    ///     .unwrap();
+    /// assert!(my_context.last_play_punt() == true);
+    /// ```
+    pub fn last_play_punt(mut self, last_play_punt: bool) -> Self {
+        self.last_play_punt = last_play_punt;
         self
     }
     
@@ -1417,9 +1840,11 @@ impl GameContextBuilder {
     /// use fbsim_core::game::context::{GameContext, GameContextBuilder};
     /// 
     /// let my_context = GameContextBuilder::new()
+    ///     .next_play_kickoff(false)
     ///     .next_play_extra_point(true)
-    ///     .build();
-    /// assert!(*my_context.next_play_extra_point() == true);
+    ///     .build()
+    ///     .unwrap();
+    /// assert!(my_context.next_play_extra_point() == true);
     /// ```
     pub fn next_play_extra_point(mut self, next_play_extra_point: bool) -> Self {
         self.next_play_extra_point = next_play_extra_point;
@@ -1434,8 +1859,9 @@ impl GameContextBuilder {
     /// 
     /// let my_context = GameContextBuilder::new()
     ///     .next_play_kickoff(false)
-    ///     .build();
-    /// assert!(*my_context.next_play_kickoff() == false);
+    ///     .build()
+    ///     .unwrap();
+    /// assert!(my_context.next_play_kickoff() == false);
     /// ```
     pub fn next_play_kickoff(mut self, next_play_kickoff: bool) -> Self {
         self.next_play_kickoff = next_play_kickoff;
@@ -1449,9 +1875,12 @@ impl GameContextBuilder {
     /// use fbsim_core::game::context::{GameContext, GameContextBuilder};
     /// 
     /// let my_context = GameContextBuilder::new()
+    ///     .half_seconds(0)
+    ///     .quarter(4)
     ///     .end_of_half(true)
-    ///     .build();
-    /// assert!(*my_context.end_of_half() == true);
+    ///     .build()
+    ///     .unwrap();
+    /// assert!(my_context.end_of_half() == true);
     /// ```
     pub fn end_of_half(mut self, end_of_half: bool) -> Self {
         self.end_of_half = end_of_half;
@@ -1465,9 +1894,12 @@ impl GameContextBuilder {
     /// use fbsim_core::game::context::{GameContext, GameContextBuilder};
     /// 
     /// let my_context = GameContextBuilder::new()
+    ///     .half_seconds(0)
+    ///     .quarter(4)
     ///     .game_over(true)
-    ///     .build();
-    /// assert!(*my_context.game_over() == true);
+    ///     .build()
+    ///     .unwrap();
+    /// assert!(my_context.game_over() == true);
     /// ```
     pub fn game_over(mut self, game_over: bool) -> Self {
         self.game_over = game_over;
@@ -1497,14 +1929,16 @@ impl GameContextBuilder {
     ///     .last_play_incomplete(true)
     ///     .last_play_out_of_bounds(false)
     ///     .last_play_timeout(false)
+    ///     .last_play_punt(false)
     ///     .last_play_kickoff(false)
     ///     .next_play_extra_point(false)
     ///     .next_play_kickoff(false)
     ///     .game_over(false)
-    ///     .build();
+    ///     .build()
+    ///     .unwrap();
     /// ```
-    pub fn build(self) -> GameContext {
-        GameContext{
+    pub fn build(self) -> Result<GameContext, String> {
+        let raw = GameContextRaw{
             home_team_short: self.home_team_short,
             away_team_short: self.away_team_short,
             quarter: self.quarter,
@@ -1524,10 +1958,45 @@ impl GameContextBuilder {
             last_play_out_of_bounds: self.last_play_out_of_bounds,
             last_play_timeout: self.last_play_timeout,
             last_play_kickoff: self.last_play_kickoff,
+            last_play_punt: self.last_play_punt,
             next_play_extra_point: self.next_play_extra_point,
             next_play_kickoff: self.next_play_kickoff,
             end_of_half: self.end_of_half,
             game_over: self.game_over
-        }
+        };
+        GameContext::try_from(raw)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::game::play::result::kickoff::{KickoffResult, KickoffResultBuilder};
+
+    #[test]
+    fn test_long_kickoff_return_fumble_result() {
+        // Create a new context
+        let context: GameContext = GameContext::new();
+
+        // Create a kickoff return result in which the return team returns
+        // 60+ yards and then fumbles
+        let kickoff_return: KickoffResult = KickoffResultBuilder::new()
+            .kickoff_yards(49)
+            .kick_return_yards(67)
+            .play_duration(10)
+            .fumble_return_yards(3)
+            .touchback(false)
+            .out_of_bounds(false)
+            .fair_catch(false)
+            .fumble(true)
+            .touchdown(false)
+            .build()
+            .unwrap();
+
+        // Get the next context
+        let next_context: GameContext = kickoff_return.next_context(&context);
+
+        // Assert the next distance is 10
+        assert!(next_context.distance() == 10);
     }
 }

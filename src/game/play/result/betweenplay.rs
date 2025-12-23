@@ -3,7 +3,7 @@ use rand::Rng;
 use rocket_okapi::okapi::schemars;
 #[cfg(feature = "rocket_okapi")]
 use rocket_okapi::okapi::schemars::JsonSchema;
-use serde::{Serialize, Deserialize};
+use serde::{Serialize, Deserialize, Deserializer};
 use rand_distr::{SkewNormal, Normal, Distribution};
 
 use crate::game::context::{GameContext, GameContextBuilder};
@@ -34,12 +34,49 @@ const P_DEFENSE_NOT_SET_UP_TEMPO: f64 = 0.3_f64;
 const P_GET_SET_TIMEOUT_INTR: f64 = 0.2_f64;
 const P_GET_SET_TIMEOUT_COEF: f64 = 0.4_f64;
 
+/// # `BetweenPlayResultRaw` struct
+///
+/// A `BetweenPlayResultRaw` is a `BetweenPlayResult` before its properties
+/// have been validated
+#[cfg_attr(feature = "rocket_okapi", derive(JsonSchema))]
+#[derive(Clone, Copy, Eq, PartialEq, Ord, PartialOrd, Debug, Serialize, Deserialize)]
+pub struct BetweenPlayResultRaw {
+    duration: u32,
+    offense_timeout: bool,
+    defense_timeout: bool,
+    up_tempo: bool,
+    defense_not_set: bool,
+    critical_down: bool
+}
+
+impl BetweenPlayResultRaw {
+    pub fn validate(&self) -> Result<(), String> {
+        // Ensure not both offense and defense call timeout
+        if self.offense_timeout && self.defense_timeout {
+            return Err(
+                String::from("Offense and defense cannot both call timeout")
+            )
+        }
+
+        // Ensure duration is not greater than 100
+        if self.duration > 100 {
+            return Err(
+                format!(
+                    "Duration is out of range [0, 100]: {}",
+                    self.duration
+                )
+            )
+        }
+        Ok(())
+    }
+}
+
 /// # `BetweenPlayResult` struct
 ///
 /// A `BetweenPlayResult` represents any activity between plays, such as the
 /// clock running in-between plays & timeouts called after the play
 #[cfg_attr(feature = "rocket_okapi", derive(JsonSchema))]
-#[derive(Clone, Copy, Eq, PartialEq, Ord, PartialOrd, Debug, Serialize, Deserialize)]
+#[derive(Clone, Copy, Eq, PartialEq, Ord, PartialOrd, Debug, Serialize)]
 pub struct BetweenPlayResult {
     duration: u32,
     offense_timeout: bool,
@@ -47,6 +84,41 @@ pub struct BetweenPlayResult {
     up_tempo: bool,
     defense_not_set: bool,
     critical_down: bool
+}
+
+impl TryFrom<BetweenPlayResultRaw> for BetweenPlayResult {
+    type Error = String;
+
+    fn try_from(item: BetweenPlayResultRaw) -> Result<Self, Self::Error> {
+        // Validate the raw between play result
+        match item.validate() {
+            Ok(()) => (),
+            Err(error) => return Err(error),
+        };
+
+        // If valid, then convert
+        Ok(
+            BetweenPlayResult{
+                duration: item.duration,
+                offense_timeout: item.offense_timeout,
+                defense_timeout: item.defense_timeout,
+                up_tempo: item.up_tempo,
+                defense_not_set: item.defense_not_set,
+                critical_down: item.critical_down
+            }
+        )
+    }
+}
+
+impl<'de> Deserialize<'de> for BetweenPlayResult {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        // Only deserialize if the conversion from raw succeeds
+        let raw = BetweenPlayResultRaw::deserialize(deserializer)?;
+        BetweenPlayResult::try_from(raw).map_err(serde::de::Error::custom)
+    }
 }
 
 impl Default for BetweenPlayResult {
@@ -107,34 +179,61 @@ impl std::fmt::Display for BetweenPlayResult {
 
 impl PlayResult for BetweenPlayResult {
     fn next_context(&self, context: &GameContext) -> GameContext {
+        if context.next_play_extra_point() {
+            return context.clone();
+        }
         let off_score = ScoreResult::None;
         let def_score = ScoreResult::None;
-        let end_of_half = context.next_end_of_half(self.duration, off_score, def_score);
+        let end_of_half = context.end_of_half() || context.next_end_of_half(self.duration, off_score, def_score);
+        let end_of_game = context.next_game_over(self.duration, off_score, def_score);
+        let next_quarter = context.next_quarter(self.duration, off_score, def_score);
+        let yard_line = if end_of_half {
+            context.next_yard_line(0, 0, false, false, true, off_score, def_score)
+        } else {
+            context.next_yard_line(self.duration, 0, false, false, false, off_score, def_score)
+        };
+        let distance = if end_of_half {
+            context.next_distance(0, 0, false, false, false, true, true, off_score, def_score)
+        } else {
+            context.next_distance(self.duration, 0, false, false, false, false, true, off_score, def_score)
+        };
+        let down = if end_of_half {
+            context.next_down(0, false, true, off_score, def_score)
+        } else {
+            context.down()
+        };
+        let home_possession = if end_of_half {
+            context.next_home_possession(0, false, true, off_score, def_score)
+        } else {
+            context.home_possession()
+        };
+        let next_play_extra_point = context.next_play_extra_point();
         GameContextBuilder::new()
             .home_team_short(context.home_team_short())
             .away_team_short(context.away_team_short())
-            .quarter(context.next_quarter(self.duration, off_score, def_score))
-            .half_seconds(context.next_half_seconds(self.duration, off_score, def_score))
-            .down(*context.down())
-            .distance(*context.distance())
-            .yard_line(*context.yard_line())
-            .home_score(*context.home_score())
-            .away_score(*context.away_score())
-            .home_timeouts(context.next_home_timeouts(self.offense_timeout, self.defense_timeout, end_of_half))
-            .away_timeouts(context.next_away_timeouts(self.offense_timeout, self.defense_timeout, end_of_half))
-            .home_positive_direction(*context.home_positive_direction())
-            .home_opening_kickoff(*context.home_opening_kickoff())
-            .home_possession(*context.home_possession())
-            .last_play_turnover(*context.last_play_turnover())
-            .last_play_incomplete(*context.last_play_incomplete())
-            .last_play_out_of_bounds(*context.last_play_out_of_bounds())
+            .quarter(next_quarter)
+            .half_seconds(context.next_half_seconds(self.duration, false, end_of_half && !end_of_game, off_score, def_score))
+            .down(down)
+            .distance(distance)
+            .yard_line(yard_line)
+            .home_score(context.home_score())
+            .away_score(context.away_score())
+            .home_timeouts(context.next_home_timeouts(self.offense_timeout, self.defense_timeout))
+            .away_timeouts(context.next_away_timeouts(self.offense_timeout, self.defense_timeout))
+            .home_positive_direction(context.next_home_positive_direction(self.duration, end_of_half, off_score, def_score))
+            .home_opening_kickoff(context.home_opening_kickoff())
+            .home_possession(home_possession)
+            .last_play_turnover(context.last_play_turnover())
+            .last_play_incomplete(context.last_play_incomplete())
+            .last_play_out_of_bounds(context.last_play_out_of_bounds())
             .last_play_timeout(self.offense_timeout || self.defense_timeout)
-            .last_play_kickoff(*context.last_play_kickoff())
-            .next_play_extra_point(*context.next_play_extra_point())
-            .next_play_kickoff(*context.next_play_kickoff())
+            .last_play_kickoff(context.last_play_kickoff())
+            .next_play_extra_point(next_play_extra_point)
+            .next_play_kickoff(context.next_play_kickoff() || (end_of_half && !next_play_extra_point))
             .end_of_half(end_of_half)
             .game_over(context.next_game_over(self.duration, off_score, def_score))
             .build()
+            .unwrap()
     }
 }
 
@@ -227,6 +326,180 @@ impl BetweenPlayResult {
     /// ```
     pub fn critical_down(&self) -> bool {
         self.critical_down
+    }
+}
+
+/// # `BetweenPlayResultBuilder` struct
+///
+/// A `BetweenPlayResultBuilder` is a builder pattern implementation for the
+/// `BetweenPlayResult` struct.
+#[cfg_attr(feature = "rocket_okapi", derive(JsonSchema))]
+#[derive(Clone, Copy, Eq, PartialEq, Ord, PartialOrd, Debug, Serialize)]
+pub struct BetweenPlayResultBuilder {
+    duration: u32,
+    offense_timeout: bool,
+    defense_timeout: bool,
+    up_tempo: bool,
+    defense_not_set: bool,
+    critical_down: bool
+}
+
+impl Default for BetweenPlayResultBuilder {
+    /// Default constructor for the BetweenPlayResultBuilder class
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::game::play::result::betweenplay::BetweenPlayResultBuilder;
+    /// 
+    /// let my_builder = BetweenPlayResultBuilder::default();
+    /// ```
+    fn default() -> Self {
+        BetweenPlayResultBuilder{
+            duration: 20,
+            offense_timeout: false,
+            defense_timeout: false,
+            up_tempo: false,
+            defense_not_set: false,
+            critical_down: false
+        }
+    }
+}
+
+impl BetweenPlayResultBuilder {
+    /// Initialize a new BetweenPlayResultBuilder
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::game::play::result::betweenplay::BetweenPlayResultBuilder;
+    /// 
+    /// let my_builder = BetweenPlayResultBuilder::new();
+    /// ```
+    pub fn new() -> BetweenPlayResultBuilder {
+        BetweenPlayResultBuilder::default()
+    }
+
+    /// Set the duration property
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::game::play::result::betweenplay::BetweenPlayResultBuilder;
+    /// 
+    /// let my_result = BetweenPlayResultBuilder::new()
+    ///     .duration(12)
+    ///     .build()
+    ///     .unwrap();
+    /// assert!(my_result.duration() == 12);
+    /// ```
+    pub fn duration(mut self, duration: u32) -> Self {
+        self.duration = duration;
+        self
+    }
+
+    /// Set the offense_timeout property
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::game::play::result::betweenplay::BetweenPlayResultBuilder;
+    /// 
+    /// let my_result = BetweenPlayResultBuilder::new()
+    ///     .offense_timeout(true)
+    ///     .build()
+    ///     .unwrap();
+    /// assert!(my_result.offense_timeout());
+    /// ```
+    pub fn offense_timeout(mut self, offense_timeout: bool) -> Self {
+        self.offense_timeout = offense_timeout;
+        self
+    }
+
+    /// Set the defense_timeout property
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::game::play::result::betweenplay::BetweenPlayResultBuilder;
+    /// 
+    /// let my_result = BetweenPlayResultBuilder::new()
+    ///     .defense_timeout(true)
+    ///     .build()
+    ///     .unwrap();
+    /// assert!(my_result.defense_timeout());
+    /// ```
+    pub fn defense_timeout(mut self, defense_timeout: bool) -> Self {
+        self.defense_timeout = defense_timeout;
+        self
+    }
+
+    /// Set the up_tempo property
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::game::play::result::betweenplay::BetweenPlayResultBuilder;
+    /// 
+    /// let my_result = BetweenPlayResultBuilder::new()
+    ///     .up_tempo(true)
+    ///     .build()
+    ///     .unwrap();
+    /// assert!(my_result.up_tempo());
+    /// ```
+    pub fn up_tempo(mut self, up_tempo: bool) -> Self {
+        self.up_tempo = up_tempo;
+        self
+    }
+
+    /// Set the defense_not_set property
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::game::play::result::betweenplay::BetweenPlayResultBuilder;
+    /// 
+    /// let my_result = BetweenPlayResultBuilder::new()
+    ///     .defense_not_set(true)
+    ///     .build()
+    ///     .unwrap();
+    /// assert!(my_result.defense_not_set());
+    /// ```
+    pub fn defense_not_set(mut self, defense_not_set: bool) -> Self {
+        self.defense_not_set = defense_not_set;
+        self
+    }
+
+    /// Set the critical_down property
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::game::play::result::betweenplay::BetweenPlayResultBuilder;
+    /// 
+    /// let my_result = BetweenPlayResultBuilder::new()
+    ///     .critical_down(true)
+    ///     .build()
+    ///     .unwrap();
+    /// assert!(my_result.critical_down());
+    /// ```
+    pub fn critical_down(mut self, critical_down: bool) -> Self {
+        self.critical_down = critical_down;
+        self
+    }
+
+    /// Build the BetweenPlayResult
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::game::play::result::betweenplay::BetweenPlayResultBuilder;
+    /// 
+    /// let my_result = BetweenPlayResultBuilder::new()
+    ///     .build()
+    ///     .unwrap();
+    /// ```
+    pub fn build(self) -> Result<BetweenPlayResult, String> {
+        let raw = BetweenPlayResultRaw{
+            duration: self.duration,
+            offense_timeout: self.offense_timeout,
+            defense_timeout: self.defense_timeout,
+            up_tempo: self.up_tempo,
+            defense_not_set: self.defense_not_set,
+            critical_down: self.critical_down
+        };
+        BetweenPlayResult::try_from(raw)
     }
 }
 
@@ -352,7 +625,8 @@ impl PlayResultSimulator for BetweenPlayResultSimulator {
         let norm_defense_risk_taking: f64 = defense.coach().risk_taking() as f64 / 100_f64;
         let norm_offense_up_tempo: f64 = offense.coach().up_tempo() as f64 / 100_f64;
         let clock_running: bool = context.clock_running();
-        let last_play_turnover: bool = *context.last_play_turnover();
+        let last_play_turnover: bool = context.last_play_turnover();
+        let last_play_kickoff: bool = context.last_play_kickoff();
         let play_context = PlayContext::from(context);
 
         // Generate whether the offense goes up-tempo, defense is not set
@@ -371,7 +645,7 @@ impl PlayResultSimulator for BetweenPlayResultSimulator {
         let critical_down: bool = play_context.critical_down();
 
         // Generate whether the defense calls timeout
-        let defense_timeout: bool = if !last_play_turnover {
+        let defense_timeout: bool = if !(last_play_turnover || last_play_kickoff) {
             if defense_not_set || critical_down {
                 self.defense_get_set_timeout(&play_context, norm_defense_risk_taking, rng)
             } else {
@@ -394,7 +668,7 @@ impl PlayResultSimulator for BetweenPlayResultSimulator {
         } else {
             0
         };
-        let between_res = BetweenPlayResult{
+        let raw = BetweenPlayResultRaw{
             duration: between_play_duration,
             offense_timeout: offense_timeout,
             defense_timeout: defense_timeout,
@@ -402,6 +676,7 @@ impl PlayResultSimulator for BetweenPlayResultSimulator {
             defense_not_set: defense_not_set,
             critical_down: critical_down
         };
+        let between_res = BetweenPlayResult::try_from(raw).unwrap();
         PlayTypeResult::BetweenPlay(between_res)
     }
 }

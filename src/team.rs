@@ -6,7 +6,7 @@ pub mod offense;
 use rocket_okapi::okapi::schemars;
 #[cfg(feature = "rocket_okapi")]
 use rocket_okapi::okapi::schemars::JsonSchema;
-use serde::{Serialize, Deserialize};
+use serde::{Serialize, Deserialize, Deserializer};
 
 use crate::game::play::PlaySimulatable;
 use crate::game::score::ScoreSimulatable;
@@ -15,17 +15,92 @@ use crate::team::defense::FootballTeamDefense;
 use crate::team::offense::FootballTeamOffense;
 
 pub const DEFAULT_TEAM_NAME: &str = "Null Island Defaults";
+pub const DEFAULT_TEAM_SHORT_NAME: &str = "NULL";
+
+/// # `FootballTeamRaw` struct
+///
+/// A `FootballTeamRaw` is a `FootballTeam` before its properties have been
+/// validated
+#[cfg_attr(feature = "rocket_okapi", derive(JsonSchema))]
+#[derive(Clone, Eq, PartialEq, Ord, PartialOrd, Debug, Default, Serialize, Deserialize)]
+pub struct FootballTeamRaw {
+    name: String,
+    short_name: String,
+    coach: FootballTeamCoach,
+    defense: FootballTeamDefense,
+    offense: FootballTeamOffense
+}
+
+impl FootballTeamRaw {
+    pub fn validate(&self) -> Result<(), String> {
+        // Ensure the team name is no longer than 64 characters
+        if self.name.len() > 64 {
+            return Err(
+                format!(
+                    "Team name is longer than 64 characters: {}",
+                    self.name
+                )
+            )
+        }
+
+        // Ensure the team acronym is no longer than 4 characters
+        if self.short_name.len() > 4 {
+            return Err(
+                format!(
+                    "Team short name is longer than 4 characters: {}",
+                    self.short_name
+                )
+            )
+        }
+        Ok(())
+    }
+}
 
 /// # `FootballTeam` struct
 ///
 /// A `FootballTeam` represents a football team
 #[cfg_attr(feature = "rocket_okapi", derive(JsonSchema))]
-#[derive(Clone, Eq, PartialEq, Ord, PartialOrd, Debug, Default, Serialize, Deserialize)]
+#[derive(Clone, Eq, PartialEq, Ord, PartialOrd, Debug, Default, Serialize)]
 pub struct FootballTeam {
     name: String,
+    short_name: String,
     coach: FootballTeamCoach,
     defense: FootballTeamDefense,
     offense: FootballTeamOffense
+}
+
+impl TryFrom<FootballTeamRaw> for FootballTeam {
+    type Error = String;
+
+    fn try_from(item: FootballTeamRaw) -> Result<Self, Self::Error> {
+        // Validate the raw team
+        match item.validate() {
+            Ok(()) => (),
+            Err(error) => return Err(error),
+        };
+
+        // If valid, then convert
+        Ok(
+            FootballTeam{
+                name: item.name,
+                short_name: item.short_name,
+                coach: item.coach,
+                offense: item.offense,
+                defense: item.defense
+            }
+        )
+    }
+}
+
+impl<'de> Deserialize<'de> for FootballTeam {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        // Only deserialize if the conversion from raw succeeds
+        let raw = FootballTeamRaw::deserialize(deserializer)?;
+        FootballTeam::try_from(raw).map_err(serde::de::Error::custom)
+    }
 }
 
 impl PlaySimulatable for FootballTeam {
@@ -93,7 +168,7 @@ impl ScoreSimulatable for FootballTeam {
     /// use fbsim_core::game::score::ScoreSimulatable;
     /// use fbsim_core::team::FootballTeam;
     ///
-    /// let my_team = FootballTeam::from_overalls("My Team", 25, 75).unwrap();
+    /// let my_team = FootballTeam::from_overalls("My Team", "TEAM", 25, 75).unwrap();
     /// let defense_overall = my_team.defense_overall();
     /// assert!(defense_overall == 75);
     /// ```
@@ -108,7 +183,7 @@ impl ScoreSimulatable for FootballTeam {
     /// use fbsim_core::game::score::ScoreSimulatable;
     /// use fbsim_core::team::FootballTeam;
     ///
-    /// let my_team = FootballTeam::from_overalls("My Team", 25, 75).unwrap();
+    /// let my_team = FootballTeam::from_overalls("My Team", "TEAM", 25, 75).unwrap();
     /// let offense_overall = my_team.offense_overall();
     /// assert!(offense_overall == 25);
     /// ```
@@ -130,6 +205,7 @@ impl FootballTeam {
     pub fn new() -> FootballTeam {
         FootballTeam{
             name: String::from(DEFAULT_TEAM_NAME),
+            short_name: String::from(DEFAULT_TEAM_SHORT_NAME),
             coach: FootballTeamCoach::new(),
             offense: FootballTeamOffense::new(),
             defense: FootballTeamDefense::new()
@@ -143,9 +219,9 @@ impl FootballTeam {
     /// ```
     /// use fbsim_core::team::FootballTeam;
     ///
-    /// let my_team = FootballTeam::from_overalls("My Team", 25, 75);
+    /// let my_team = FootballTeam::from_overalls("My Team", "TEAM", 25, 75);
     /// ```
-    pub fn from_overalls(name: &str, offense_overall: u32, defense_overall: u32) -> Result<FootballTeam, String> {
+    pub fn from_overalls(name: &str, short_name: &str, offense_overall: u32, defense_overall: u32) -> Result<FootballTeam, String> {
         let offense = match FootballTeamOffense::from_overall(offense_overall) {
             Ok(o) => o,
             Err(msg) => return Err(msg)
@@ -157,6 +233,7 @@ impl FootballTeam {
         Ok(
             FootballTeam{
                 name: String::from(name),
+                short_name: String::from(short_name),
                 coach: FootballTeamCoach::new(),
                 offense: offense,
                 defense: defense
@@ -177,11 +254,12 @@ impl FootballTeam {
     /// let my_coach = FootballTeamCoach::new();
     /// let my_defense = FootballTeamDefense::new();
     /// let my_offense = FootballTeamOffense::new();
-    /// let my_team = FootballTeam::from_properties("My Team", my_coach, my_offense, my_defense);
+    /// let my_team = FootballTeam::from_properties("My Team", "TEAM", my_coach, my_offense, my_defense);
     /// ```
-    pub fn from_properties(name: &str, coach: FootballTeamCoach, offense: FootballTeamOffense, defense: FootballTeamDefense) -> FootballTeam {
+    pub fn from_properties(name: &str, short_name: &str, coach: FootballTeamCoach, offense: FootballTeamOffense, defense: FootballTeamDefense) -> FootballTeam {
         FootballTeam{
             name: String::from(name),
+            short_name: String::from(short_name),
             coach: coach,
             offense: offense,
             defense: defense
@@ -213,6 +291,32 @@ impl FootballTeam {
     pub fn name_mut(&mut self) -> &mut String {
         &mut self.name
     }
+
+    /// Borrow the football team's short name / acronym
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::team::FootballTeam;
+    ///
+    /// let my_team = FootballTeam::new();
+    /// let short_name = my_team.short_name();
+    /// ```
+    pub fn short_name(&self) -> &str {
+        &self.short_name
+    }
+
+    /// Borrow the football team's short name / acronym mutably
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::team::FootballTeam;
+    ///
+    /// let mut my_team = FootballTeam::new();
+    /// let mut short_name = my_team.short_name_mut();
+    /// ```
+    pub fn short_name_mut(&mut self) -> &mut String {
+        &mut self.short_name
+    }
 }
 
 #[cfg(test)]
@@ -222,9 +326,9 @@ mod tests {
     #[test]
     fn test_football_team_from_properties() {
         // Test offense overall OOB high
-        let result_a = FootballTeam::from_overalls("Test Team", 200, 50);
+        let result_a = FootballTeam::from_overalls("Test Team", "TEST", 200, 50);
         let expected_a: Result<FootballTeam, String> = Err(
-            String::from("Overall not in range [0, 100]: 200")
+            String::from("Passing attribute is out of range [0, 100]: 200")
         );
         assert_eq!(
             result_a,
@@ -232,9 +336,9 @@ mod tests {
         );
 
         // Test defense overall OOB high
-        let result_b = FootballTeam::from_overalls("Test Team", 50, 150);
+        let result_b = FootballTeam::from_overalls("Test Team", "TEST", 50, 150);
         let expected_b: Result<FootballTeam, String> = Err(
-            String::from("Overall not in range [0, 100]: 150")
+            String::from("Blitzing attribute is out of range [0, 100]: 150")
         );
         assert_eq!(
             result_b,

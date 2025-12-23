@@ -3,7 +3,7 @@ use rand::Rng;
 use rocket_okapi::okapi::schemars;
 #[cfg(feature = "rocket_okapi")]
 use rocket_okapi::okapi::schemars::JsonSchema;
-use serde::{Serialize, Deserialize};
+use serde::{Serialize, Deserialize, Deserializer};
 use rand_distr::{Normal, Distribution, Exp, SkewNormal};
 
 use crate::game::context::GameContext;
@@ -82,17 +82,139 @@ const SKEW_REL_RETURN_YARDS_COEF_2: f64 = -6.94528823_f64;
 
 // Fumble probability regression
 const P_FUMBLE_INTR: f64 = 0.0460047101408259_f64;
-const P_FUMBLE_COEF: f64 = -0.04389777_f64;
+const P_FUMBLE_COEF: f64 = -0.08389777_f64; // Adjusted - 0.04
 
 // Punt play duration regression
-const PUNT_PLAY_DURATION_INTR: f64 = 5.2792296_f64;
+const PUNT_PLAY_DURATION_INTR: f64 = 8.2792296_f64; // Adjusted + 3
 const PUNT_PLAY_DURATION_COEF: f64 = 0.09291598_f64;
+
+/// # `PuntResultRaw` struct
+///
+/// A `PuntResultRaw` is a `PuntResult` before its properties have been
+/// validated
+#[cfg_attr(feature = "rocket_okapi", derive(JsonSchema))]
+#[derive(Clone, Copy, Eq, PartialEq, Ord, PartialOrd, Debug, Serialize, Deserialize)]
+pub struct PuntResultRaw {
+    fumble_return_yards: i32,
+    punt_yards: i32,
+    punt_return_yards: i32,
+    play_duration: u32,
+    blocked: bool,
+    touchback: bool,
+    out_of_bounds: bool,
+    fair_catch: bool,
+    muffed: bool,
+    fumble: bool,
+    touchdown: bool
+}
+
+impl PuntResultRaw {
+    pub fn validate(&self) -> Result<(), String> {
+        // Ensure the play duration is not greater than 100 seconds
+        if self.play_duration > 100 {
+            return Err(
+                format!(
+                    "Play duration is not in range [0, 100]: {}",
+                    self.play_duration
+                )
+            )
+        }
+
+        // Ensure the fumble return yards are in range [-100, 100]
+        if self.fumble_return_yards.abs() > 100 {
+            return Err(
+                format!(
+                    "Fumble return yards is not in range [-100, 100]: {}",
+                    self.fumble_return_yards
+                )
+            )
+        }
+
+        // Ensure the fumble return yards are zero if a fumble did not occur
+        if !self.fumble && self.fumble_return_yards != 0 {
+            return Err(
+                format!(
+                    "Fumble did not occur but fumble return yards are nonzero: {}",
+                    self.fumble_return_yards
+                )
+            )
+        }
+
+        // Ensure the punt yards are in range [-100, 100]
+        if self.punt_yards.abs() > 100 {
+            return Err(
+                format!(
+                    "Punt yards is not in range [-100, 100]: {}",
+                    self.punt_yards
+                )
+            )
+        }
+
+        // Ensure the punt return yards are in range [-100, 100]
+        if self.punt_return_yards.abs() > 100 {
+            return Err(
+                format!(
+                    "Punt return yards is not in range [-100, 100]: {}",
+                    self.punt_return_yards
+                )
+            )
+        }
+
+        // Ensure punt return yards are zero if punt was not returned
+        if (self.blocked || self.out_of_bounds || self.touchback || self.fair_catch || self.muffed) && self.punt_return_yards != 0 {
+            return Err(
+                format!(
+                    "Punt was not returned but punt return yards were nonzero: {}",
+                    self.punt_return_yards
+                )
+            )
+        }
+
+        // Ensure if muffed, a fumble also occurred
+        if self.muffed && !self.fumble {
+            return Err(
+                String::from("Cannot have a muffed punt that was not also fumbled")
+            )
+        }
+
+        // Ensure if blocked, not also oob, touchback, fair catch, or muffed
+        if self.blocked && (self.out_of_bounds || self.touchback || self.fair_catch || self.muffed) {
+            return Err(
+                format!(
+                    "Cannot have both blocked punt and out of bounds ({}), touchback ({}), fair catch ({}), or muffed ({})",
+                    self.out_of_bounds, self.touchback, self.fair_catch, self.muffed
+                )
+            )
+        }
+
+        // Ensure if touchback, not also oob, fair catch, muffed, fumble, or TD
+        if self.touchback && (self.out_of_bounds || self.fair_catch || self.fumble || self.touchdown) {
+            return Err(
+                format!(
+                    "Cannot have both touchback and out of bounds ({}), fair catch ({}), fumble ({}), or touchdown ({})",
+                    self.out_of_bounds, self.fair_catch, self.fumble, self.touchdown
+                )
+            )
+        }
+
+        // Ensure if out of bounds, not also fair catch, muffed, fumble, or TD
+        if self.out_of_bounds && (self.fair_catch || self.muffed || self.fumble || self.touchdown) {
+            return Err(
+                format!(
+                    "Cannot have both punt out of bounds and fair catch ({}), muffed ({}), fumble ({}), or touchdown ({})",
+                    self.fair_catch, self.muffed, self.fumble, self.touchdown
+                )
+            )
+        }
+        Ok(())
+    }
+}
 
 /// # `PuntResult` struct
 ///
 /// A `PuntResult` represents a result of a punt play
 #[cfg_attr(feature = "rocket_okapi", derive(JsonSchema))]
-#[derive(Clone, Copy, Eq, PartialEq, Ord, PartialOrd, Debug, Serialize, Deserialize)]
+#[derive(Clone, Copy, Eq, PartialEq, Ord, PartialOrd, Debug, Serialize)]
 pub struct PuntResult {
     fumble_return_yards: i32,
     punt_yards: i32,
@@ -105,6 +227,46 @@ pub struct PuntResult {
     muffed: bool,
     fumble: bool,
     touchdown: bool
+}
+
+impl TryFrom<PuntResultRaw> for PuntResult {
+    type Error = String;
+
+    fn try_from(item: PuntResultRaw) -> Result<Self, Self::Error> {
+        // Validate the raw between play result
+        match item.validate() {
+            Ok(()) => (),
+            Err(error) => return Err(error),
+        };
+
+        // If valid, then convert
+        Ok(
+            PuntResult{
+                fumble_return_yards: item.fumble_return_yards,
+                punt_yards: item.punt_yards,
+                punt_return_yards: item.punt_return_yards,
+                play_duration: item.play_duration,
+                blocked: item.blocked,
+                touchback: item.touchback,
+                out_of_bounds: item.out_of_bounds,
+                fair_catch: item.fair_catch,
+                muffed: item.muffed,
+                fumble: item.fumble,
+                touchdown: item.touchdown
+            }
+        )
+    }
+}
+
+impl<'de> Deserialize<'de> for PuntResult {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        // Only deserialize if the conversion from raw succeeds
+        let raw = PuntResultRaw::deserialize(deserializer)?;
+        PuntResult::try_from(raw).map_err(serde::de::Error::custom)
+    }
 }
 
 impl Default for PuntResult {
@@ -238,6 +400,8 @@ impl PlayResult for PuntResult {
     }
 
     fn kickoff(&self) -> bool { false }
+
+    fn punt(&self) -> bool { true }
 
     fn next_play_kickoff(&self) -> bool { false }
 
@@ -411,6 +575,282 @@ impl PuntResult {
     /// ```
     pub fn touchdown(&self) -> bool {
         self.touchdown
+    }
+}
+
+/// # `PuntResultBuilder` struct
+///
+/// A `PuntResultBuilder` is a builder pattern implementation for the
+/// `PuntResult` struct
+#[cfg_attr(feature = "rocket_okapi", derive(JsonSchema))]
+#[derive(Clone, Copy, Eq, PartialEq, Ord, PartialOrd, Debug, Serialize)]
+pub struct PuntResultBuilder {
+    fumble_return_yards: i32,
+    punt_yards: i32,
+    punt_return_yards: i32,
+    play_duration: u32,
+    blocked: bool,
+    touchback: bool,
+    out_of_bounds: bool,
+    fair_catch: bool,
+    muffed: bool,
+    fumble: bool,
+    touchdown: bool
+}
+
+impl Default for PuntResultBuilder {
+    /// Default constructor for the PuntResultBuilder class
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::game::play::result::punt::PuntResultBuilder;
+    /// 
+    /// let my_result = PuntResultBuilder::default();
+    /// ```
+    fn default() -> Self {
+        PuntResultBuilder{
+            fumble_return_yards: 0,
+            punt_yards: 0,
+            punt_return_yards: 0,
+            play_duration: 0,
+            blocked: false,
+            touchback: false,
+            out_of_bounds: false,
+            fair_catch: false,
+            muffed: false,
+            fumble: false,
+            touchdown: false
+        }
+    }
+}
+
+impl PuntResultBuilder {
+    /// Initialize a new PuntResultBuilder
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::game::play::result::punt::PuntResultBuilder;
+    /// 
+    /// let my_builder = PuntResultBuilder::new();
+    /// ```
+    pub fn new() -> PuntResultBuilder {
+        PuntResultBuilder::default()
+    }
+
+    /// Set the play_duration property
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::game::play::result::punt::PuntResultBuilder;
+    /// 
+    /// let my_result = PuntResultBuilder::new()
+    ///     .play_duration(10)
+    ///     .build()
+    ///     .unwrap();
+    /// assert!(my_result.play_duration() == 10);
+    /// ```
+    pub fn play_duration(mut self, play_duration: u32) -> Self {
+        self.play_duration = play_duration;
+        self
+    }
+
+    /// Set the fumble_return_yards property
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::game::play::result::punt::PuntResultBuilder;
+    /// 
+    /// let my_result = PuntResultBuilder::new()
+    ///     .fumble(true)
+    ///     .fumble_return_yards(4)
+    ///     .build()
+    ///     .unwrap();
+    /// assert!(my_result.fumble_return_yards() == 4);
+    /// ```
+    pub fn fumble_return_yards(mut self, fumble_return_yards: i32) -> Self {
+        self.fumble_return_yards = fumble_return_yards;
+        self
+    }
+
+    /// Set the punt_yards property
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::game::play::result::punt::PuntResultBuilder;
+    /// 
+    /// let my_result = PuntResultBuilder::new()
+    ///     .punt_yards(41)
+    ///     .build()
+    ///     .unwrap();
+    /// assert!(my_result.punt_yards() == 41);
+    /// ```
+    pub fn punt_yards(mut self, punt_yards: i32) -> Self {
+        self.punt_yards = punt_yards;
+        self
+    }
+
+    /// Set the punt_return_yards property
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::game::play::result::punt::PuntResultBuilder;
+    /// 
+    /// let my_result = PuntResultBuilder::new()
+    ///     .punt_return_yards(8)
+    ///     .build()
+    ///     .unwrap();
+    /// assert!(my_result.punt_return_yards() == 8);
+    /// ```
+    pub fn punt_return_yards(mut self, punt_return_yards: i32) -> Self {
+        self.punt_return_yards = punt_return_yards;
+        self
+    }
+
+    /// Set the blocked property
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::game::play::result::punt::PuntResultBuilder;
+    /// 
+    /// let my_result = PuntResultBuilder::new()
+    ///     .blocked(true)
+    ///     .build()
+    ///     .unwrap();
+    /// assert!(my_result.blocked());
+    /// ```
+    pub fn blocked(mut self, blocked: bool) -> Self {
+        self.blocked = blocked;
+        self
+    }
+
+    /// Set the touchback property
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::game::play::result::punt::PuntResultBuilder;
+    /// 
+    /// let my_result = PuntResultBuilder::new()
+    ///     .touchback(true)
+    ///     .build()
+    ///     .unwrap();
+    /// assert!(my_result.touchback());
+    /// ```
+    pub fn touchback(mut self, touchback: bool) -> Self {
+        self.touchback = touchback;
+        self
+    }
+
+    /// Set the out_of_bounds property
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::game::play::result::punt::PuntResultBuilder;
+    /// 
+    /// let my_result = PuntResultBuilder::new()
+    ///     .out_of_bounds(true)
+    ///     .build()
+    ///     .unwrap();
+    /// assert!(my_result.out_of_bounds());
+    /// ```
+    pub fn out_of_bounds(mut self, out_of_bounds: bool) -> Self {
+        self.out_of_bounds = out_of_bounds;
+        self
+    }
+
+    /// Set the fair_catch property
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::game::play::result::punt::PuntResultBuilder;
+    /// 
+    /// let my_result = PuntResultBuilder::new()
+    ///     .fair_catch(true)
+    ///     .build()
+    ///     .unwrap();
+    /// assert!(my_result.fair_catch());
+    /// ```
+    pub fn fair_catch(mut self, fair_catch: bool) -> Self {
+        self.fair_catch = fair_catch;
+        self
+    }
+
+    /// Set the muffed property
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::game::play::result::punt::PuntResultBuilder;
+    /// 
+    /// let my_result = PuntResultBuilder::new()
+    ///     .fumble(true)
+    ///     .muffed(true)
+    ///     .build()
+    ///     .unwrap();
+    /// assert!(my_result.muffed());
+    /// ```
+    pub fn muffed(mut self, muffed: bool) -> Self {
+        self.muffed = muffed;
+        self
+    }
+
+    /// Set the fumble property
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::game::play::result::punt::PuntResultBuilder;
+    /// 
+    /// let my_result = PuntResultBuilder::new()
+    ///     .fumble(true)
+    ///     .build()
+    ///     .unwrap();
+    /// assert!(my_result.fumble());
+    /// ```
+    pub fn fumble(mut self, fumble: bool) -> Self {
+        self.fumble = fumble;
+        self
+    }
+
+    /// Set the touchdown property
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::game::play::result::punt::PuntResultBuilder;
+    /// 
+    /// let my_result = PuntResultBuilder::new()
+    ///     .touchdown(true)
+    ///     .build()
+    ///     .unwrap();
+    /// assert!(my_result.touchdown());
+    /// ```
+    pub fn touchdown(mut self, touchdown: bool) -> Self {
+        self.touchdown = touchdown;
+        self
+    }
+
+    /// Build the PuntResult
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::game::play::result::punt::PuntResultBuilder;
+    /// 
+    /// let my_result = PuntResultBuilder::new()
+    ///     .build()
+    ///     .unwrap();
+    /// ```
+    pub fn build(self) -> Result<PuntResult, String> {
+        let raw = PuntResultRaw{
+            fumble_return_yards: self.fumble_return_yards,
+            punt_yards: self.punt_yards,
+            punt_return_yards: self.punt_return_yards,
+            play_duration: self.play_duration,
+            blocked: self.blocked,
+            touchback: self.touchback,
+            out_of_bounds: self.out_of_bounds,
+            fair_catch: self.fair_catch,
+            muffed: self.muffed,
+            fumble: self.fumble,
+            touchdown: self.touchdown
+        };
+        PuntResult::try_from(raw)
     }
 }
 

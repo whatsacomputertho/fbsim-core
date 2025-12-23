@@ -36,38 +36,38 @@ impl From<&GameContext> for PlayContext {
     /// ```
     fn from(item: &GameContext) -> PlayContext {
         // Determine score diff and timeouts based on possession
-        let score_diff: i32 = if *item.home_possession() {
-            *item.home_score() as i32 - *item.away_score() as i32
+        let score_diff: i32 = if item.home_possession() {
+            item.home_score() as i32 - item.away_score() as i32
         } else {
-            *item.away_score() as i32 - *item.home_score() as i32
+            item.away_score() as i32 - item.home_score() as i32
         };
-        let off_timeouts: u32 = if *item.home_possession() {
-            *item.home_timeouts()
+        let off_timeouts: u32 = if item.home_possession() {
+            item.home_timeouts()
         } else {
-            *item.away_timeouts()
+            item.away_timeouts()
         };
-        let def_timeouts: u32 = if *item.home_possession() {
-            *item.away_timeouts()
+        let def_timeouts: u32 = if item.home_possession() {
+            item.away_timeouts()
         } else {
-            *item.home_timeouts()
+            item.home_timeouts()
         };
 
         // Determine yard line based on possession and direction
-        let yard_line: u32 = if *item.home_possession() ^ *item.home_positive_direction() {
-            match u32::try_from(100_i32 - *item.yard_line() as i32) {
+        let yard_line: u32 = if item.home_possession() ^ item.home_positive_direction() {
+            match u32::try_from(100_i32 - item.yard_line() as i32) {
                 Ok(n) => n,
                 Err(_) => 0
             }
         } else {
-            *item.yard_line()
+            item.yard_line()
         };
 
         // Construct the play context
         PlayContext{
-            quarter: *item.quarter(),
-            half_seconds: *item.half_seconds(),
-            down: *item.down(),
-            distance: *item.distance(),
+            quarter: item.quarter(),
+            half_seconds: item.half_seconds(),
+            down: item.down(),
+            distance: item.distance(),
             yard_line: yard_line,
             score_diff: score_diff,
             off_timeouts: off_timeouts,
@@ -422,7 +422,8 @@ impl std::fmt::Display for PlayContext {
     /// ```
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         // Format the clock
-        let clock_total = if self.half_seconds < 900 {
+        let clock_total = if self.half_seconds < 900 || 
+            (self.half_seconds == 900 && self.quarter % 2 == 0 && self.quarter <= 4) {
             self.half_seconds
         } else {
             self.half_seconds - 900

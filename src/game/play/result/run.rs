@@ -3,7 +3,7 @@ use rand::Rng;
 use rocket_okapi::okapi::schemars;
 #[cfg(feature = "rocket_okapi")]
 use rocket_okapi::okapi::schemars::JsonSchema;
-use serde::{Serialize, Deserialize};
+use serde::{Serialize, Deserialize, Deserializer};
 use rand_distr::{Normal, Distribution, Exp};
 
 use crate::game::context::GameContext;
@@ -25,7 +25,7 @@ const STD_BP_YARDS_COEF_1: f64 = -3.82403981_f64;
 const STD_BP_YARDS_COEF_2: f64 = 7.60215528_f64;
 
 // Mean regresion for play duration
-const MEAN_DURATION_INTR: f64 = 5.32135821_f64;
+const MEAN_DURATION_INTR: f64 = 8.32135821_f64; // Adjusted + 3
 const MEAN_DURATION_COEF_1: f64 = 0.11343699_f64;
 const MEAN_DURATION_COEF_2: f64 = -0.00056798_f64;
 
@@ -39,13 +39,97 @@ const P_BP_COEF: f64 = 0.82863208;
 
 // Fumble probability regression
 const P_FUMBLE_INTR: f64 = 0.04932479844415921;
-const P_FUMBLE_COEF: f64 = -0.05432772;
+const P_FUMBLE_COEF: f64 = -0.08432772;
+
+/// # `RunResultRaw` struct
+///
+/// A `RunResultRaw` represents a result of a run play
+#[cfg_attr(feature = "rocket_okapi", derive(JsonSchema))]
+#[derive(Clone, Copy, Eq, PartialEq, Ord, PartialOrd, Debug, Serialize, Deserialize)]
+pub struct RunResultRaw {
+    yards_gained: i32,
+    play_duration: u32,
+    fumble: bool,
+    return_yards: i32,
+    out_of_bounds: bool,
+    touchdown: bool,
+    safety: bool
+}
+
+impl RunResultRaw {
+    pub fn validate(&self) -> Result<(), String> {
+        // Ensure play duration is not greater than 100
+        if self.play_duration > 100 {
+            return Err(
+                format!(
+                    "Play duration is not in range [0, 100]: {}",
+                    self.play_duration
+                )
+            )
+        }
+
+        // Ensure yards gained are in range [-100, 100]
+        if self.yards_gained.abs() > 100 {
+            return Err(
+                format!(
+                    "Yards gained is not in range [-100, 100]: {}",
+                    self.yards_gained
+                )
+            )
+        }
+
+        // Ensure return yards are in range [-100, 100]
+        if self.return_yards.abs() > 100 {
+            return Err(
+                format!(
+                    "Return yards is not in range [-100, 100]: {}",
+                    self.return_yards
+                )
+            )
+        }
+
+        // Ensure if there is no fumble, the return yards are zero
+        if !self.fumble && self.return_yards != 0 {
+            return Err(
+                format!(
+                    "Fumble did not occur but return yards were nonzero: {}",
+                    self.return_yards
+                )
+            )
+        }
+
+        // Ensure if there is a fumble, there is not also a safety
+        if self.fumble && self.safety {
+            return Err(
+                String::from("Cannot have both a fumble and a safety")
+            )
+        }
+
+        // Ensure if out of bounds, there is not also a touchdown or safety
+        if self.out_of_bounds && (self.touchdown || self.safety) {
+            return Err(
+                format!(
+                    "Cannot have both a rush out of bounds and a touchdown ({}) or safety ({})",
+                    self.touchdown, self.safety
+                )
+            )
+        }
+
+        // Ensure there is not both a safety and a touchdown
+        if self.touchdown && self.safety {
+            return Err(
+                String::from("Cannot have both a touchdown and a safety")
+            )
+        }
+        Ok(())
+    }
+}
 
 /// # `RunResult` struct
 ///
 /// A `RunResult` represents a result of a run play
 #[cfg_attr(feature = "rocket_okapi", derive(JsonSchema))]
-#[derive(Clone, Copy, Eq, PartialEq, Ord, PartialOrd, Debug, Serialize, Deserialize)]
+#[derive(Clone, Copy, Eq, PartialEq, Ord, PartialOrd, Debug, Serialize)]
 pub struct RunResult {
     yards_gained: i32,
     play_duration: u32,
@@ -53,8 +137,43 @@ pub struct RunResult {
     return_yards: i32,
     out_of_bounds: bool,
     touchdown: bool,
-    safety: bool,
-    scramble: bool
+    safety: bool
+}
+
+impl TryFrom<RunResultRaw> for RunResult {
+    type Error = String;
+
+    fn try_from(item: RunResultRaw) -> Result<Self, Self::Error> {
+        // Validate the raw between play result
+        match item.validate() {
+            Ok(()) => (),
+            Err(error) => return Err(error),
+        };
+
+        // If valid, then convert
+        Ok(
+            RunResult{
+                yards_gained: item.yards_gained,
+                play_duration: item.play_duration,
+                fumble: item.fumble,
+                return_yards: item.return_yards,
+                out_of_bounds: item.out_of_bounds,
+                touchdown: item.touchdown,
+                safety: item.safety
+            }
+        )
+    }
+}
+
+impl<'de> Deserialize<'de> for RunResult {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        // Only deserialize if the conversion from raw succeeds
+        let raw = RunResultRaw::deserialize(deserializer)?;
+        RunResult::try_from(raw).map_err(serde::de::Error::custom)
+    }
 }
 
 impl Default for RunResult {
@@ -74,8 +193,7 @@ impl Default for RunResult {
             return_yards: 0,
             out_of_bounds: false,
             touchdown: false,
-            safety: false,
-            scramble: false
+            safety: false
         }
     }
 }
@@ -278,19 +396,200 @@ impl RunResult {
     pub fn safety(&self) -> bool {
         self.safety
     }
+}
 
-    /// Get a run result's scramble property
+/// # `RunResultBuilder` struct
+///
+/// A `RunResultBuilder` is a builder pattern implementation for the
+/// `RunResult` struct
+#[cfg_attr(feature = "rocket_okapi", derive(JsonSchema))]
+#[derive(Clone, Copy, Eq, PartialEq, Ord, PartialOrd, Debug, Serialize)]
+pub struct RunResultBuilder {
+    yards_gained: i32,
+    play_duration: u32,
+    fumble: bool,
+    return_yards: i32,
+    out_of_bounds: bool,
+    touchdown: bool,
+    safety: bool
+}
+
+impl Default for RunResultBuilder {
+    /// Default constructor for the RunResultBuilder struct
     ///
     /// ### Example
     /// ```
-    /// use fbsim_core::game::play::result::run::RunResult;
+    /// use fbsim_core::game::play::result::run::RunResultBuilder;
     /// 
-    /// let my_res = RunResult::new();
-    /// let scramble = my_res.scramble();
-    /// assert!(!scramble);
+    /// let my_result = RunResultBuilder::default();
     /// ```
-    pub fn scramble(&self) -> bool {
-        self.scramble
+    fn default() -> Self {
+        RunResultBuilder{
+            yards_gained: 0,
+            play_duration: 0,
+            fumble: false,
+            return_yards: 0,
+            out_of_bounds: false,
+            touchdown: false,
+            safety: false
+        }
+    }
+}
+
+impl RunResultBuilder {
+    /// Initialize a new RunResultBuilder
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::game::play::result::run::RunResultBuilder;
+    /// 
+    /// let my_builder = RunResultBuilder::new();
+    /// ```
+    pub fn new() -> RunResultBuilder {
+        RunResultBuilder::default()
+    }
+
+    /// Set the play_duration property
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::game::play::result::run::RunResultBuilder;
+    /// 
+    /// let my_result = RunResultBuilder::new()
+    ///     .play_duration(10)
+    ///     .build()
+    ///     .unwrap();
+    /// assert!(my_result.play_duration() == 10);
+    /// ```
+    pub fn play_duration(mut self, play_duration: u32) -> Self {
+        self.play_duration = play_duration;
+        self
+    }
+
+    /// Set the yards_gained property
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::game::play::result::run::RunResultBuilder;
+    /// 
+    /// let my_result = RunResultBuilder::new()
+    ///     .yards_gained(3)
+    ///     .build()
+    ///     .unwrap();
+    /// assert!(my_result.yards_gained() == 3);
+    /// ```
+    pub fn yards_gained(mut self, yards_gained: i32) -> Self {
+        self.yards_gained = yards_gained;
+        self
+    }
+
+    /// Set the return_yards property
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::game::play::result::run::RunResultBuilder;
+    /// 
+    /// let my_result = RunResultBuilder::new()
+    ///     .fumble(true)
+    ///     .return_yards(12)
+    ///     .build()
+    ///     .unwrap();
+    /// assert!(my_result.return_yards() == 12);
+    /// ```
+    pub fn return_yards(mut self, return_yards: i32) -> Self {
+        self.return_yards = return_yards;
+        self
+    }
+
+    /// Set the fumble property
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::game::play::result::run::RunResultBuilder;
+    /// 
+    /// let my_result = RunResultBuilder::new()
+    ///     .fumble(true)
+    ///     .build()
+    ///     .unwrap();
+    /// assert!(my_result.fumble());
+    /// ```
+    pub fn fumble(mut self, fumble: bool) -> Self {
+        self.fumble = fumble;
+        self
+    }
+
+    /// Set the out_of_bounds property
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::game::play::result::run::RunResultBuilder;
+    /// 
+    /// let my_result = RunResultBuilder::new()
+    ///     .out_of_bounds(true)
+    ///     .build()
+    ///     .unwrap();
+    /// assert!(my_result.out_of_bounds());
+    /// ```
+    pub fn out_of_bounds(mut self, out_of_bounds: bool) -> Self {
+        self.out_of_bounds = out_of_bounds;
+        self
+    }
+
+    /// Set the touchdown property
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::game::play::result::run::RunResultBuilder;
+    /// 
+    /// let my_result = RunResultBuilder::new()
+    ///     .touchdown(true)
+    ///     .build()
+    ///     .unwrap();
+    /// assert!(my_result.touchdown());
+    /// ```
+    pub fn touchdown(mut self, touchdown: bool) -> Self {
+        self.touchdown = touchdown;
+        self
+    }
+
+    /// Set the safety property
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::game::play::result::run::RunResultBuilder;
+    /// 
+    /// let my_result = RunResultBuilder::new()
+    ///     .safety(true)
+    ///     .build()
+    ///     .unwrap();
+    /// assert!(my_result.safety());
+    /// ```
+    pub fn safety(mut self, safety: bool) -> Self {
+        self.safety = safety;
+        self
+    }
+
+    /// Build the RunResult
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::game::play::result::run::RunResultBuilder;
+    /// 
+    /// let my_result = RunResultBuilder::new()
+    ///     .build()
+    ///     .unwrap();
+    /// ```
+    pub fn build(self) -> Result<RunResult, String> {
+        let raw = RunResultRaw{
+            yards_gained: self.yards_gained,
+            play_duration: self.play_duration,
+            fumble: self.fumble,
+            return_yards: self.return_yards,
+            out_of_bounds: self.out_of_bounds,
+            touchdown: self.touchdown,
+            safety: self.safety
+        };
+        RunResult::try_from(raw)
     }
 }
 
@@ -354,7 +653,7 @@ impl RunResultSimulator {
 
     /// Generates whether a fumble occurred on the play
     fn fumble(&self, norm_diff_turnovers: f64, rng: &mut impl Rng) -> bool {
-        let p_fumble: f64 = 1_f64.min(0_f64.max(P_FUMBLE_INTR + (P_FUMBLE_COEF * norm_diff_turnovers)));
+        let p_fumble: f64 = 1_f64.min(0.001_f64.max(P_FUMBLE_INTR + (P_FUMBLE_COEF * norm_diff_turnovers)));
         rng.gen::<f64>() < p_fumble
     }
 
@@ -442,8 +741,7 @@ impl PlayResultSimulator for RunResultSimulator {
             return_yards: return_yards,
             out_of_bounds: false,
             touchdown: touchdown,
-            safety: safety,
-            scramble: false
+            safety: safety
         };
         PlayTypeResult::Run(run_res)
     }

@@ -3,7 +3,7 @@ use rand::Rng;
 use rocket_okapi::okapi::schemars;
 #[cfg(feature = "rocket_okapi")]
 use rocket_okapi::okapi::schemars::JsonSchema;
-use serde::{Serialize, Deserialize};
+use serde::{Serialize, Deserialize, Deserializer};
 use rand_distr::{Normal, Distribution, Exp, SkewNormal};
 
 use crate::game::context::GameContext;
@@ -65,11 +65,95 @@ const P_KICKOFF_RETURN_FUMBLE: f64 = 0.007_f64;
 const KICKOFF_RETURN_PLAY_DURATION_INTR: f64 = 0.11217103_f64;
 const KICKOFF_RETURN_PLAY_DURATION_COEF: f64 = 1.20326252_f64;
 
+/// # `KickoffResultRaw` struct
+///
+/// A `KickoffResultRaw` represents a result of a kickoff
+#[cfg_attr(feature = "rocket_okapi", derive(JsonSchema))]
+#[derive(Clone, Copy, Eq, PartialEq, Ord, PartialOrd, Debug, Serialize, Deserialize)]
+pub struct KickoffResultRaw {
+    kickoff_yards: i32,
+    kick_return_yards: i32,
+    play_duration: u32,
+    fumble_return_yards: i32,
+    touchback: bool,
+    out_of_bounds: bool,
+    fair_catch: bool,
+    fumble: bool,
+    touchdown: bool
+}
+
+impl KickoffResultRaw {
+    pub fn validate(&self) -> Result<(), String> {
+        // Ensure kickoff yards are no more than 100
+        if self.kickoff_yards > 100 {
+            return Err(
+                format!(
+                    "Kickoff yards is not in range [0, 100]: {}",
+                    self.kickoff_yards
+                )
+            )
+        }
+
+        // Ensure kick return yards are no more than 110
+        if self.kick_return_yards > 110 {
+            return Err(
+                format!(
+                    "Kick return yards is not in range [0, 110]: {}",
+                    self.kick_return_yards
+                )
+            )
+        }
+
+        // Ensure play duration is no more than 100 seconds
+        if self.play_duration > 100 {
+            return Err(
+                format!(
+                    "Play duration is not in range [0, 100]: {}",
+                    self.play_duration
+                )
+            )
+        }
+
+        // Ensure fumble return yards are no more than 100
+        if self.fumble_return_yards > 100 {
+            return Err(
+                format!(
+                    "Fubmle return yards is not in range [0, 100]: {}",
+                    self.fumble_return_yards
+                )
+            )
+        }
+
+        // Ensure mutual exclusivity of touchback, oob, and fair catch
+        if (self.touchback && self.out_of_bounds) || 
+            (self.out_of_bounds && self.fair_catch) ||
+            (self.fair_catch && self.out_of_bounds) {
+            return Err(
+                format!(
+                    "Must have at most one true across touchback ({}), out of bounds ({}), and fair catch ({})",
+                    self.touchback, self.out_of_bounds, self.fair_catch
+                )
+            )
+        }
+
+        // Ensure not both touchdown and either touchback, oob, fair catch
+        if self.touchdown && (self.touchback || self.out_of_bounds || self.fair_catch) {
+            return Err(
+                format!(
+                    "Cannot both score a touchdown and touchback ({}), out of bounds ({}), or fair catch ({})",
+                    self.touchback, self.out_of_bounds, self.fair_catch
+                )
+            )
+        }
+        Ok(())
+    }
+}
+
 /// # `KickoffResult` struct
 ///
 /// A `KickoffResult` represents a result of a kickoff
 #[cfg_attr(feature = "rocket_okapi", derive(JsonSchema))]
-#[derive(Clone, Copy, Eq, PartialEq, Ord, PartialOrd, Debug, Serialize, Deserialize)]
+#[derive(Clone, Copy, Eq, PartialEq, Ord, PartialOrd, Debug, Serialize)]
 pub struct KickoffResult {
     kickoff_yards: i32,
     kick_return_yards: i32,
@@ -80,6 +164,44 @@ pub struct KickoffResult {
     fair_catch: bool,
     fumble: bool,
     touchdown: bool
+}
+
+impl TryFrom<KickoffResultRaw> for KickoffResult {
+    type Error = String;
+
+    fn try_from(item: KickoffResultRaw) -> Result<Self, Self::Error> {
+        // Validate the raw between play result
+        match item.validate() {
+            Ok(()) => (),
+            Err(error) => return Err(error),
+        };
+
+        // If valid, then convert
+        Ok(
+            KickoffResult{
+                kickoff_yards: item.kickoff_yards,
+                kick_return_yards: item.kick_return_yards,
+                play_duration: item.play_duration,
+                fumble_return_yards: item.fumble_return_yards,
+                touchback: item.touchback,
+                out_of_bounds: item.out_of_bounds,
+                fair_catch: item.fair_catch,
+                fumble: item.fumble,
+                touchdown: item.touchdown
+            }
+        )
+    }
+}
+
+impl<'de> Deserialize<'de> for KickoffResult {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        // Only deserialize if the conversion from raw succeeds
+        let raw = KickoffResultRaw::deserialize(deserializer)?;
+        KickoffResult::try_from(raw).map_err(serde::de::Error::custom)
+    }
 }
 
 impl Default for KickoffResult {
@@ -355,6 +477,242 @@ impl KickoffResult {
     }
 }
 
+/// # `KickoffResultBuilder` struct
+///
+/// A `KickoffResultBuilder` is a builder pattern implementation for the
+/// `KickoffResult` struct.
+#[cfg_attr(feature = "rocket_okapi", derive(JsonSchema))]
+#[derive(Clone, Copy, Eq, PartialEq, Ord, PartialOrd, Debug, Serialize)]
+pub struct KickoffResultBuilder {
+    kickoff_yards: i32,
+    kick_return_yards: i32,
+    play_duration: u32,
+    fumble_return_yards: i32,
+    touchback: bool,
+    out_of_bounds: bool,
+    fair_catch: bool,
+    fumble: bool,
+    touchdown: bool
+}
+
+impl Default for KickoffResultBuilder {
+    /// Default constructor for the KickoffResultBuilder class
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::game::play::result::kickoff::KickoffResultBuilder;
+    /// 
+    /// let my_builder = KickoffResultBuilder::default();
+    /// ```
+    fn default() -> Self {
+        KickoffResultBuilder{
+            kickoff_yards: 65,
+            kick_return_yards: 0,
+            play_duration: 0,
+            fumble_return_yards: 0,
+            touchback: true,
+            out_of_bounds: false,
+            fair_catch: false,
+            fumble: false,
+            touchdown: false
+        }
+    }
+}
+
+impl KickoffResultBuilder {
+    /// Initialize a new KickoffResultBuilder
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::game::play::result::kickoff::KickoffResultBuilder;
+    /// 
+    /// let my_builder = KickoffResultBuilder::new();
+    /// ```
+    pub fn new() -> KickoffResultBuilder {
+        KickoffResultBuilder::default()
+    }
+
+    /// Set the kickoff_yards property
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::game::play::result::kickoff::KickoffResultBuilder;
+    /// 
+    /// let my_result = KickoffResultBuilder::new()
+    ///     .kickoff_yards(62)
+    ///     .build()
+    ///     .unwrap();
+    /// assert!(my_result.kickoff_yards() == 62);
+    /// ```
+    pub fn kickoff_yards(mut self, kickoff_yards: i32) -> Self {
+        self.kickoff_yards = kickoff_yards;
+        self
+    }
+
+    /// Set the kick_return_yards property
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::game::play::result::kickoff::KickoffResultBuilder;
+    /// 
+    /// let my_result = KickoffResultBuilder::new()
+    ///     .kick_return_yards(14)
+    ///     .build()
+    ///     .unwrap();
+    /// assert!(my_result.kick_return_yards() == 14);
+    /// ```
+    pub fn kick_return_yards(mut self, kick_return_yards: i32) -> Self {
+        self.kick_return_yards = kick_return_yards;
+        self
+    }
+
+    /// Set the play_duration property
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::game::play::result::kickoff::KickoffResultBuilder;
+    /// 
+    /// let my_result = KickoffResultBuilder::new()
+    ///     .play_duration(7)
+    ///     .build()
+    ///     .unwrap();
+    /// assert!(my_result.play_duration() == 7);
+    /// ```
+    pub fn play_duration(mut self, play_duration: u32) -> Self {
+        self.play_duration = play_duration;
+        self
+    }
+
+    /// Set the fumble_return_yards property
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::game::play::result::kickoff::KickoffResultBuilder;
+    /// 
+    /// let my_result = KickoffResultBuilder::new()
+    ///     .fumble_return_yards(4)
+    ///     .build()
+    ///     .unwrap();
+    /// assert!(my_result.fumble_return_yards() == 4);
+    /// ```
+    pub fn fumble_return_yards(mut self, fumble_return_yards: i32) -> Self {
+        self.fumble_return_yards = fumble_return_yards;
+        self
+    }
+
+    /// Set the touchback property
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::game::play::result::kickoff::KickoffResultBuilder;
+    /// 
+    /// let my_result = KickoffResultBuilder::new()
+    ///     .touchback(false)
+    ///     .build()
+    ///     .unwrap();
+    /// assert!(!my_result.touchback());
+    /// ```
+    pub fn touchback(mut self, touchback: bool) -> Self {
+        self.touchback = touchback;
+        self
+    }
+
+    /// Set the out_of_bounds property
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::game::play::result::kickoff::KickoffResultBuilder;
+    /// 
+    /// let my_result = KickoffResultBuilder::new()
+    ///     .out_of_bounds(true)
+    ///     .touchback(false)
+    ///     .build()
+    ///     .unwrap();
+    /// assert!(my_result.out_of_bounds());
+    /// ```
+    pub fn out_of_bounds(mut self, out_of_bounds: bool) -> Self {
+        self.out_of_bounds = out_of_bounds;
+        self
+    }
+
+    /// Set the fair_catch property
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::game::play::result::kickoff::KickoffResultBuilder;
+    /// 
+    /// let my_result = KickoffResultBuilder::new()
+    ///     .fair_catch(true)
+    ///     .build()
+    ///     .unwrap();
+    /// assert!(my_result.fair_catch());
+    /// ```
+    pub fn fair_catch(mut self, fair_catch: bool) -> Self {
+        self.fair_catch = fair_catch;
+        self
+    }
+
+    /// Set the fumble property
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::game::play::result::kickoff::KickoffResultBuilder;
+    /// 
+    /// let my_result = KickoffResultBuilder::new()
+    ///     .fumble(true)
+    ///     .build()
+    ///     .unwrap();
+    /// assert!(my_result.fumble());
+    /// ```
+    pub fn fumble(mut self, fumble: bool) -> Self {
+        self.fumble = fumble;
+        self
+    }
+
+    /// Set the touchdown property
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::game::play::result::kickoff::KickoffResultBuilder;
+    /// 
+    /// let my_result = KickoffResultBuilder::new()
+    ///     .touchdown(true)
+    ///     .touchback(false)
+    ///     .build()
+    ///     .unwrap();
+    /// assert!(my_result.touchdown());
+    /// ```
+    pub fn touchdown(mut self, touchdown: bool) -> Self {
+        self.touchdown = touchdown;
+        self
+    }
+
+    /// Build the KickoffResult
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::game::play::result::kickoff::KickoffResultBuilder;
+    /// 
+    /// let my_result = KickoffResultBuilder::new()
+    ///     .build()
+    ///     .unwrap();
+    /// ```
+    pub fn build(self) -> Result<KickoffResult, String> {
+        let raw = KickoffResultRaw{
+            kickoff_yards: self.kickoff_yards,
+            kick_return_yards: self.kick_return_yards,
+            play_duration: self.play_duration,
+            fumble_return_yards: self.fumble_return_yards,
+            touchback: self.touchback,
+            out_of_bounds: self.out_of_bounds,
+            fair_catch: self.fair_catch,
+            fumble: self.fumble,
+            touchdown: self.touchdown
+        };
+        KickoffResult::try_from(raw)
+    }
+}
+
 /// # `KickoffResultSimulator` struct
 ///
 /// A `KickoffResultSimulator` represents a simulator which can produce a result of a kickoff
@@ -503,9 +861,9 @@ impl PlayResultSimulator for KickoffResultSimulator {
 
         // Generate the kickoff distance
         let kickoff_distance: i32 = if !touchback {
-            self.distance(norm_kicking, inside_20, rng)
+            td_yards.min(self.distance(norm_kicking, inside_20, rng))
         } else {
-            65
+            td_yards
         };
 
         // Generate whether a fair catch was called on the kickoff
@@ -517,7 +875,7 @@ impl PlayResultSimulator for KickoffResultSimulator {
 
         // Generate the kickoff return yards
         let return_yards: i32 = if !(touchback || out_of_bounds || fair_catch) {
-            self.return_yards(norm_diff_returning, rng)
+            self.return_yards(norm_diff_returning, rng).min(safety_yards + kickoff_distance)
         } else {
             0
         };
@@ -553,7 +911,7 @@ impl PlayResultSimulator for KickoffResultSimulator {
             false
         };
 
-        let kickoff_res = KickoffResult{
+        let raw = KickoffResultRaw{
             kickoff_yards: kickoff_distance,
             kick_return_yards: return_yards,
             play_duration: play_duration,
@@ -564,6 +922,7 @@ impl PlayResultSimulator for KickoffResultSimulator {
             fumble: fumble,
             touchdown: touchdown
         };
+        let kickoff_res = KickoffResult::try_from(raw).unwrap();
         PlayTypeResult::Kickoff(kickoff_res)
     }
 }

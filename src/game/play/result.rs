@@ -39,6 +39,7 @@ pub trait PlayResult {
     fn out_of_bounds(&self) -> bool { false }
     fn touchback(&self) -> bool { false }
     fn kickoff(&self) -> bool { false }
+    fn punt(&self) -> bool { false }
     fn next_play_kickoff(&self) -> bool { false }
     fn next_play_extra_point(&self) -> bool { false }
 }
@@ -245,15 +246,29 @@ impl PlayResult for PlayTypeResult {
 
     fn kickoff(&self) -> bool {
         match self {
-            PlayTypeResult::BetweenPlay(res) => res.touchback(),
-            PlayTypeResult::Run(res) => res.touchback(),
-            PlayTypeResult::Pass(res) => res.touchback(),
-            PlayTypeResult::FieldGoal(res) => res.touchback(),
-            PlayTypeResult::Punt(res) => res.touchback(),
-            PlayTypeResult::Kickoff(res) => res.touchback(),
-            PlayTypeResult::ExtraPoint(res) => res.touchback(),
-            PlayTypeResult::QbKneel(res) => res.touchback(),
-            PlayTypeResult::QbSpike(res) => res.touchback()
+            PlayTypeResult::BetweenPlay(res) => res.kickoff(),
+            PlayTypeResult::Run(res) => res.kickoff(),
+            PlayTypeResult::Pass(res) => res.kickoff(),
+            PlayTypeResult::FieldGoal(res) => res.kickoff(),
+            PlayTypeResult::Punt(res) => res.kickoff(),
+            PlayTypeResult::Kickoff(res) => res.kickoff(),
+            PlayTypeResult::ExtraPoint(res) => res.kickoff(),
+            PlayTypeResult::QbKneel(res) => res.kickoff(),
+            PlayTypeResult::QbSpike(res) => res.kickoff()
+        }
+    }
+
+    fn punt(&self) -> bool {
+        match self {
+            PlayTypeResult::BetweenPlay(res) => res.punt(),
+            PlayTypeResult::Run(res) => res.punt(),
+            PlayTypeResult::Pass(res) => res.punt(),
+            PlayTypeResult::FieldGoal(res) => res.punt(),
+            PlayTypeResult::Punt(res) => res.punt(),
+            PlayTypeResult::Kickoff(res) => res.punt(),
+            PlayTypeResult::ExtraPoint(res) => res.punt(),
+            PlayTypeResult::QbKneel(res) => res.punt(),
+            PlayTypeResult::QbSpike(res) => res.punt()
         }
     }
 

@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 pub struct ScoreFrequencyLookup {
-    freq_lookup: HashMap<i32, i32>,
+    freq_lookup: HashMap<u32, u32>,
 }
 
 impl ScoreFrequencyLookup {
@@ -13,7 +13,7 @@ impl ScoreFrequencyLookup {
     }
 
     /// Insert a score into the lookup table
-    pub fn insert(&mut self, score: i32, freq: i32) {
+    pub fn insert(&mut self, score: u32, freq: u32) {
         self.freq_lookup.insert(
             score, freq
         );
@@ -87,18 +87,10 @@ impl ScoreFrequencyLookup {
     }
 
     /// Get the frequency of a score
-    pub fn frequency(&self, score: i32) -> Result<i32, String> {
-        if score < 0 {
-            return Err(
-                format!(
-                    "Score must be greater than 0: {}",
-                    score
-                )
-            )
-        }
+    pub fn frequency(&self, score: u32) -> Result<u32, String> {
         match self.freq_lookup.get(&score) {
             Some(freq) => return Ok(*freq),
-            None       => return Ok(1_i32),
+            None       => return Ok(1),
         }
     }
 }
