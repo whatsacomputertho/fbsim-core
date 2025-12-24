@@ -18,6 +18,7 @@ use crate::game::play::result::kickoff::KickoffResultSimulator;
 use crate::game::play::result::punt::PuntResultSimulator;
 use crate::game::play::result::pass::PassResultSimulator;
 use crate::game::play::result::run::RunResultSimulator;
+use crate::game::stat::{PassingStats, RushingStats, ReceivingStats};
 use crate::team::FootballTeam;
 use crate::team::coach::FootballTeamCoach;
 use crate::team::defense::FootballTeamDefense;
@@ -297,7 +298,9 @@ pub enum DriveResult {
     Touchdown,
     Safety,
     Interception,
+    PickSix,
     Fumble,
+    ScoopAndScore,
     Downs,
     EndOfHalf
 }
@@ -320,7 +323,9 @@ impl std::fmt::Display for DriveResult {
             DriveResult::Touchdown => f.write_str("Touchdown"),
             DriveResult::Safety => f.write_str("Safety"),
             DriveResult::Interception => f.write_str("Interception"),
+            DriveResult::PickSix => f.write_str("Pick Six"),
             DriveResult::Fumble => f.write_str("Fumble"),
+            DriveResult::ScoopAndScore => f.write_str("Scoop and Score"),
             DriveResult::Downs => f.write_str("Turnover on Downs"),
             DriveResult::EndOfHalf => f.write_str("End of Half")
         }
@@ -333,7 +338,8 @@ impl std::fmt::Display for DriveResult {
 #[derive(Clone, Eq, PartialEq, Ord, PartialOrd, Debug, Serialize, Deserialize)]
 pub struct Drive {
     plays: Vec<Play>,
-    result: DriveResult
+    result: DriveResult,
+    complete: bool
 }
 
 impl Drive {
@@ -348,7 +354,8 @@ impl Drive {
     pub fn new() -> Drive {
         Drive {
             plays: Vec::new(),
-            result: DriveResult::None
+            result: DriveResult::None,
+            complete: false
         }
     }
 
@@ -388,119 +395,98 @@ impl Drive {
         &mut self.result
     }
 
-    /// Get the number of pass plays on the drive
+    /// Get whether the drive is complete
     ///
     /// ### Example
     /// ```
     /// use fbsim_core::game::play::Drive;
     /// 
-    /// let my_drive = Drive::new();
-    /// let pass_plays = my_drive.pass_plays();
-    /// assert!(pass_plays == 0);
+    /// let mut my_drive = Drive::new();
+    /// let complete = my_drive.complete();
+    /// assert!(!complete);
     /// ```
-    pub fn pass_plays(&self) -> u32 {
-        let mut count: u32 = 0;
-        for play in self.plays.iter() {
-            match play.result() {
-                PlayTypeResult::Pass(_) => count += 1,
-                _ => continue
-            }
-        }
-        count
+    pub fn complete(&self) -> bool {
+        self.complete
     }
 
-    /// Get the number of completed passes on the drive
-    ///
-    /// ### Example
-    /// ```
-    /// use fbsim_core::game::play::Drive;
-    /// 
-    /// let my_drive = Drive::new();
-    /// let completed_passes = my_drive.completed_passes();
-    /// assert!(completed_passes == 0);
-    /// ```
-    pub fn completed_passes(&self) -> u32 {
-        let mut count: u32 = 0;
-        for play in self.plays.iter() {
-            match play.result() {
-                PlayTypeResult::Pass(res) => {
-                    if res.complete() {
-                        count += 1;
-                    }
-                },
-                _ => continue
-            }
-        }
-        count
+    /// Mutably borrow the drive's complete property
+    fn complete_mut(&mut self) -> &mut bool {
+        &mut self.complete
     }
 
-    /// Get the passing yards on the drive
+    /// Get the rushing stats on the drive
     ///
     /// ### Example
     /// ```
     /// use fbsim_core::game::play::Drive;
-    /// 
-    /// let my_drive = Drive::new();
-    /// let passing_yards = my_drive.passing_yards();
-    /// assert!(passing_yards == 0);
-    /// ```
-    pub fn passing_yards(&self) -> i32 {
-        let mut yards: i32 = 0;
-        for play in self.plays.iter() {
-            match play.result() {
-                PlayTypeResult::Pass(res) => {
-                    if res.complete() {
-                        yards += res.net_yards();
-                    }
-                },
-                _ => continue
-            }
-        }
-        yards
-    }
-
-    /// Get the number of run plays on the drive
     ///
-    /// ### Example
+    /// let drive = Drive::new();
+    /// let rushing_stats = drive.rushing_stats(true);
+    /// assert!(rushing_stats.yards() == 0);
+    /// assert!(rushing_stats.rushes() == 0);
     /// ```
-    /// use fbsim_core::game::play::Drive;
-    /// 
-    /// let my_drive = Drive::new();
-    /// let run_plays = my_drive.run_plays();
-    /// assert!(run_plays == 0);
-    /// ```
-    pub fn run_plays(&self) -> u32 {
-        let mut count: u32 = 0;
-        for play in self.plays.iter() {
-            match play.result() {
-                PlayTypeResult::Run(_) => count += 1,
-                _ => continue
-            }
-        }
-        count
-    }
-
-    /// Get the rushing yards on the drive
-    ///
-    /// ### Example
-    /// ```
-    /// use fbsim_core::game::play::Drive;
-    /// 
-    /// let my_drive = Drive::new();
-    /// let rushing_yards = my_drive.rushing_yards();
-    /// assert!(rushing_yards == 0);
-    /// ```
-    pub fn rushing_yards(&self) -> i32 {
-        let mut yards: i32 = 0;
-        for play in self.plays.iter() {
+    pub fn rushing_stats(&self) -> RushingStats {
+        let mut stats = RushingStats::new();
+        for play in self.plays().iter() {
             match play.result() {
                 PlayTypeResult::Run(res) => {
-                    yards += res.net_yards();
+                    // Increment rushes & rushing yards
+                    stats.increment_rushes();
+                    stats.increment_yards(res.net_yards());
+
+                    // Increment rushing TDs & fumbles if either occur
+                    if res.touchdown() {
+                        stats.increment_touchdowns();
+                    }
+                    if res.fumble() {
+                        stats.increment_fumbles();
+                    }
                 },
                 _ => continue
             }
         }
-        yards
+        stats
+    }
+
+    /// Get the passing stats on the drive
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::game::play::Drive;
+    ///
+    /// let drive = Drive::new();
+    /// let passing_stats = drive.passing_stats(true);
+    /// assert!(passing_stats.yards() == 0);
+    /// assert!(passing_stats.completions() == 0);
+    /// ```
+    pub fn passing_stats(&self) -> PassingStats {
+        let mut stats = PassingStats::new();
+        for play in self.plays().iter() {
+            match play.result() {
+                PlayTypeResult::Pass(res) => {
+                    // Increment attempts
+                    stats.increment_attempts();
+                    
+                    // Increment completions and yards if complete
+                    if res.complete() {
+                        stats.increment_completions();
+                        stats.increment_yards(res.net_yards());
+                        
+                        // Increment TDs if completion and touchdown
+                        if res.touchdown() {
+                            stats.increment_touchdowns();
+                        }
+                    }
+
+                    // Increment interceptions if this was an INT
+                    if res.interception() {
+                        stats.increment_interceptions();
+                    }
+                },
+                _ => continue
+            }
+        }
+        stats
     }
 
     /// Get the total yards on the drive
@@ -542,15 +528,12 @@ impl std::fmt::Display for Drive {
     /// ```
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let mut drive_str = format!(
-            "{} plays, {} yards | Result: {} | Passing: {}/{}, {} yards | Rushing: {} rush, {} yards",
+            "{} plays, {} yards | Result: {} | Passing: {} | Rushing: {}",
             self.plays().len(),
             self.total_yards(),
             self.result(),
-            self.completed_passes(),
-            self.pass_plays(),
-            self.passing_yards(),
-            self.run_plays(),
-            self.rushing_yards()
+            self.passing_stats(),
+            self.rushing_stats()
         );
         for play in self.plays() {
             drive_str = format!("{}\n{}", drive_str, play);
@@ -583,7 +566,222 @@ impl DriveSimulator {
         }
     }
 
-    /// Simulate a drive
+    /// Simulate the next play of a drive
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::game::context::GameContext;
+    /// use fbsim_core::game::play::{Drive, DriveSimulator};
+    /// use fbsim_core::team::FootballTeam;
+    ///
+    /// // Initialize home & away teams
+    /// let my_home = FootballTeam::new();
+    /// let my_away = FootballTeam::new();
+    ///
+    /// // Initialize a game context
+    /// let mut my_context = GameContext::new();
+    /// let mut drive = Drive::new();
+    /// 
+    /// // Initialize a drive simulator & simulate a drive
+    /// let my_sim = DriveSimulator::new();
+    /// let mut rng = rand::thread_rng();
+    /// my_context = my_sim.sim_play(&my_home, &my_away, my_context, &mut drive, &mut rng).unwrap();
+    /// ```
+    pub fn sim_play(&self, home: &FootballTeam, away: &FootballTeam, context: GameContext, drive: &mut Drive, rng: &mut impl Rng) -> Result<GameContext, String> {
+        // Ensure the result is none, unless last play was a touchdown
+        let drive_res = *drive.result();
+        let result_was_none = drive_res == DriveResult::None;
+        let result_was_touchdown = drive_res == DriveResult::Touchdown ||
+            drive_res == DriveResult::ScoopAndScore ||
+            drive_res == DriveResult::PickSix;
+        if !(result_was_none || result_was_touchdown) {
+            return Err(
+                format!(
+                    "Cannot simulate play, result was not None ({}) and last play was not TD",
+                    drive.result()
+                )
+            )
+        }
+
+        // Simulate a play
+        let mut complete = false;
+        let mut result = DriveResult::None;
+        let new_context: GameContext;
+        let prev_context = context.clone();
+        let (play, next_context) = self.play.sim(home, away, prev_context, rng);
+        let play_result = play.result();
+        new_context = next_context;
+
+        // Determine if a drive result occurred
+        let result_was_none = *drive.result() == DriveResult::None;
+        if result_was_none {
+            let field_goal: bool = match play_result {
+                PlayTypeResult::FieldGoal(res) => res.made(),
+                _ => false
+            };
+            if field_goal {
+                result = DriveResult::FieldGoal;
+                complete = true;
+            }
+            let field_goal_missed: bool = match play_result {
+                PlayTypeResult::FieldGoal(res) => res.missed(),
+                _ => false
+            };
+            if field_goal_missed {
+                result = DriveResult::FieldGoalMissed;
+                complete = true;
+            }
+
+            // Punt
+            let punt: bool = match play_result {
+                PlayTypeResult::Punt(_) => true,
+                _ => false
+            };
+            if punt {
+                result = DriveResult::Punt;
+                complete = true;
+            }
+
+            // Touchdown
+            let touchdown = play_result.offense_score() == ScoreResult::Touchdown ||
+                play_result.defense_score() == ScoreResult::Touchdown;
+            if touchdown {
+                result = DriveResult::Touchdown;
+            }
+
+            // Safety
+            let safety: bool = play_result.defense_score() == ScoreResult::Safety;
+            if safety {
+                result = DriveResult::Safety;
+                complete = true;
+            }
+
+            // Interception
+            let turnover = play_result.turnover();
+            let interception = if turnover {
+                match play_result {
+                    PlayTypeResult::Pass(res) => res.interception(),
+                    _ => false
+                }
+            } else {
+                false
+            };
+            if interception {
+                if touchdown {
+                    result = DriveResult::PickSix;
+                } else {
+                    result = DriveResult::Interception;
+                    complete = true;
+                }
+            }
+
+            // Fumble
+            let fumble = if turnover {
+                match play_result {
+                    PlayTypeResult::Run(res) => res.fumble(),
+                    PlayTypeResult::Pass(res) => res.fumble(),
+                    PlayTypeResult::FieldGoal(res) => res.blocked(),
+                    PlayTypeResult::Punt(res) => res.fumble(),
+                    PlayTypeResult::Kickoff(res) => res.fumble(),
+                    PlayTypeResult::QbKneel(res) => res.fumble(),
+                    PlayTypeResult::QbSpike(res) => res.fumble(),
+                    _ => false
+                }
+            } else {
+                false
+            };
+            if fumble {
+                if touchdown {
+                    result = DriveResult::ScoopAndScore;
+                } else {
+                    result = DriveResult::Fumble;
+                    complete = true;
+                }
+            }
+
+            // Downs
+            let prev_context = play.context();
+            let downs = prev_context.down() == 4 && new_context.down() == 1 && !turnover &&
+                prev_context.home_possession() != new_context.home_possession() &&
+                play_result.net_yards() < prev_context.distance() as i32;
+            if downs {
+                result = DriveResult::Downs;
+                complete = true;
+            }
+
+            // End of half
+            let end_of_half = ((prev_context.quarter() == 2 || prev_context.quarter() >= 4) &&
+                (prev_context.quarter() != new_context.quarter())) || new_context.game_over();
+            if end_of_half {
+                result = DriveResult::EndOfHalf;
+                complete = true;
+            }
+        } else if result_was_touchdown {
+            result = drive_res;
+            complete = true;
+        }
+
+        // Add the play to the drive, update result, return the new drive & context
+        let plays = drive.plays_mut();
+        plays.push(play);
+        let drive_res = drive.result_mut();
+        *drive_res = result;
+        let drive_complete = drive.complete_mut();
+        *drive_complete = complete;
+        return Ok(new_context);
+    }
+
+    /// Simulate the remaining plays of a drive
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::game::context::GameContext;
+    /// use fbsim_core::game::play::{Drive, DriveSimulator};
+    /// use fbsim_core::team::FootballTeam;
+    ///
+    /// // Initialize home & away teams
+    /// let my_home = FootballTeam::new();
+    /// let my_away = FootballTeam::new();
+    ///
+    /// // Initialize a game context
+    /// let my_context = GameContext::new();
+    /// 
+    /// // Initialize a drive simulator & simulate a drive
+    /// let mut my_drive = Drive::new();
+    /// let my_sim = DriveSimulator::new();
+    /// let mut rng = rand::thread_rng();
+    /// let next_context = my_sim.sim_drive(&my_home, &my_away, my_context, &mut my_drive, &mut rng).unwrap();
+    /// ```
+    pub fn sim_drive(&self, home: &FootballTeam, away: &FootballTeam, context: GameContext, drive: &mut Drive, rng: &mut impl Rng) -> Result<GameContext, String> {
+        let mut extra_point_complete: bool = false;
+        let mut prev_context = context.clone();
+        while !drive.complete() {
+            // Simulate a play
+            let prev_result = *drive.result();
+            let next_context = match self.sim_play(home, away, prev_context, drive, rng) {
+                Ok(c) => c,
+                Err(e) => return Err(format!("Error simulating the next play of drive: {}", e))
+            };
+            let result = *drive.result();
+
+            // Check if the result was something other than a touchdown
+            // Or whether the previous result was a touchdown and this was the extra point
+            if (prev_result == DriveResult::Touchdown || prev_result == DriveResult::PickSix || prev_result == DriveResult::ScoopAndScore) ||
+                (prev_result == DriveResult::None && result != DriveResult::None && result != DriveResult::Touchdown) {
+                extra_point_complete = true;
+            }
+            
+            // Break the loop if necessary
+            if (result == DriveResult::None && prev_result == DriveResult::None) || !extra_point_complete {
+                prev_context = next_context
+            } else {
+                return Ok(next_context)
+            }
+        }
+        return Err(String::from("Drive was already complete"))
+    }
+
+    /// Simulate a new drive
     ///
     /// ### Example
     /// ```
@@ -606,125 +804,513 @@ impl DriveSimulator {
     pub fn sim(&self, home: &FootballTeam, away: &FootballTeam, context: GameContext, rng: &mut impl Rng) -> (Drive, GameContext) {
         let mut extra_point_complete: bool = false;
         let mut drive: Drive = Drive::new();
-        let mut result: DriveResult = DriveResult::None;
-        let plays = drive.plays_mut();
         let mut prev_context = context.clone();
-        let mut new_context: GameContext;
-        let mut touchdown: bool = false;
         loop {
             // Simulate a play
-            let (play, next_context) = self.play.sim(home, away, prev_context, rng);
-            let play_result = play.result();
-            new_context = next_context;
+            let prev_result = *drive.result();
+            let next_context = self.sim_play(home, away, prev_context, &mut drive, rng).unwrap();
+            let result = *drive.result();
 
-            // Determine if a drive result occurred
-            let result_was_none = result == DriveResult::None;
-            if result_was_none {
-                let field_goal: bool = match play_result {
-                    PlayTypeResult::FieldGoal(res) => res.made(),
-                    _ => false
-                };
-                if field_goal {
-                    result = DriveResult::FieldGoal;
-                }
-                let field_goal_missed: bool = match play_result {
-                    PlayTypeResult::FieldGoal(res) => res.missed(),
-                    _ => false
-                };
-                if field_goal_missed {
-                    result = DriveResult::FieldGoalMissed;
-                }
-
-                // Punt
-                let punt: bool = match play_result {
-                    PlayTypeResult::Punt(_) => true,
-                    _ => false
-                };
-                if punt {
-                    result = DriveResult::Punt;
-                }
-
-                // Touchdown
-                touchdown = play_result.offense_score() == ScoreResult::Touchdown ||
-                    play_result.defense_score() == ScoreResult::Touchdown;
-                if touchdown {
-                    result = DriveResult::Touchdown;
-                }
-
-                // Safety
-                let safety: bool = play_result.defense_score() == ScoreResult::Safety;
-                if safety {
-                    result = DriveResult::Safety;
-                }
-
-                // Interception
-                let turnover = play_result.turnover();
-                let interception = if turnover {
-                    match play_result {
-                        PlayTypeResult::Pass(res) => res.interception(),
-                        _ => false
-                    }
-                } else {
-                    false
-                };
-                if interception {
-                    result = DriveResult::Interception;
-                }
-
-                // Fumble
-                let fumble = if turnover {
-                    match play_result {
-                        PlayTypeResult::Run(res) => res.fumble(),
-                        PlayTypeResult::Pass(res) => res.fumble(),
-                        PlayTypeResult::FieldGoal(res) => res.blocked(),
-                        PlayTypeResult::Punt(res) => res.fumble(),
-                        PlayTypeResult::Kickoff(res) => res.fumble(),
-                        PlayTypeResult::QbKneel(res) => res.fumble(),
-                        PlayTypeResult::QbSpike(res) => res.fumble(),
-                        _ => false
-                    }
-                } else {
-                    false
-                };
-                if fumble {
-                    result = DriveResult::Fumble;
-                }
-
-                // Downs
-                let prev_context = play.context();
-                let downs = prev_context.down() == 4 && new_context.down() == 1 && !turnover &&
-                    prev_context.home_possession() != new_context.home_possession() &&
-                    play_result.net_yards() < prev_context.distance() as i32;
-                if downs {
-                    result = DriveResult::Downs;
-                }
-
-                // End of half
-                let end_of_half = ((prev_context.quarter() == 2 || prev_context.quarter() >= 4) &&
-                    (prev_context.quarter() != new_context.quarter())) || new_context.game_over();
-                if end_of_half {
-                    result = DriveResult::EndOfHalf;
-                }
-            } else if touchdown {
+            // Check if the result was something other than a touchdown
+            // Or whether the previous result was a touchdown and this was the extra point
+            if (prev_result == DriveResult::Touchdown || prev_result == DriveResult::PickSix || prev_result == DriveResult::ScoopAndScore) ||
+                (prev_result == DriveResult::None && result != DriveResult::None && result != DriveResult::Touchdown) {
                 extra_point_complete = true;
             }
-
-            // Check if the result changed to something other than a touchdown
-            if result_was_none && result != DriveResult::None && result != DriveResult::Touchdown && !touchdown {
-                extra_point_complete = true;
-            }
-
-            // Add the play to the drive and update the previous context
-            plays.push(play);
             
             // Break the loop if necessary
-            if result == DriveResult::None || !extra_point_complete {
-                prev_context = new_context
+            if (result == DriveResult::None && prev_result == DriveResult::None) || !extra_point_complete {
+                prev_context = next_context
             } else {
-                let drive_res = drive.result_mut();
-                *drive_res = result;
-                return (drive, new_context)
+                return (drive, next_context)
             }
         }
+    }
+}
+
+/// # `Game` struct
+///
+/// A `Game` represents the outcome of a game
+#[derive(Clone, Eq, PartialEq, Ord, PartialOrd, Debug, Serialize, Deserialize)]
+pub struct Game {
+    drives: Vec<Drive>,
+    complete: bool
+}
+
+impl Game {
+    /// Initialize a new game
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::game::play::Game;
+    ///
+    /// let game = Game::new();
+    /// ```
+    pub fn new() -> Game {
+        Game {
+            drives: Vec::new(),
+            complete: false
+        }
+    }
+
+    /// Get whether the game is complete
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::game::play::Game;
+    ///
+    /// let game = Game::new();
+    /// let complete = game.complete();
+    /// assert!(!complete);
+    /// ```
+    pub fn complete(&self) -> bool {
+        self.complete
+    }
+
+    /// Borrow the game's drives
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::game::play::Game;
+    ///
+    /// let game = Game::new();
+    /// let drives = game.drives();
+    /// ```
+    pub fn drives(&self) -> &Vec<Drive> {
+        &self.drives
+    }
+
+    /// Borrow the game's drives mutably
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::game::play::Game;
+    ///
+    /// let mut game = Game::new();
+    /// let drives = game.drives_mut();
+    /// ```
+    pub fn drives_mut(&mut self) -> &mut Vec<Drive> {
+        &mut self.drives
+    }
+
+    /// Get the rushing stats for either team
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::game::play::Game;
+    ///
+    /// let game = Game::new();
+    /// let rushing_stats = game.rushing_stats(true);
+    /// assert!(rushing_stats.yards() == 0);
+    /// assert!(rushing_stats.rushes() == 0);
+    /// ```
+    pub fn rushing_stats(&self, home: bool) -> RushingStats {
+        let mut stats = RushingStats::new();
+        for drive in self.drives.iter() {
+            for play in drive.plays().iter() {
+                if play.context().home_possession() == home {
+                    match play.result() {
+                        PlayTypeResult::Run(res) => {
+                            // Increment rushes & rushing yards
+                            stats.increment_rushes();
+                            stats.increment_yards(res.net_yards());
+
+                            // Increment rushing TDs & fumbles if either occur
+                            if res.touchdown() {
+                                stats.increment_touchdowns();
+                            }
+                            if res.fumble() {
+                                stats.increment_fumbles();
+                            }
+                        },
+                        _ => continue
+                    }
+                }
+            }
+        }
+        stats
+    }
+
+    /// Get the passing stats for either team
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::game::play::Game;
+    ///
+    /// let game = Game::new();
+    /// let passing_stats = game.passing_stats(true);
+    /// assert!(passing_stats.yards() == 0);
+    /// assert!(passing_stats.completions() == 0);
+    /// ```
+    pub fn passing_stats(&self, home: bool) -> PassingStats {
+        let mut stats = PassingStats::new();
+        for drive in self.drives.iter() {
+            for play in drive.plays().iter() {
+                if play.context().home_possession() == home {
+                    match play.result() {
+                        PlayTypeResult::Pass(res) => {
+                            // Increment attempts
+                            stats.increment_attempts();
+                            
+                            // Increment completions and yards if complete
+                            if res.complete() {
+                                stats.increment_completions();
+                                stats.increment_yards(res.net_yards());
+                                
+                                // Increment TDs if completion and touchdown
+                                if res.touchdown() {
+                                    stats.increment_touchdowns();
+                                }
+                            }
+
+                            // Increment interceptions if this was an INT
+                            if res.interception() {
+                                stats.increment_interceptions();
+                            }
+                        },
+                        _ => continue
+                    }
+                }
+            }
+        }
+        stats
+    }
+
+    /// Get the receiving stats for either team
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::game::play::Game;
+    ///
+    /// let game = Game::new();
+    /// let receiving_stats = game.receiving_stats(true);
+    /// assert!(receiving_stats.yards() == 0);
+    /// assert!(receiving_stats.completions() == 0);
+    /// ```
+    pub fn receiving_stats(&self, home: bool) -> ReceivingStats {
+        let mut stats = ReceivingStats::new();
+        for drive in self.drives.iter() {
+            for play in drive.plays().iter() {
+                if play.context().home_possession() == home {
+                    match play.result() {
+                        PlayTypeResult::Pass(res) => {
+                            // Increment targets
+                            stats.increment_targets(1);
+                            
+                            // Increment receptions and yards if complete
+                            if res.complete() {
+                                stats.increment_receptions(1);
+                                stats.increment_yards(res.net_yards());
+                                
+                                // Increment TDs or fumbles if either occur
+                                if res.touchdown() {
+                                    stats.increment_touchdowns(1);
+                                }
+                                if res.fumble() {
+                                    stats.increment_fumbles(1);
+                                }
+                            }
+                        },
+                        _ => continue
+                    }
+                }
+            }
+        }
+        stats
+    }
+}
+
+impl std::fmt::Display for Game {
+    /// Display a game as a human readable string
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::game::play::Game;
+    /// 
+    /// let my_game = Game::new();
+    /// println!("{}", my_game);
+    /// ```
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        // Format the game log
+        let mut game_log = String::from("");
+        for drive in self.drives() {
+            game_log = format!("{}\n\n{}", game_log, drive);
+        }
+        f.write_str(&game_log.trim())
+    }
+}
+
+/// # `GameSimulator` struct
+///
+/// A `GameSimulator` can simulate a game given a context, returning an
+/// updated context and a drive
+pub struct GameSimulator {
+    drive: DriveSimulator
+}
+
+impl GameSimulator {
+    /// Constructor for the `GameSimulator` struct
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::game::play::GameSimulator;
+    ///
+    /// let my_sim = GameSimulator::new();
+    /// ```
+    pub fn new() -> GameSimulator {
+        GameSimulator {
+            drive: DriveSimulator::new()
+        }
+    }
+
+    /// Simulate the next play of a game
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::game::context::GameContext;
+    /// use fbsim_core::game::play::{GameSimulator, Game};
+    /// use fbsim_core::team::FootballTeam;
+    ///
+    /// // Initialize home & away teams
+    /// let my_home = FootballTeam::new();
+    /// let my_away = FootballTeam::new();
+    ///
+    /// // Initialize a game context
+    /// let my_context = GameContext::new();
+    /// 
+    /// // Initialize a game simulator & simulate a drive
+    /// let mut my_game = Game::new();
+    /// let my_sim = GameSimulator::new();
+    /// let mut rng = rand::thread_rng();
+    /// let next_context = my_sim.sim_play(&my_home, &my_away, my_context, &mut my_game, &mut rng).unwrap();
+    /// ```
+    pub fn sim_play(&self, home: &FootballTeam, away: &FootballTeam, context: GameContext, game: &mut Game, rng: &mut impl Rng) -> Result<GameContext, String> {
+        // Error if the game is over
+        if context.game_over() {
+            return Err(String::from("Game is already over, cannot simulate next play"))
+        }
+
+        // Get the latest drive to sim or create new one if latest is complete
+        let drives = game.drives_mut();
+        let new_context = match drives.last_mut() {
+            Some(d) => {
+                if !d.complete() {
+                    match self.drive.sim_play(home, away, context, d, rng) {
+                        Ok(c) => c,
+                        Err(e) => return Err(format!("Error simulating next play of game: {}", e))
+                    }
+                } else {
+                    let mut new_drive = Drive::new();
+                    let new_context = match self.drive.sim_play(home, away, context, &mut new_drive, rng) {
+                        Ok(c) => c,
+                        Err(e) => return Err(format!("Error simulating the next play of game: {}", e))
+                    };
+                    drives.push(new_drive);
+                    new_context
+                }
+            },
+            None => {
+                let mut new_drive = Drive::new();
+                let new_context = match self.drive.sim_play(home, away, context, &mut new_drive, rng) {
+                    Ok(c) => c,
+                    Err(e) => return Err(format!("Error simulating the next play of game: {}", e))
+                };
+                drives.push(new_drive);
+                new_context
+            }
+        };
+
+        // Return the new context
+        Ok(new_context)
+    }
+
+    /// Simulate the next drive of a game
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::game::context::GameContext;
+    /// use fbsim_core::game::play::{GameSimulator, Game};
+    /// use fbsim_core::team::FootballTeam;
+    ///
+    /// // Initialize home & away teams
+    /// let my_home = FootballTeam::new();
+    /// let my_away = FootballTeam::new();
+    ///
+    /// // Initialize a game context
+    /// let my_context = GameContext::new();
+    /// 
+    /// // Initialize a game simulator & simulate a drive
+    /// let mut my_game = Game::new();
+    /// let my_sim = GameSimulator::new();
+    /// let mut rng = rand::thread_rng();
+    /// let next_context = my_sim.sim_drive(&my_home, &my_away, my_context, &mut my_game, &mut rng).unwrap();
+    /// ```
+    pub fn sim_drive(&self, home: &FootballTeam, away: &FootballTeam, context: GameContext, game: &mut Game, rng: &mut impl Rng) -> Result<GameContext, String> {
+        // Error if the game is over
+        if context.game_over() {
+            return Err(String::from("Game is already over, cannot simulate next drive"))
+        }
+
+        // Get the latest drive to sim or create new one if latest is complete
+        let drives = game.drives_mut();
+        let new_context = match drives.last_mut() {
+            Some(d) => {
+                if !d.complete() {
+                    match self.drive.sim_drive(home, away, context, d, rng) {
+                        Ok(c) => c,
+                        Err(e) => return Err(format!("Error simulating the next drive of game: {}", e))
+                    }
+                } else {
+                    let mut new_drive = Drive::new();
+                    let new_context = match self.drive.sim_drive(home, away, context, &mut new_drive, rng) {
+                        Ok(c) => c,
+                        Err(e) => return Err(format!("Error simulating the next drive of game: {}", e))
+                    };
+                    drives.push(new_drive);
+                    new_context
+                }
+            },
+            None => {
+                let mut new_drive = Drive::new();
+                let new_context = match self.drive.sim_drive(home, away, context, &mut new_drive, rng) {
+                    Ok(c) => c,
+                    Err(e) => return Err(format!("Error simulating the next drive of game: {}", e))
+                };
+                drives.push(new_drive);
+                new_context
+            }
+        };
+
+        // Return the new context
+        Ok(new_context)
+    }
+
+    /// Simulate the remainder of a game
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::game::context::GameContext;
+    /// use fbsim_core::game::play::{GameSimulator, Game};
+    /// use fbsim_core::team::FootballTeam;
+    ///
+    /// // Initialize home & away teams
+    /// let my_home = FootballTeam::new();
+    /// let my_away = FootballTeam::new();
+    ///
+    /// // Initialize a game context
+    /// let my_context = GameContext::new();
+    /// 
+    /// // Initialize a game simulator and game, simulate the game
+    /// let mut my_game = Game::new();
+    /// let my_sim = GameSimulator::new();
+    /// let mut rng = rand::thread_rng();
+    /// let next_context = my_sim.sim_game(&my_home, &my_away, my_context, &mut my_game, &mut rng).unwrap();
+    /// ```
+    pub fn sim_game(&self, home: &FootballTeam, away: &FootballTeam, context: GameContext, game: &mut Game, rng: &mut impl Rng) -> Result<GameContext, String> {
+        // Error if the game is over
+        if context.game_over() {
+            return Err(String::from("Game is already over, cannot simulate remainder of game"))
+        }
+
+        // Get the latest drive to sim or create new one if latest is complete
+        let drives = game.drives_mut();
+        let mut next_context = context.clone();
+        let mut game_over = next_context.game_over();
+        while !game_over {
+            let new_context = match drives.last_mut() {
+                Some(d) => {
+                    if !d.complete() {
+                        match self.drive.sim_drive(home, away, next_context, d, rng) {
+                            Ok(c) => c,
+                            Err(e) => return Err(format!("Error simulating the next drive of game: {}", e))
+                        }
+                    } else {
+                        let mut new_drive = Drive::new();
+                        let new_context = match self.drive.sim_drive(home, away, next_context, &mut new_drive, rng) {
+                            Ok(c) => c,
+                            Err(e) => return Err(format!("Error simulating the next drive of game: {}", e))
+                        };
+                        drives.push(new_drive);
+                        new_context
+                    }
+                },
+                None => {
+                    let mut new_drive = Drive::new();
+                    let new_context = match self.drive.sim_drive(home, away, next_context, &mut new_drive, rng) {
+                        Ok(c) => c,
+                        Err(e) => return Err(format!("Error simulating the next drive of game: {}", e))
+                    };
+                    drives.push(new_drive);
+                    new_context
+                }
+            };
+            game_over = new_context.game_over();
+            next_context = new_context;
+        }
+
+        // Return the final context
+        Ok(next_context)
+    }
+
+    /// Simulate a new game
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::game::context::GameContext;
+    /// use fbsim_core::game::play::GameSimulator;
+    /// use fbsim_core::team::FootballTeam;
+    ///
+    /// // Initialize home & away teams
+    /// let my_home = FootballTeam::new();
+    /// let my_away = FootballTeam::new();
+    ///
+    /// // Initialize a game context
+    /// let my_context = GameContext::new();
+    /// 
+    /// // Initialize a game simulator & simulate a game
+    /// let my_sim = GameSimulator::new();
+    /// let mut rng = rand::thread_rng();
+    /// let (game, final_context) = my_sim.sim(&my_home, &my_away, my_context, &mut rng).unwrap();
+    /// ```
+    pub fn sim(&self, home: &FootballTeam, away: &FootballTeam, context: GameContext, rng: &mut impl Rng) -> Result<(Game, GameContext), String> {
+        // Get the latest drive to sim or create new one if latest is complete
+        let mut game = Game::new();
+        let drives = game.drives_mut();
+        let mut next_context = context.clone();
+        let mut game_over = next_context.game_over();
+        while !game_over {
+            let new_context = match drives.last_mut() {
+                Some(d) => {
+                    if !d.complete() {
+                        match self.drive.sim_drive(home, away, next_context, d, rng) {
+                            Ok(c) => c,
+                            Err(e) => return Err(format!("Error simulating the next drive of game: {}", e))
+                        }
+                    } else {
+                        let mut new_drive = Drive::new();
+                        let new_context = match self.drive.sim_drive(home, away, next_context, &mut new_drive, rng) {
+                            Ok(c) => c,
+                            Err(e) => return Err(format!("Error simulating the next drive of game: {}", e))
+                        };
+                        drives.push(new_drive);
+                        new_context
+                    }
+                },
+                None => {
+                    let mut new_drive = Drive::new();
+                    let new_context = match self.drive.sim_drive(home, away, next_context, &mut new_drive, rng) {
+                        Ok(c) => c,
+                        Err(e) => return Err(format!("Error simulating the next drive of game: {}", e))
+                    };
+                    drives.push(new_drive);
+                    new_context
+                }
+            };
+            game_over = new_context.game_over();
+            next_context = new_context;
+        }
+
+        // Return the final context
+        Ok((game, next_context))
     }
 }
