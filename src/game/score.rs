@@ -1,3 +1,4 @@
+#![doc = include_str!("../../docs/game/score.md")]
 pub mod freq;
 
 use lazy_static::lazy_static;

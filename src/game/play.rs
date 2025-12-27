@@ -1,3 +1,4 @@
+#![doc = include_str!("../../docs/game/play.md")]
 pub mod call;
 pub mod context;
 pub mod result;

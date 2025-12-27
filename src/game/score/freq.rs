@@ -1,3 +1,4 @@
+#![doc = include_str!("../../../docs/game/score/freq.md")]
 use std::collections::HashMap;
 
 pub struct ScoreFrequencyLookup {
