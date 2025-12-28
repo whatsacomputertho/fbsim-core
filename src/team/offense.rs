@@ -1,3 +1,4 @@
+#![doc = include_str!("../../docs/team/offense.md")]
 #[cfg(feature = "rocket_okapi")]
 use rocket_okapi::okapi::schemars;
 #[cfg(feature = "rocket_okapi")]

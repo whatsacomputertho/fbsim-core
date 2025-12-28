@@ -1,3 +1,4 @@
+#![doc = include_str!("../../../docs/game/play/call.md")]
 use rand::Rng;
 #[cfg(feature = "rocket_okapi")]
 use rocket_okapi::okapi::schemars;

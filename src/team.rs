@@ -1,3 +1,4 @@
+#![doc = include_str!("../docs/team.md")]
 pub mod coach;
 pub mod defense;
 pub mod offense;
