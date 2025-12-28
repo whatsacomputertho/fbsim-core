@@ -31,26 +31,23 @@ pub struct LeagueRaw {
 impl LeagueRaw {
     pub fn validate(&self) -> Result<(), String> {
         // Ensure the IDs in the current season map to matching league team IDs
-        match &self.current_season {
-            Some(season) => {
-                for (id, team) in season.teams().iter() {
-                    if !self.teams.contains_key(&id) {
-                        return Err(
-                            format!(
-                                "Season {} contains team {} with nonexistent ID: {}",
-                                season.year(), team.name(), id
-                            )
+        if let Some(season) = &self.current_season {
+            for (id, team) in season.teams().iter() {
+                if !self.teams.contains_key(id) {
+                    return Err(
+                        format!(
+                            "Season {} contains team {} with nonexistent ID: {}",
+                            season.year(), team.name(), id
                         )
-                    }
+                    )
                 }
-            },
-            None => ()
+            }
         }
 
         // Ensure the IDs in all past seasons map to matching league team IDs
         for season in self.seasons.iter() {
             for (id, team) in season.teams().iter() {
-                if !self.teams.contains_key(&id) {
+                if !self.teams.contains_key(id) {
                     return Err(
                         format!(
                             "Season {} contains team {} with nonexistent ID: {}",
@@ -109,6 +106,24 @@ impl<'de> Deserialize<'de> for League {
     }
 }
 
+impl Default for League {
+    /// Default constructor for the League struct
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::league::League;
+    /// 
+    /// let my_league = League::default();
+    /// ```
+    fn default() -> Self {
+        League{
+            teams: BTreeMap::new(),
+            current_season: None,
+            seasons: Vec::new()
+        }
+    }
+}
+
 impl League {
     /// Constructor for the `League` struct in which the vec of league
     /// teams is empty
@@ -120,11 +135,7 @@ impl League {
     /// let my_league = League::new();
     /// ```
     pub fn new() -> League {
-        League{
-            teams: BTreeMap::new(),
-            current_season: None,
-            seasons: Vec::new()
-        }
+        League::default()
     }
 
     /// Adds a `LeagueTeam` to a `League`
@@ -136,7 +147,7 @@ impl League {
     /// let mut my_league = League::new();
     /// my_league.add_team();
     /// ```
-    pub fn add_team(&mut self) -> () {
+    pub fn add_team(&mut self) {
         // Get the last item in the BTreeMap, which is auto-sorted by ID
         if let Some((&max_id, _)) = self.teams.iter().next_back() {
             // The list is non-empty and has a max ID
@@ -216,12 +227,7 @@ impl League {
         }
 
         // Otherwise search for it in the past seasons
-        for season in self.seasons().iter() {
-            if *season.year() == year {
-                return Some(season);
-            }
-        }
-        return None
+        self.seasons().iter().find(|&season| *season.year() == year).map(|v| v as _)
     }
 
     /// Borrows the past seasons from a `League`
@@ -264,7 +270,7 @@ impl League {
         for season in seasons.iter() {
             let season_year = season.year();
             if *season_year > most_recent_year {
-                most_recent_year = season_year.clone();
+                most_recent_year = *season_year;
             }
         }
         most_recent_year
@@ -313,7 +319,7 @@ impl League {
         let mut new_season = LeagueSeason::new();
 
         // If the past seasons list is empty then stick with the default year
-        if self.seasons.len() == 0 {
+        if self.seasons.is_empty() {
             self.current_season = Some(new_season);
             return Ok(());
         }
@@ -323,7 +329,7 @@ impl League {
         let new_year = new_season.year_mut();
         *new_year = most_recent_year + 1;
         self.current_season = Some(new_season);
-        return Ok(());
+        Ok(())
     }
 
     /// Adds a `LeagueSeasonTeam` to a `LeagueSeason`, and corresponds the
@@ -356,7 +362,7 @@ impl League {
         // Teams can only be added to the current season since all past seasons
         // must have already completed in order to be archived in that list
         match &mut self.current_season {
-            Some(ref mut season) => return season.add_team(id, team),
+            Some(ref mut season) => season.add_team(id, team),
             None => Err("No current season to which to add a new team".to_string()),
         }
     }
@@ -629,29 +635,18 @@ impl League {
         let mut matchups: BTreeMap<usize, LeagueSeasonMatchups> = BTreeMap::new();
 
         // For the current season, get the team's season matchups
-        match self.current_season() {
-            Some(s) => {
-                let res = s.team_matchups(id);
-                match res {
-                    Ok(m) => {
-                        matchups.insert(*s.year(), m);
-                        ()
-                    },
-                    Err(_) => ()
-                };
-            },
-            None => ()
+        if let Some(s) = self.current_season() {
+            let res = s.team_matchups(id);
+            if let Ok(m) = res {
+                matchups.insert(*s.year(), m);
+            }
         }
 
         // For each previous season, get the team's season matchups
         for season in self.seasons().iter() {
             let res = season.team_matchups(id);
-            match res {
-                Ok(m) => {
-                    matchups.insert(*season.year(), m);
-                    ()
-                },
-                Err(_) => ()
+            if let Ok(m) = res {
+                matchups.insert(*season.year(), m);
             }
         }
 

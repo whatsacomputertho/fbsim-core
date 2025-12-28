@@ -15,6 +15,24 @@ pub struct LeagueTeamRecord {
     ties: usize
 }
 
+impl Default for LeagueTeamRecord {
+    /// Default constructor for the LeagueTeamRecord type
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::league::matchup::LeagueTeamRecord;
+    ///
+    /// let my_record = LeagueTeamRecord::default();
+    /// ```
+    fn default() -> Self {
+        LeagueTeamRecord{
+            wins: 0,
+            losses: 0,
+            ties: 0
+        }
+    }
+}
+
 impl LeagueTeamRecord {
     /// Constructor for the LeagueTeamRecord type
     ///

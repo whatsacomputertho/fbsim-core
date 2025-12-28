@@ -13,7 +13,7 @@ use crate::game::play::context::PlayContext;
 use crate::game::play::result::{PlayResult, PlayTypeResult, PlayResultSimulator, ScoreResult};
 
 // Up-tempo probability regression
-const P_UP_TEMPO_INTR: f64 = -4.5395125211354683_f64; // Adjusted -1
+const P_UP_TEMPO_INTR: f64 = -4.539512521135468_f64; // Adjusted -1
 const P_UP_TEMPO_COEF: f64 = 3.03267023_f64;
 
 // Normal between-play duration distribution parameters
@@ -174,7 +174,7 @@ impl std::fmt::Display for BetweenPlayResult {
             ""
         };
         let result_str = format!("{} {}", up_tempo_str, timeout_str);
-        f.write_str(&result_str.trim())
+        f.write_str(result_str.trim())
     }
 }
 
@@ -592,10 +592,7 @@ impl BetweenPlayResultSimulator {
         } else {
             SkewNormal::new(MEAN_BETWEEN_PLAY_DURATION, STD_BETWEEN_PLAY_DURATION, SKEW_BETWEEN_PLAY_DURATION).unwrap().sample(rng).round()
         };
-        match u32::try_from(duration as i32) {
-            Ok(n) => n,
-            Err(_) => 0
-        }
+        u32::try_from(duration as i32).unwrap_or_default()
     }
 }
 

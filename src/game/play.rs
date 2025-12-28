@@ -175,7 +175,7 @@ impl std::fmt::Display for Play {
             self.result,
             self.post_play
         );
-        f.write_str(&score_str.trim())
+        f.write_str(score_str.trim())
     }
 }
 
@@ -193,6 +193,28 @@ pub struct PlaySimulator {
     playcall: PlayCallSimulator
 }
 
+impl Default for PlaySimulator {
+    /// Default constructor for the `PlaySimulator` struct
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::game::play::PlaySimulator;
+    /// 
+    /// let my_sim = PlaySimulator::default();
+    /// ```
+    fn default() -> Self {
+        PlaySimulator{
+            betweenplay: BetweenPlayResultSimulator::new(),
+            fieldgoal: FieldGoalResultSimulator::new(),
+            kickoff: KickoffResultSimulator::new(),
+            pass: PassResultSimulator::new(),
+            punt: PuntResultSimulator::new(),
+            run: RunResultSimulator::new(),
+            playcall: PlayCallSimulator::new()
+        }
+    }
+}
+
 impl PlaySimulator {
     /// Initialize a new play simulator
     ///
@@ -204,15 +226,7 @@ impl PlaySimulator {
     /// let my_sim = PlaySimulator::new();
     /// ```
     pub fn new() -> PlaySimulator {
-        PlaySimulator{
-            betweenplay: BetweenPlayResultSimulator::new(),
-            fieldgoal: FieldGoalResultSimulator::new(),
-            kickoff: KickoffResultSimulator::new(),
-            pass: PassResultSimulator::new(),
-            punt: PuntResultSimulator::new(),
-            run: RunResultSimulator::new(),
-            playcall: PlayCallSimulator::new()
-        }
+        PlaySimulator::default()
     }
 
     /// Simulate a play
@@ -241,12 +255,10 @@ impl PlaySimulator {
             PlayCall::ExtraPoint
         } else if context.next_play_kickoff() {
             PlayCall::Kickoff
+        } else if context.home_possession() {
+            self.playcall.sim(home, &context, rng)
         } else {
-            if context.home_possession() {
-                self.playcall.sim(home, &context, rng)
-            } else {
-                self.playcall.sim(away, &context, rng)
-            }
+            self.playcall.sim(away, &context, rng)
         };
 
         // Simulate the play
@@ -343,6 +355,24 @@ pub struct Drive {
     complete: bool
 }
 
+impl Default for Drive {
+    /// Default constructor for the Drive struct
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::game::play::Drive;
+    /// 
+    /// let my_drive = Drive::default();
+    /// ```
+    fn default() -> Self {
+        Drive {
+            plays: Vec::new(),
+            result: DriveResult::None,
+            complete: false
+        }
+    }
+}
+
 impl Drive {
     /// Initialize a new drive
     ///
@@ -353,11 +383,7 @@ impl Drive {
     /// let my_drive = Drive::new();
     /// ```
     pub fn new() -> Drive {
-        Drive {
-            plays: Vec::new(),
-            result: DriveResult::None,
-            complete: false
-        }
+        Drive::default()
     }
 
     /// Borrow the plays in the drive
@@ -551,6 +577,22 @@ pub struct DriveSimulator {
     play: PlaySimulator
 }
 
+impl Default for DriveSimulator {
+    /// Default constructor for the DriveSimulator struct
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::game::play::DriveSimulator;
+    /// 
+    /// let my_sim = DriveSimulator::default();
+    /// ```
+    fn default() -> Self {
+        DriveSimulator{
+            play: PlaySimulator::new()
+        }
+    }
+}
+
 impl DriveSimulator {
     /// Initialize a new drive simulator
     ///
@@ -558,13 +600,10 @@ impl DriveSimulator {
     /// ```
     /// use fbsim_core::game::play::DriveSimulator;
     /// 
-    /// // Initialize a drive simulator
     /// let my_sim = DriveSimulator::new();
     /// ```
     pub fn new() -> DriveSimulator {
-        DriveSimulator{
-            play: PlaySimulator::new()
-        }
+        DriveSimulator::new()
     }
 
     /// Simulate the next play of a drive
@@ -607,11 +646,10 @@ impl DriveSimulator {
         // Simulate a play
         let mut complete = false;
         let mut result = DriveResult::None;
-        let new_context: GameContext;
         let prev_context = context.clone();
         let (play, next_context) = self.play.sim(home, away, prev_context, rng);
         let play_result = play.result();
-        new_context = next_context;
+        let new_context = next_context;
 
         // Determine if a drive result occurred
         let result_was_none = *drive.result() == DriveResult::None;
@@ -634,11 +672,7 @@ impl DriveSimulator {
             }
 
             // Punt
-            let punt: bool = match play_result {
-                PlayTypeResult::Punt(_) => true,
-                _ => false
-            };
-            if punt {
+            if matches!(play_result, PlayTypeResult::Punt(_)) {
                 result = DriveResult::Punt;
                 complete = true;
             }
@@ -729,7 +763,7 @@ impl DriveSimulator {
         *drive_res = result;
         let drive_complete = drive.complete_mut();
         *drive_complete = complete;
-        return Ok(new_context);
+        Ok(new_context)
     }
 
     /// Simulate the remaining plays of a drive
@@ -779,7 +813,7 @@ impl DriveSimulator {
                 return Ok(next_context)
             }
         }
-        return Err(String::from("Drive was already complete"))
+        Err(String::from("Drive was already complete"))
     }
 
     /// Simulate a new drive
@@ -838,6 +872,23 @@ pub struct Game {
     complete: bool
 }
 
+impl Default for Game {
+    /// Default constructor for the Game struct
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::game::play::Game;
+    ///
+    /// let game = Game::default();
+    /// ```
+    fn default() -> Self {
+        Game {
+            drives: Vec::new(),
+            complete: false
+        }
+    }
+}
+
 impl Game {
     /// Initialize a new game
     ///
@@ -848,10 +899,7 @@ impl Game {
     /// let game = Game::new();
     /// ```
     pub fn new() -> Game {
-        Game {
-            drives: Vec::new(),
-            complete: false
-        }
+        Game::default()
     }
 
     /// Get whether the game is complete
@@ -1037,7 +1085,7 @@ impl std::fmt::Display for Game {
         for drive in self.drives() {
             game_log = format!("{}\n\n{}", game_log, drive);
         }
-        f.write_str(&game_log.trim())
+        f.write_str(game_log.trim())
     }
 }
 
@@ -1047,6 +1095,22 @@ impl std::fmt::Display for Game {
 /// updated context and a drive
 pub struct GameSimulator {
     drive: DriveSimulator
+}
+
+impl Default for GameSimulator {
+    /// Default constructor for the `GameSimulator` struct
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::game::play::GameSimulator;
+    ///
+    /// let my_sim = GameSimulator::default();
+    /// ```
+    fn default() -> Self {
+        GameSimulator {
+            drive: DriveSimulator::new()
+        }
+    }
 }
 
 impl GameSimulator {
@@ -1059,9 +1123,7 @@ impl GameSimulator {
     /// let my_sim = GameSimulator::new();
     /// ```
     pub fn new() -> GameSimulator {
-        GameSimulator {
-            drive: DriveSimulator::new()
-        }
+        GameSimulator::default()
     }
 
     /// Simulate the next play of a game

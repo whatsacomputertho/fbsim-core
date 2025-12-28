@@ -630,10 +630,7 @@ impl RunResultSimulator {
     fn play_duration(&self, total_yards: u32, rng: &mut impl Rng) -> u32 {
         let mean_duration: f64 = MEAN_DURATION_INTR + (MEAN_DURATION_COEF_1 * total_yards as f64) + (MEAN_DURATION_COEF_2 * total_yards.pow(2) as f64);
         let duration_dist = Normal::new(mean_duration, 2_f64).unwrap();
-        match u32::try_from(duration_dist.sample(rng).round() as i32) {
-            Ok(n) => n,
-            Err(_) => 0
-        }
+        u32::try_from(duration_dist.sample(rng).round() as i32).unwrap_or_default()
     }
 
     /// Generaes the rushing yards on the play
@@ -721,7 +718,7 @@ impl PlayResultSimulator for RunResultSimulator {
         } else {
             0
         };
-        let total_yards: u32 = yards_gained.abs() as u32 + return_yards.abs() as u32;
+        let total_yards: u32 = yards_gained.unsigned_abs() + return_yards.unsigned_abs();
         let net_yards: i32 = safety_yards.max(td_yards.min(yards_gained - return_yards));
         touchdown = if fumble {
             net_yards == safety_yards

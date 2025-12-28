@@ -16,6 +16,20 @@ use rocket_okapi::okapi::schemars::JsonSchema;
 #[derive(Clone, Eq, PartialEq, Ord, PartialOrd, Debug, Serialize, Deserialize)]
 pub struct LeagueTeam {}
 
+impl Default for LeagueTeam {
+    /// Default constructor for the `LeagueTeam` struct
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::league::team::LeagueTeam;
+    ///
+    /// let my_league_team = LeagueTeam::default();
+    /// ```
+    fn default() -> Self {
+        LeagueTeam{}
+    }
+}
+
 impl LeagueTeam {
     /// Constructor for the `LeagueTeam` struct
     ///
@@ -26,6 +40,6 @@ impl LeagueTeam {
     /// let my_league_team = LeagueTeam::new();
     /// ```
     pub fn new() -> LeagueTeam {
-        LeagueTeam{}
+        LeagueTeam::default()
     }
 }

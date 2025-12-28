@@ -5,12 +5,19 @@ pub struct ScoreFrequencyLookup {
     freq_lookup: HashMap<u32, u32>,
 }
 
-impl ScoreFrequencyLookup {
-    /// Constructor for the ScoreFrequencyLookup struct
-    pub fn new() -> ScoreFrequencyLookup {
+impl Default for ScoreFrequencyLookup {
+    /// Default constructor for the ScoreFrequencyLookup struct
+    fn default() -> Self {
         ScoreFrequencyLookup{
             freq_lookup: HashMap::new()
         }
+    }
+}
+
+impl ScoreFrequencyLookup {
+    /// Constructor for the ScoreFrequencyLookup struct
+    pub fn new() -> ScoreFrequencyLookup {
+        ScoreFrequencyLookup::default()
     }
 
     /// Insert a score into the lookup table
@@ -90,8 +97,8 @@ impl ScoreFrequencyLookup {
     /// Get the frequency of a score
     pub fn frequency(&self, score: u32) -> Result<u32, String> {
         match self.freq_lookup.get(&score) {
-            Some(freq) => return Ok(*freq),
-            None       => return Ok(1),
+            Some(freq) => Ok(*freq),
+            None       => Ok(1),
         }
     }
 }

@@ -381,9 +381,9 @@ impl FinalScoreSimulator {
     fn get_mean_score(&self, norm_diff: f64, home: bool) -> f64 {
         // Get the mean score parameter
         if home {
-            return H_MEAN_INTERCEPT + (H_MEAN_COEF * norm_diff)
+            H_MEAN_INTERCEPT + (H_MEAN_COEF * norm_diff)
         } else {
-            return A_MEAN_INTERCEPT + (A_MEAN_COEF * norm_diff)
+            A_MEAN_INTERCEPT + (A_MEAN_COEF * norm_diff)
         }
     }
 
@@ -406,13 +406,13 @@ impl FinalScoreSimulator {
 
     /// Gets the probability of a tie for the given skill differential
     fn get_p_tie(&self, norm_diff: f64) -> f64 {
-        return P_TIE_INTERCEPT + (P_TIE_COEF * norm_diff)
+        P_TIE_INTERCEPT + (P_TIE_COEF * norm_diff)
     }
 
     /// Gets the probability of a re-sim in the event of a tie in order to
     /// achieve the desired tie probability in the end
     fn get_p_resim(&self, p_tie: f64) -> f64 {
-        return (p_tie - P_TIE_BASE) / (P_TIE_BASE.powi(2) - P_TIE_BASE)
+        (p_tie - P_TIE_BASE) / (P_TIE_BASE.powi(2) - P_TIE_BASE)
     }
 
     /// Generates the away score only
@@ -423,11 +423,7 @@ impl FinalScoreSimulator {
         let away_score_float = away_dist.sample(rng);
 
         // Round to nearest integer and return
-        let away_score = match u32::try_from(away_score_float.round() as i32) {
-            Ok(n) => n,
-            Err(_) => 0
-        };
-        return away_score
+        u32::try_from(away_score_float.round() as i32).unwrap_or_default()
     }
 
     /// Generates the home score only
@@ -438,11 +434,7 @@ impl FinalScoreSimulator {
         let home_score_float = home_dist.sample(rng);
 
         // Round to nearest integer, ensure positive and return
-        let home_score = match u32::try_from(home_score_float.round() as i32) {
-            Ok(n) => n,
-            Err(_) => 0
-        };
-        return home_score
+        u32::try_from(home_score_float.round() as i32).unwrap_or_default()
     }
 
     /// Generates the home and away scores, returns as a 2-tuple
@@ -450,7 +442,7 @@ impl FinalScoreSimulator {
     /// value is the away score
     fn gen_score(&self, ha_norm_diff: f64, ah_norm_diff: f64, rng: &mut impl Rng) -> Result<(u32, u32), String> {
          // Ensure normalized differentials are in range [0, 1]
-         if !(ha_norm_diff >= 0.0_f64 && ha_norm_diff <= 1.0_f64) {
+         if !(0.0_f64..=1.0_f64).contains(&ha_norm_diff) {
             return Err(
                 format!(
                     "Home offense / away defense normalized skill differential not in range [0, 1]: {}",
@@ -458,7 +450,7 @@ impl FinalScoreSimulator {
                 )
             )
         }
-        if !(ah_norm_diff >= 0.0_f64 && ah_norm_diff <= 1.0_f64) {
+        if !(0.0_f64..=1.0_f64).contains(&ah_norm_diff) {
            return Err(
                format!(
                    "Away offense / home defense normalized skill differential not in range [0, 1]: {}",
@@ -491,10 +483,7 @@ impl FinalScoreSimulator {
         let score_adjustment_r: f64 = dist.sample(rng);
         let score_adjustment = (score_adjustment_r as i32) - 1_i32;
         let adj_score = score as i32 + score_adjustment;
-        match u32::try_from(adj_score) {
-            Ok(n) => n,
-            Err(_) => 0
-        }
+        u32::try_from(adj_score).unwrap_or_default()
     }
 
     /// Simulates a game by generating a final score result
@@ -517,10 +506,7 @@ impl FinalScoreSimulator {
         let ah_norm_diff: f64 = (away_team.offense_overall() as i32 - home_team.defense_overall() as i32 + 100_i32) as f64 / 200_f64;
 
         // Generate the final score, return error if error is encountered
-        let (home_score, away_score): (u32, u32) = match self.gen_score(ha_norm_diff, ah_norm_diff, rng) {
-            Ok(v) => v,
-            Err(e) => return Err(e)
-        };
+        let (home_score, away_score): (u32, u32) = self.gen_score(ha_norm_diff, ah_norm_diff, rng)?;
 
         // Filter the final score by score frequency
         let adj_home_score = self.filter_score(home_score, rng);
@@ -559,10 +545,7 @@ impl FinalScoreSimulator {
         // Re-sim and re-filter if needed
         if res {
             // Generate the final score, return error if error is encountered
-            let (home_score_2, away_score_2): (u32, u32) = match self.gen_score(ha_norm_diff, ah_norm_diff, rng) {
-                Ok(v) => v,
-                Err(e) => return Err(e)
-            };
+            let (home_score_2, away_score_2): (u32, u32) = self.gen_score(ha_norm_diff, ah_norm_diff, rng)?;
 
             // Filter the final score by score frequency
             let adj_home_score_2 = self.filter_score(home_score_2, rng);
@@ -579,6 +562,6 @@ impl FinalScoreSimulator {
             return Ok(final_score_2)
         }
 
-        return Ok(final_score)
+        Ok(final_score)
     }
 }

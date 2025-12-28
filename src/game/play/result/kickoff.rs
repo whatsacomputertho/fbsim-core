@@ -126,9 +126,8 @@ impl KickoffResultRaw {
         }
 
         // Ensure mutual exclusivity of touchback, oob, and fair catch
-        if (self.touchback && self.out_of_bounds) || 
-            (self.out_of_bounds && self.fair_catch) ||
-            (self.fair_catch && self.out_of_bounds) {
+        if self.out_of_bounds && (self.fair_catch || self.touchback) ||
+            (self.fair_catch && self.touchback) {
             return Err(
                 format!(
                     "Must have at most one true across touchback ({}), out of bounds ({}), and fair catch ({})",
@@ -278,7 +277,7 @@ impl std::fmt::Display for KickoffResult {
             &fumble_str,
             &touchdown_str
         );
-        f.write_str(&kickoff_str.trim())
+        f.write_str(kickoff_str.trim())
     }
 }
 
@@ -807,10 +806,7 @@ impl KickoffResultSimulator {
     fn play_duration(&self, total_yards: u32, rng: &mut impl Rng) -> u32 {
         let mean_duration: f64 = KICKOFF_RETURN_PLAY_DURATION_INTR + (KICKOFF_RETURN_PLAY_DURATION_COEF * total_yards as f64);
         let duration_dist = Normal::new(mean_duration, 2_f64).unwrap();
-        match u32::try_from(duration_dist.sample(rng).sqrt().round() as i32) {
-            Ok(n) => n,
-            Err(_) => 0
-        }
+        u32::try_from(duration_dist.sample(rng).sqrt().round() as i32).unwrap_or_default()
     }
 }
 
@@ -896,7 +892,7 @@ impl PlayResultSimulator for KickoffResultSimulator {
         };
 
         // Generate the duration of the kickoff in seconds
-        let total_yards: u32 = kickoff_distance.abs() as u32 + return_yards.abs() as u32 + fumble_return_yards.abs() as u32;
+        let total_yards: u32 = kickoff_distance.unsigned_abs() + return_yards.unsigned_abs() + fumble_return_yards.unsigned_abs();
         let play_duration: u32 = if !(touchback || out_of_bounds || fair_catch) {
             self.play_duration(total_yards, rng)
         } else {

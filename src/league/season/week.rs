@@ -16,6 +16,22 @@ pub struct LeagueSeasonWeek {
     matchups: Vec<LeagueSeasonMatchup>
 }
 
+impl Default for LeagueSeasonWeek {
+    /// Default constructor for the LeagueSeasonWeek struct
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::league::season::week::LeagueSeasonWeek;
+    ///
+    /// let my_week = LeagueSeasonWeek::default();
+    /// ```
+    fn default() -> Self {
+        LeagueSeasonWeek {
+            matchups: Vec::new()
+        }
+    }
+}
+
 impl LeagueSeasonWeek {
     /// Constructor for the LeagueSeasonWeek struct, with the week containing
     /// no matchups
@@ -27,9 +43,7 @@ impl LeagueSeasonWeek {
     /// let my_week = LeagueSeasonWeek::new();
     /// ```
     pub fn new() -> LeagueSeasonWeek {
-        LeagueSeasonWeek {
-            matchups: Vec::new()
-        }
+        LeagueSeasonWeek::default()
     }
 
     /// Borrow the matchups for the week
@@ -69,7 +83,7 @@ impl LeagueSeasonWeek {
     /// ```
     pub fn started(&self) -> bool {
         // If no matchups, then the week hasn't started
-        if self.matchups.len() == 0 {
+        if self.matchups.is_empty() {
             return false;
         }
 
@@ -93,7 +107,7 @@ impl LeagueSeasonWeek {
     /// ```
     pub fn complete(&self) -> bool {
         // If no matchups, then the week hasn't started
-        if self.matchups.len() == 0 {
+        if self.matchups.is_empty() {
             return false;
         }
 
@@ -113,6 +127,6 @@ impl LeagueSeasonWeek {
                 return Some(matchup.clone());
             }
         }
-        return None
+        None
     }
 }

@@ -289,7 +289,6 @@ name = "fbsim-core"
 version = "1.0.0-beta.1"
 dependencies = [
  "chrono",
- "iana-time-zone",
  "lazy_static",
  "rand",
  "rand_distr",

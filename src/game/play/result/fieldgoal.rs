@@ -235,7 +235,7 @@ impl std::fmt::Display for FieldGoalResult {
             result_str,
             &return_str
         );
-        f.write_str(&fg_str.trim())
+        f.write_str(fg_str.trim())
     }
 }
 
@@ -675,10 +675,7 @@ impl FieldGoalResultSimulator {
         } else {
             SkewNormal::new(FIELD_GOAL_NOT_BLOCKED_DURATION_MEAN, FIELD_GOAL_NOT_BLOCKED_DURATION_STD, FIELD_GOAL_NOT_BLOCKED_DURATION_SKEW).unwrap()
         };
-        match u32::try_from(duration_dist.sample(rng).round() as i32) {
-            Ok(n) => n,
-            Err(_) => 0
-        }
+        u32::try_from(duration_dist.sample(rng).round() as i32).unwrap_or_default()
     }
 }
 
