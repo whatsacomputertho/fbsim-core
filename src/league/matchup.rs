@@ -1,3 +1,4 @@
+#![doc = include_str!("../../docs/league/matchup.md")]
 use std::collections::BTreeMap;
 use std::fmt;
 

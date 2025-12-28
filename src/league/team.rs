@@ -1,3 +1,4 @@
+#![doc = include_str!("../../docs/league/team.md")]
 use serde::{Serialize, Deserialize};
 
 #[cfg(feature = "rocket_okapi")]

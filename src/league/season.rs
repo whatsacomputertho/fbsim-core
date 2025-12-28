@@ -1,3 +1,4 @@
+#![doc = include_str!("../../docs/league/season.md")]
 pub mod matchup;
 pub mod team;
 pub mod week;
