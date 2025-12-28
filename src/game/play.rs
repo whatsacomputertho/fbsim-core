@@ -603,7 +603,7 @@ impl DriveSimulator {
     /// let my_sim = DriveSimulator::new();
     /// ```
     pub fn new() -> DriveSimulator {
-        DriveSimulator::new()
+        DriveSimulator::default()
     }
 
     /// Simulate the next play of a drive

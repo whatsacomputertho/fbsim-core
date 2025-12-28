@@ -290,7 +290,7 @@ impl LeagueSeasonScheduleOptions {
     /// let my_schedule_options = LeagueSeasonScheduleOptions::new();
     /// ```
     pub fn new() -> LeagueSeasonScheduleOptions {
-        LeagueSeasonScheduleOptions::new()
+        LeagueSeasonScheduleOptions::default()
     }
 }
 

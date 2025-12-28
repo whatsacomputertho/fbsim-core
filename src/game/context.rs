@@ -83,7 +83,7 @@ impl GameContextRaw {
         }
 
         // Ensure half seconds is not greater than 900 if quarter is even or greater than 4
-        if self.half_seconds > 900 && (self.quarter % 2 == 0 || self.quarter > 4) {
+        if self.half_seconds > 900 && (self.quarter.is_multiple_of(2) || self.quarter > 4) {
             return Err(
                 format!(
                     "Half seconds is not in range [0, 900] for quarter {}: {}",
@@ -785,7 +785,7 @@ impl GameContext {
         } else {
             self.yard_line as i32
         };
-        safety_yards * -1_i32
+        -safety_yards
     }
 
     /// Get the updated home score
@@ -855,10 +855,7 @@ impl GameContext {
     /// assert!(half_seconds == 1790);
     /// ```
     pub fn next_half_seconds(&self, play_duration: u32, end_of_half: bool, post_play_end_of_half: bool, offense_score: ScoreResult, defense_score: ScoreResult) -> u32 {
-        let next_clock = match u32::try_from(self.half_seconds as i32 - play_duration as i32) {
-            Ok(n) => n,
-            Err(_) => 0
-        };
+        let next_clock = u32::try_from(self.half_seconds as i32 - play_duration as i32).unwrap_or_default();
 
         // If end of quarter, max out at 900 seconds
         if (self.quarter == 1 || self.quarter == 3) && self.half_seconds > 900 && next_clock <= 900 {
@@ -900,10 +897,7 @@ impl GameContext {
     /// assert!(!end_of_half);
     /// ```
     pub fn next_end_of_half(&self, play_duration: u32, offense_score: ScoreResult, defense_score: ScoreResult) -> bool {
-        let next_clock = match u32::try_from(self.half_seconds as i32 - play_duration as i32) {
-            Ok(n) => n,
-            Err(_) => 0
-        };
+        let next_clock = u32::try_from(self.half_seconds as i32 - play_duration as i32).unwrap_or_default();
 
         // Check if end of half
         if next_clock == 0 && (self.quarter == 2 || self.quarter >=4) &&
@@ -925,19 +919,8 @@ impl GameContext {
     /// assert!(!game_over);
     /// ```
     pub fn next_game_over(&self, play_duration: u32, offense_score: ScoreResult, defense_score: ScoreResult) -> bool {
-        let next_clock = match u32::try_from(self.half_seconds as i32 - play_duration as i32) {
-            Ok(n) => n,
-            Err(_) => 0
-        };
-
-        // Check if end of game
-        if self.quarter >= 4 && next_clock == 0 {
-            if !self.next_score_tied(offense_score, defense_score) {
-                // If end of game, max out at 0 seconds
-                return true;
-            }
-        }
-        false
+        let next_clock = u32::try_from(self.half_seconds as i32 - play_duration as i32).unwrap_or_default();
+        self.quarter >= 4 && next_clock == 0 && !self.next_score_tied(offense_score, defense_score)
     }
 
     /// Get the updated quarter
@@ -952,10 +935,7 @@ impl GameContext {
     /// assert!(quarter == 1);
     /// ```
     pub fn next_quarter(&self, play_duration: u32, offense_score: ScoreResult, defense_score: ScoreResult) -> u32 {
-        let next_clock = match u32::try_from(self.half_seconds as i32 - play_duration as i32) {
-            Ok(n) => n,
-            Err(_) => 0
-        };
+        let next_clock = u32::try_from(self.half_seconds as i32 - play_duration as i32).unwrap_or_default();
 
         // Don't increment quarter if extra point still needs to be kicked
         if offense_score == ScoreResult::Touchdown || defense_score == ScoreResult::Touchdown {
@@ -1025,18 +1005,14 @@ impl GameContext {
         }
 
         // If a touchdown, safety, or field goal occurred then next play is a down-0 play
-        let off_zero_down = match offense_score {
-            ScoreResult::Touchdown => true,
-            ScoreResult::FieldGoal => true,
-            ScoreResult::Safety => true,
-            _ => false
-        };
-        let def_zero_down = match defense_score {
-            ScoreResult::Touchdown => true,
-            ScoreResult::FieldGoal => true,
-            ScoreResult::Safety => true,
-            _ => false
-        };
+        let off_zero_down = matches!(
+            offense_score,
+            ScoreResult::Touchdown | ScoreResult::FieldGoal | ScoreResult::Safety
+        );
+        let def_zero_down = matches!(
+            defense_score,
+            ScoreResult::Touchdown | ScoreResult::FieldGoal | ScoreResult::Safety
+        );
         if off_zero_down || def_zero_down {
             return 0;
         }
@@ -1077,7 +1053,7 @@ impl GameContext {
         }
 
         // Change possession on successful kickoffs, defensive TDs, turnovers
-        if (self.next_play_kickoff && !turnover) || defense_score == ScoreResult::Touchdown || turnover {
+        if self.next_play_kickoff || defense_score == ScoreResult::Touchdown || turnover {
             return !self.home_possession;
         }
 
@@ -1191,20 +1167,14 @@ impl GameContext {
 
         // Increment the yard line
         if self.home_possession ^ self.home_positive_direction {
-            let next_yl = match u32::try_from(0.max(100.min(self.yard_line as i32 - net_yards))) {
-                Ok(n) => n,
-                Err(_) => 0
-            };
+            let next_yl = u32::try_from(0.max(100.min(self.yard_line as i32 - net_yards))).unwrap_or_default();
             if end_of_quarter {
                 100 - next_yl
             } else {
                 next_yl
             }
         } else {
-            let next_yl = match u32::try_from(0.max(100.min(self.yard_line as i32 + net_yards))) {
-                Ok(n) => n,
-                Err(_) => 0
-            };
+            let next_yl = u32::try_from(0.max(100.min(self.yard_line as i32 + net_yards))).unwrap_or_default();
             if end_of_quarter {
                 100 - next_yl
             } else {
@@ -1265,10 +1235,7 @@ impl GameContext {
             return 10.min(next_yl);
         }
         let next_dist = self.distance as i32 - net_yards;
-        match u32::try_from(next_dist) {
-            Ok(n) => n,
-            Err(_) => 0
-        }
+        u32::try_from(next_dist).unwrap_or_default()
     }
 
     /// Get the updated home timetous
@@ -1313,10 +1280,8 @@ impl GameContext {
             return 3; // Reset at end of half
         }
         let away_tos = self.away_timeouts;
-        if self.home_possession {
-            if defense_timeout {
-                return 0.max(away_tos as i32 - 1_i32) as u32;
-            }
+        if self.home_possession && defense_timeout {
+            return 0.max(away_tos as i32 - 1_i32) as u32;
         }
         if offense_timeout {
             return 0.max(away_tos as i32 - 1_i32) as u32;

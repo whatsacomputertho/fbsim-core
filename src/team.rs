@@ -230,8 +230,8 @@ impl FootballTeam {
                 name: String::from(name),
                 short_name: String::from(short_name),
                 coach: FootballTeamCoach::new(),
-                offense: offense,
-                defense: defense
+                offense,
+                defense
             }
         )
     }
@@ -255,9 +255,9 @@ impl FootballTeam {
         FootballTeam{
             name: String::from(name),
             short_name: String::from(short_name),
-            coach: coach,
-            offense: offense,
-            defense: defense
+            coach,
+            offense,
+            defense
         }
     }
 
