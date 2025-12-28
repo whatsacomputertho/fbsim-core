@@ -25,7 +25,7 @@ let context = GameContext::new();
 // Instantiate the rng, simulator, and simulate the game
 let mut rng = rand::thread_rng();
 let sim = GameSimulator::new();
-let (game, next_context) = sim.sim(&home_team, &away_team, context, &mut rng);
+let (game, next_context) = sim.sim(&home_team, &away_team, context, &mut rng).unwrap();
 
 // Print the game log
 println!("{}", game);

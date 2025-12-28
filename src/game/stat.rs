@@ -223,7 +223,7 @@ impl PassingStats {
     /// ```
     /// use fbsim_core::game::stat::PassingStats;
     ///
-    /// let my_stats = PassingStats::new();
+    /// let mut my_stats = PassingStats::new();
     /// my_stats.increment_attempts();
     /// assert!(my_stats.attempts() == 1);
     /// ```
@@ -251,7 +251,7 @@ impl PassingStats {
     /// ```
     /// use fbsim_core::game::stat::PassingStats;
     ///
-    /// let my_stats = PassingStats::new();
+    /// let mut my_stats = PassingStats::new();
     /// my_stats.increment_completions();
     /// assert!(my_stats.completions() == 1);
     /// ```
@@ -279,7 +279,7 @@ impl PassingStats {
     /// ```
     /// use fbsim_core::game::stat::PassingStats;
     ///
-    /// let my_stats = PassingStats::new();
+    /// let mut my_stats = PassingStats::new();
     /// my_stats.increment_touchdowns();
     /// assert!(my_stats.touchdowns() == 1);
     /// ```
@@ -307,7 +307,7 @@ impl PassingStats {
     /// ```
     /// use fbsim_core::game::stat::PassingStats;
     ///
-    /// let my_stats = PassingStats::new();
+    /// let mut my_stats = PassingStats::new();
     /// my_stats.increment_interceptions();
     /// assert!(my_stats.interceptions() == 1);
     /// ```
@@ -335,7 +335,7 @@ impl PassingStats {
     /// ```
     /// use fbsim_core::game::stat::PassingStats;
     ///
-    /// let my_stats = PassingStats::new();
+    /// let mut my_stats = PassingStats::new();
     /// my_stats.increment_yards(25);
     /// assert!(my_stats.yards() == 25);
     /// ```
@@ -425,7 +425,7 @@ impl ReceivingStats {
     /// ```
     /// use fbsim_core::game::stat::ReceivingStats;
     ///
-    /// let my_stats = ReceivingStats::new();
+    /// let mut my_stats = ReceivingStats::new();
     /// my_stats.increment_targets(1);
     /// assert!(my_stats.targets() == 1);
     /// ```
@@ -453,7 +453,7 @@ impl ReceivingStats {
     /// ```
     /// use fbsim_core::game::stat::ReceivingStats;
     ///
-    /// let my_stats = ReceivingStats::new();
+    /// let mut my_stats = ReceivingStats::new();
     /// my_stats.increment_receptions(1);
     /// assert!(my_stats.receptions() == 1);
     /// ```
@@ -481,7 +481,7 @@ impl ReceivingStats {
     /// ```
     /// use fbsim_core::game::stat::ReceivingStats;
     ///
-    /// let my_stats = ReceivingStats::new();
+    /// let mut my_stats = ReceivingStats::new();
     /// my_stats.increment_touchdowns(1);
     /// assert!(my_stats.touchdowns() == 1);
     /// ```
@@ -509,7 +509,7 @@ impl ReceivingStats {
     /// ```
     /// use fbsim_core::game::stat::ReceivingStats;
     ///
-    /// let my_stats = ReceivingStats::new();
+    /// let mut my_stats = ReceivingStats::new();
     /// my_stats.increment_fumbles(1);
     /// assert!(my_stats.fumbles() == 1);
     /// ```
@@ -537,7 +537,7 @@ impl ReceivingStats {
     /// ```
     /// use fbsim_core::game::stat::ReceivingStats;
     ///
-    /// let my_stats = ReceivingStats::new();
+    /// let mut my_stats = ReceivingStats::new();
     /// my_stats.increment_yards(11);
     /// assert!(my_stats.yards() == 11);
     /// ```

@@ -422,7 +422,7 @@ impl Drive {
     /// use fbsim_core::game::play::Drive;
     ///
     /// let drive = Drive::new();
-    /// let rushing_stats = drive.rushing_stats(true);
+    /// let rushing_stats = drive.rushing_stats();
     /// assert!(rushing_stats.yards() == 0);
     /// assert!(rushing_stats.rushes() == 0);
     /// ```
@@ -456,7 +456,7 @@ impl Drive {
     /// use fbsim_core::game::play::Drive;
     ///
     /// let drive = Drive::new();
-    /// let passing_stats = drive.passing_stats(true);
+    /// let passing_stats = drive.passing_stats();
     /// assert!(passing_stats.yards() == 0);
     /// assert!(passing_stats.completions() == 0);
     /// ```
@@ -986,7 +986,7 @@ impl Game {
     /// let game = Game::new();
     /// let receiving_stats = game.receiving_stats(true);
     /// assert!(receiving_stats.yards() == 0);
-    /// assert!(receiving_stats.completions() == 0);
+    /// assert!(receiving_stats.receptions() == 0);
     /// ```
     pub fn receiving_stats(&self, home: bool) -> ReceivingStats {
         let mut stats = ReceivingStats::new();

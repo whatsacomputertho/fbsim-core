@@ -25,6 +25,7 @@ The `GameContextRaw` struct includes the same properties as `GameContext`, but a
 
 The `GameContextBuilder` struct implements the builder pattern for the `GameContext` struct. Here is an example of its use in whcih the opening kickoff is randomized.
 ```rust
+use rand::Rng;
 use fbsim_core::game::context::{GameContext, GameContextBuilder};
 
 // Initialize a new context with randomized opening kickoff
