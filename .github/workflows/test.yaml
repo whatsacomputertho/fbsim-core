@@ -1,0 +1,17 @@
+name: Test
+
+on:
+  push:
+    branches: '**'
+
+permissions:
+  contents: write
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Test Crate
+        run: |
+          make test
