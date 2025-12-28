@@ -66,10 +66,10 @@ impl From<&GameContext> for PlayContext {
             half_seconds: item.half_seconds(),
             down: item.down(),
             distance: item.distance(),
-            yard_line: yard_line,
-            score_diff: score_diff,
-            off_timeouts: off_timeouts,
-            def_timeouts: def_timeouts,
+            yard_line,
+            score_diff,
+            off_timeouts,
+            def_timeouts,
             clock_running: item.clock_running()
         }
     }

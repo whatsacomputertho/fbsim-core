@@ -1332,9 +1332,9 @@ impl GameContext {
             last_play_timeout: off_timeout || def_timeout,
             last_play_kickoff: result.kickoff(),
             last_play_punt: result.punt(),
-            next_play_extra_point: next_play_extra_point,
+            next_play_extra_point,
             next_play_kickoff: result.next_play_kickoff() || (end_of_half && !next_play_extra_point),
-            end_of_half: end_of_half,
+            end_of_half,
             game_over: self.next_game_over(duration, off_score, def_score)
         };
         GameContext::try_from(raw).unwrap()

@@ -668,11 +668,11 @@ impl PlayResultSimulator for BetweenPlayResultSimulator {
         };
         let raw = BetweenPlayResultRaw{
             duration: between_play_duration,
-            offense_timeout: offense_timeout,
-            defense_timeout: defense_timeout,
-            up_tempo: up_tempo,
-            defense_not_set: defense_not_set,
-            critical_down: critical_down
+            offense_timeout,
+            defense_timeout,
+            up_tempo,
+            defense_not_set,
+            critical_down
         };
         let between_res = BetweenPlayResult::try_from(raw).unwrap();
         PlayTypeResult::BetweenPlay(between_res)

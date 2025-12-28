@@ -1391,20 +1391,20 @@ impl PlayResultSimulator for PassResultSimulator {
             rng
         );
         let pass_res = PassResult{
-            play_duration: play_duration,
-            sack_yards_lost: sack_yards_lost,
-            scramble_yards: scramble_yards,
+            play_duration,
+            sack_yards_lost,
+            scramble_yards,
             pass_dist: pass_distance,
-            return_yards: return_yards,
-            yards_after_catch: yards_after_catch,
-            pressure: pressure,
-            sack: sack,
-            scramble: scramble,
-            interception: interception,
-            complete: complete,
-            fumble: fumble,
-            touchdown: touchdown,
-            safety: safety
+            return_yards,
+            yards_after_catch,
+            pressure,
+            sack,
+            scramble,
+            interception,
+            complete,
+            fumble,
+            touchdown,
+            safety
         };
         PlayTypeResult::Pass(pass_res)
     }

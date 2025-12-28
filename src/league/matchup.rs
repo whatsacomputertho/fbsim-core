@@ -165,7 +165,7 @@ impl LeagueMatchups {
     /// ```
     pub fn new(matchups: BTreeMap<usize, LeagueSeasonMatchups>) -> LeagueMatchups {
         LeagueMatchups{
-            matchups: matchups
+            matchups
         }
     }
 

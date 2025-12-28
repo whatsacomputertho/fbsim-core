@@ -733,13 +733,13 @@ impl PlayResultSimulator for RunResultSimulator {
 
         // Construct the run result
         let run_res = RunResult{
-            yards_gained: yards_gained,
+            yards_gained,
             play_duration: self.play_duration(total_yards, rng),
-            fumble: fumble,
-            return_yards: return_yards,
+            fumble,
+            return_yards,
             out_of_bounds: false,
-            touchdown: touchdown,
-            safety: safety
+            touchdown,
+            safety
         };
         PlayTypeResult::Run(run_res)
     }

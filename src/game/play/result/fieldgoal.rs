@@ -732,11 +732,11 @@ impl PlayResultSimulator for FieldGoalResultSimulator {
         let touchdown: bool = blocked && (return_yards > safety_yards.abs());
         let raw = FieldGoalResultRaw{
             field_goal_distance: td_yards + 17,
-            return_yards: return_yards,
-            play_duration: play_duration,
-            made: made,
-            blocked: blocked,
-            touchdown: touchdown,
+            return_yards,
+            play_duration,
+            made,
+            blocked,
+            touchdown,
             extra_point: context.next_play_extra_point()
         };
         let fg_res = FieldGoalResult::try_from(raw).unwrap();

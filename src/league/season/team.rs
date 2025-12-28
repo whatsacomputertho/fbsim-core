@@ -182,10 +182,10 @@ impl LeagueSeasonTeam {
     /// ```
     pub fn from_properties(name: String, logo: String, offense_overall: u32, defense_overall: u32) -> Result<LeagueSeasonTeam, String> {
         let raw = LeagueSeasonTeamRaw{
-            name: name, 
-            logo: logo,
-            offense_overall: offense_overall,
-            defense_overall: defense_overall
+            name, 
+            logo,
+            offense_overall,
+            defense_overall
         };
         LeagueSeasonTeam::try_from(raw)
     }

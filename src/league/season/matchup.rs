@@ -33,8 +33,8 @@ impl LeagueSeasonMatchup {
     /// ```
     pub fn new(home_team: usize, away_team: usize) -> LeagueSeasonMatchup {
         LeagueSeasonMatchup {
-            home_team: home_team,
-            away_team: away_team,
+            home_team,
+            away_team,
             home_score: 0,
             away_score: 0,
             complete: false
@@ -235,8 +235,8 @@ impl LeagueSeasonMatchups {
     /// ```
     pub fn new(team_id: usize, matchups: Vec<Option<LeagueSeasonMatchup>>) -> LeagueSeasonMatchups {
         LeagueSeasonMatchups{
-            team_id: team_id,
-            matchups: matchups
+            team_id,
+            matchups
         }
     }
 

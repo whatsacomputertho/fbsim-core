@@ -1095,17 +1095,17 @@ impl PlayResultSimulator for PuntResultSimulator {
         let total_yards: u32 = punt_distance.unsigned_abs() + punt_return_yards.unsigned_abs() + fumble_return_yards.unsigned_abs();
         let play_duration: u32 = self.play_duration(total_yards, rng);
         let punt_res = PuntResult{
-            fumble_return_yards: fumble_return_yards,
+            fumble_return_yards,
             punt_yards: punt_distance,
-            punt_return_yards: punt_return_yards,
-            play_duration: play_duration,
-            blocked: blocked,
-            touchback: touchback,
-            out_of_bounds: out_of_bounds,
-            fair_catch: fair_catch,
+            punt_return_yards,
+            play_duration,
+            blocked,
+            touchback,
+            out_of_bounds,
+            fair_catch,
             muffed: punt_muffed,
-            fumble: fumble,
-            touchdown: touchdown
+            fumble,
+            touchdown
         };
         PlayTypeResult::Punt(punt_res)
     }

@@ -911,13 +911,13 @@ impl PlayResultSimulator for KickoffResultSimulator {
         let raw = KickoffResultRaw{
             kickoff_yards: kickoff_distance,
             kick_return_yards: return_yards,
-            play_duration: play_duration,
-            fumble_return_yards: fumble_return_yards,
-            touchback: touchback,
-            out_of_bounds: out_of_bounds,
-            fair_catch: fair_catch,
-            fumble: fumble,
-            touchdown: touchdown
+            play_duration,
+            fumble_return_yards,
+            touchback,
+            out_of_bounds,
+            fair_catch,
+            fumble,
+            touchdown
         };
         let kickoff_res = KickoffResult::try_from(raw).unwrap();
         PlayTypeResult::Kickoff(kickoff_res)

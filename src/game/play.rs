@@ -64,9 +64,9 @@ impl Play {
     /// ```
     pub fn new(context: GameContext, result: PlayTypeResult, post_play: PlayTypeResult) -> Play {
         Play{
-            context: context,
-            result: result,
-            post_play: post_play
+            context,
+            result,
+            post_play
         }
     }
 
