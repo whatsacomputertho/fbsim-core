@@ -1,5 +1,7 @@
 # FBSim Core
 
+[![Build](https://github.com/whatsacomputertho/fbsim-core/actions/workflows/build.yaml/badge.svg)](https://github.com/whatsacomputertho/fbsim-core/actions/workflows/build.yaml) [![Test](https://github.com/whatsacomputertho/fbsim-core/actions/workflows/test.yaml/badge.svg)](https://github.com/whatsacomputertho/fbsim-core/actions/workflows/test.yaml) [![Lint](https://github.com/whatsacomputertho/fbsim-core/actions/workflows/lint.yaml/badge.svg)](https://github.com/whatsacomputertho/fbsim-core/actions/workflows/lint.yaml) [![Securty](https://github.com/whatsacomputertho/fbsim-core/actions/workflows/sec.yaml/badge.svg)](https://github.com/whatsacomputertho/fbsim-core/actions/workflows/sec.yaml)
+
 > A library for american football simulation
 
 ## Overview
