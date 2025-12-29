@@ -1346,16 +1346,16 @@ impl GameContext {
         let next_play_extra_point = result.next_play_extra_point();
         let turnover = result.turnover();
         let update_opts = GameContextUpdateOptions{
-            duration: duration,
+            duration,
             net_yards: result.net_yards(),
-            off_score: off_score,
-            def_score: def_score,
-            turnover: turnover,
+            off_score,
+            def_score,
+            turnover,
             touchback: result.touchback(),
             kickoff_oob: result.kickoff() && result.out_of_bounds(),
-            off_timeout: off_timeout,
-            def_timeout: def_timeout,
-            next_play_extra_point: next_play_extra_point,
+            off_timeout,
+            def_timeout,
+            next_play_extra_point,
             between_play: false,
             end_of_game: false
         };
