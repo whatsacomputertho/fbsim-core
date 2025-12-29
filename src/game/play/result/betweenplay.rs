@@ -183,7 +183,10 @@ impl PlayResult for BetweenPlayResult {
         if context.next_play_extra_point() {
             return context.clone();
         }
-        let default_update_opts = GameContextUpdateOptions::default();
+        let default_update_opts = GameContextUpdateOptions{
+            between_play: true,
+            ..Default::default()
+        };
         let between_update_opts = GameContextUpdateOptions{
             duration: self.duration,
             off_timeout: self.offense_timeout,
@@ -191,28 +194,34 @@ impl PlayResult for BetweenPlayResult {
             between_play: true,
             ..Default::default()
         };
-        let end_of_half = context.end_of_half() || context.next_end_of_half(&between_update_opts);
+        let prev_end_of_half = context.end_of_half();
+        let next_end_of_half = context.next_end_of_half(&between_update_opts);
+        let end_of_half = prev_end_of_half || next_end_of_half;
         let end_of_game = context.next_game_over(&between_update_opts);
         let mut eog_update_opts = between_update_opts.clone();
         eog_update_opts.end_of_game = end_of_game;
         let next_quarter = context.next_quarter(&between_update_opts);
-        let yard_line = if end_of_half {
+        let yard_line = if prev_end_of_half {
             context.next_yard_line(&default_update_opts)
         } else {
             context.next_yard_line(&between_update_opts)
         };
-        let distance = if end_of_half {
+        let distance = if prev_end_of_half {
             context.next_distance(&default_update_opts)
         } else {
             context.next_distance(&between_update_opts)
         };
-        let down = if end_of_half {
+        let down = if prev_end_of_half {
             context.next_down(&default_update_opts)
+        } else if next_end_of_half {
+            context.next_down(&between_update_opts)
         } else {
             context.down()
         };
-        let home_possession = if end_of_half {
+        let home_possession = if prev_end_of_half {
             context.next_home_possession(&default_update_opts)
+        } else if next_end_of_half {
+            context.next_home_possession(&between_update_opts)
         } else {
             context.home_possession()
         };

@@ -1097,12 +1097,9 @@ mod tests {
                     });
 
                 // Assert that no team plays three away games in a row
-                match home_away.get(away_id) {
-                    Some(entry) => {
-                        let (_, _, cons_away) = entry;
-                        assert!(*cons_away < 3);
-                    },
-                    None => ()
+                if let Some(entry) = home_away.get(away_id) {
+                    let (_, _, cons_away) = entry;
+                    assert!(*cons_away < 3);
                 }
             }
         }
