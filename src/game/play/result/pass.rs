@@ -103,7 +103,7 @@ const P_COMPLETE_DIST_INTR: f64 = 0.7706457923470589_f64;
 const P_COMPLETE_DIST_COEF: f64 = -0.00870494_f64; // Adjusted -0.002
 
 // Zero yards after catch probability regression
-const P_ZERO_YAC_INTR: f64 = 0.46761265601223527_f64; // Adjusted + 0.3
+const P_ZERO_YAC_INTR: f64 = 0.4676126560122353_f64; // Adjusted + 0.3
 const P_ZERO_YAC_COEF: f64 = -0.06038915_f64;
 
 // Mean yards after catch regression
@@ -432,7 +432,7 @@ impl std::fmt::Display for PassResult {
         } else {
             String::from("")
         };
-        let catch_str = if !self.pressure || (self.pressure && !(self.sack || self.scramble)) {
+        let catch_str = if !self.pressure || !(self.sack || self.scramble) {
             let pass_prefix = format!(" Pass {} yards", self.pass_dist);
             if self.interception {
                 format!("{} INTERCEPTED, returned {} yards.", pass_prefix, self.return_yards)
@@ -464,7 +464,7 @@ impl std::fmt::Display for PassResult {
             &fumble_str,
             score_str
         );
-        f.write_str(&pass_str.trim())
+        f.write_str(pass_str.trim())
     }
 }
 
@@ -1170,7 +1170,7 @@ impl PassResultSimulator {
 
     /// Generates whether the quarterback threw a complete pass
     fn complete(&self, norm_diff_passing: f64, pass_dist: i32, rng: &mut impl Rng) -> bool {
-        let p_complete_skill: f64 = P_COMPLETE_INTR + (P_COMPLETE_COEF * norm_diff_passing as f64);
+        let p_complete_skill: f64 = P_COMPLETE_INTR + (P_COMPLETE_COEF * norm_diff_passing);
         let p_complete_yl: f64 = P_COMPLETE_DIST_INTR + (P_COMPLETE_DIST_COEF * pass_dist as f64);
         let p_complete: f64 = 0.8_f64.min((
             (
@@ -1212,10 +1212,7 @@ impl PassResultSimulator {
     fn play_duration(&self, total_yards: u32, rng: &mut impl Rng) -> u32 {
         let mean_duration: f64 = MEAN_PLAY_DURATION_INTR + (MEAN_PLAY_DURATION_COEF_1 * total_yards as f64) + (MEAN_PLAY_DURATION_COEF_2 * total_yards.pow(2) as f64);
         let duration_dist = Normal::new(mean_duration, 2_f64).unwrap();
-        match u32::try_from(duration_dist.sample(rng).round() as i32) {
-            Ok(n) => n,
-            Err(_) => 0
-        }
+        u32::try_from(duration_dist.sample(rng).round() as i32).unwrap_or_default()
     }
 }
 
@@ -1250,10 +1247,7 @@ impl PlayResultSimulator for PassResultSimulator {
         let norm_diff_scrambling: f64 = 0.5_f64 + ((offense.offense().scrambling() as f64 - defense.defense().rush_defense() as f64) / 200_f64);
         let norm_scrambling: f64 = offense.offense().scrambling() as f64 / 100_f64;
         let td_yards = context.yards_to_touchdown();
-        let yard_line = match u32::try_from(td_yards) {
-            Ok(n) => n,
-            Err(_) => 0
-        };
+        let yard_line = u32::try_from(td_yards).unwrap_or_default();
         let oob_yards = td_yards + 10;
         let safety_yards = context.yards_to_safety();
 
@@ -1276,7 +1270,7 @@ impl PlayResultSimulator for PassResultSimulator {
 
         // Determine if a safety occurred
         let mut safety: bool = if sack {
-            sack_yards_lost * -1 < safety_yards
+            -sack_yards_lost < safety_yards
         } else {
             false
         };
@@ -1299,7 +1293,7 @@ impl PlayResultSimulator for PassResultSimulator {
         let mut touchdown: bool = scramble && (scramble_yards > td_yards);
 
         // Generate whether a short pass occurred
-        let pass: bool = !pressure || (pressure && !(sack || scramble));
+        let pass: bool = !pressure || !(sack || scramble);
         let short_pass: bool = if pass {
             self.short_pass(yard_line, rng)
         } else {
@@ -1329,7 +1323,7 @@ impl PlayResultSimulator for PassResultSimulator {
 
         // Check whether an interception return TD occurred
         touchdown = if !touchdown {
-            interception && ((int_return_yards * -1) < safety_yards)
+            interception && ((-int_return_yards) < safety_yards)
         } else {
             touchdown
         };
@@ -1392,25 +1386,25 @@ impl PlayResultSimulator for PassResultSimulator {
         // Generate return yards, yards gained, play duration
         let return_yards: i32 = int_return_yards + fumble_return_yards;
         let play_duration: u32 = self.play_duration(
-            sack_yards_lost.abs() as u32 + pass_distance.abs() as u32 + scramble_yards.abs() as u32 +
-            int_return_yards.abs() as u32 + yards_after_catch.abs() as u32 + fumble_return_yards.abs() as u32,
+            sack_yards_lost.unsigned_abs() + pass_distance.unsigned_abs() + scramble_yards.unsigned_abs() +
+            int_return_yards.unsigned_abs() + yards_after_catch.unsigned_abs() + fumble_return_yards.unsigned_abs(),
             rng
         );
         let pass_res = PassResult{
-            play_duration: play_duration,
-            sack_yards_lost: sack_yards_lost,
-            scramble_yards: scramble_yards,
+            play_duration,
+            sack_yards_lost,
+            scramble_yards,
             pass_dist: pass_distance,
-            return_yards: return_yards,
-            yards_after_catch: yards_after_catch,
-            pressure: pressure,
-            sack: sack,
-            scramble: scramble,
-            interception: interception,
-            complete: complete,
-            fumble: fumble,
-            touchdown: touchdown,
-            safety: safety
+            return_yards,
+            yards_after_catch,
+            pressure,
+            sack,
+            scramble,
+            interception,
+            complete,
+            fumble,
+            touchdown,
+            safety
         };
         PlayTypeResult::Pass(pass_res)
     }

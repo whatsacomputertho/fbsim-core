@@ -192,12 +192,12 @@ impl FootballTeamDefense {
     /// assert!(overall == 50_u32);
     /// ```
     pub fn overall(&self) -> u32 {
-        return (
+        (
             (
                 self.blitzing + self.rush_defense + self.pass_defense +
                 self.coverage + self.turnovers + self.kick_returning
             ) as f32 / 6_f32
-        ) as u32;
+        ) as u32
     }
 
     /// Get the defense's rush defense skill level

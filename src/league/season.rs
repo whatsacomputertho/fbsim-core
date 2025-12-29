@@ -30,6 +30,24 @@ pub struct LeagueSeasonRaw {
     pub weeks: Vec<LeagueSeasonWeek>
 }
 
+impl Default for LeagueSeasonRaw {
+    /// Default constructor for the `LeagueSeasonRaw` struct
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::league::season::LeagueSeasonRaw;
+    ///
+    /// let raw_league_season = LeagueSeasonRaw::default();
+    /// ```
+    fn default() -> Self {
+        LeagueSeasonRaw{
+            year: chrono::Utc::now().year() as usize,
+            teams: BTreeMap::new(),
+            weeks: Vec::new()
+        }
+    }
+}
+
 impl LeagueSeasonRaw {
     /// Constructor for the `LeagueSeasonRaw` struct
     ///
@@ -40,11 +58,7 @@ impl LeagueSeasonRaw {
     /// let raw_league_season = LeagueSeasonRaw::new();
     /// ```
     pub fn new() -> LeagueSeasonRaw {
-        LeagueSeasonRaw{
-            year: chrono::Utc::now().year() as usize,
-            teams: BTreeMap::new(),
-            weeks: Vec::new()
-        }
+        LeagueSeasonRaw::default()
     }
 
     /// Determine based on the matchups whether the season has started
@@ -58,7 +72,7 @@ impl LeagueSeasonRaw {
     /// ```
     pub fn started(&self) -> bool {
         // If no season weeks, then the season hasn't started
-        if self.weeks.len() == 0 {
+        if self.weeks.is_empty() {
             return false;
         }
 
@@ -82,7 +96,7 @@ impl LeagueSeasonRaw {
     /// ```
     pub fn complete(&self) -> bool {
         // If no season weeks, then the season isn't complete
-        if self.weeks.len() == 0 {
+        if self.weeks.is_empty() {
             return false;
         }
 
@@ -143,7 +157,7 @@ impl LeagueSeasonRaw {
                     )
                 );
             }
-            if num_teams % 2 != 0 {
+            if !num_teams.is_multiple_of(2) {
                 return Err(
                     format!(
                         "Season {} has started, but has an odd number of teams: {}",
@@ -229,8 +243,8 @@ impl LeagueSeasonRaw {
                         )
                     )
                 }
-                found_ids.push(home_id.clone());
-                found_ids.push(away_id.clone());
+                found_ids.push(*home_id);
+                found_ids.push(*away_id);
             }
         }
         Ok(())
@@ -248,8 +262,26 @@ pub struct LeagueSeasonScheduleOptions {
     pub permute: Option<bool>
 }
 
+impl Default for LeagueSeasonScheduleOptions {
+    /// Default constructor for the `LeagueSeasonScheduleOptions` struct
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::league::season::LeagueSeasonScheduleOptions;
+    ///
+    /// let my_schedule_options = LeagueSeasonScheduleOptions::new();
+    /// ```
+    fn default() -> Self {
+        LeagueSeasonScheduleOptions{
+            weeks: None,
+            shift: None,
+            permute: None
+        }
+    }
+}
+
 impl LeagueSeasonScheduleOptions {
-    /// Constructor for the `LeagueSeasonScheduleOptions` struct with defaults
+    /// Constructor for the `LeagueSeasonScheduleOptions` struct
     ///
     /// ### Example
     /// ```
@@ -258,11 +290,7 @@ impl LeagueSeasonScheduleOptions {
     /// let my_schedule_options = LeagueSeasonScheduleOptions::new();
     /// ```
     pub fn new() -> LeagueSeasonScheduleOptions {
-        LeagueSeasonScheduleOptions{
-            weeks: None,
-            shift: None,
-            permute: None
-        }
+        LeagueSeasonScheduleOptions::default()
     }
 }
 
@@ -309,6 +337,25 @@ impl<'de> Deserialize<'de> for LeagueSeason {
     }
 }
 
+impl Default for LeagueSeason {
+    /// Default constructor for the `LeagueSeason` struct, with the year
+    /// defaulting to the current year
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::league::season::LeagueSeason;
+    ///
+    /// let my_league_season = LeagueSeason::default();
+    /// ```
+    fn default() -> Self {
+        LeagueSeason{
+            year: chrono::Utc::now().year() as usize,
+            teams: BTreeMap::new(),
+            weeks: Vec::new()
+        }
+    }
+}
+
 impl LeagueSeason {
     /// Constructor for the `LeagueSeason` struct, with the year
     /// defaulting to the current year
@@ -320,11 +367,7 @@ impl LeagueSeason {
     /// let my_league_season = LeagueSeason::new();
     /// ```
     pub fn new() -> LeagueSeason {
-        LeagueSeason{
-            year: chrono::Utc::now().year() as usize,
-            teams: BTreeMap::new(),
-            weeks: Vec::new()
-        }
+        LeagueSeason::default()
     }
 
     /// Borrow the year the season took place
@@ -493,7 +536,7 @@ impl LeagueSeason {
     /// ```
     pub fn started(&self) -> bool {
         // If no season weeks, then the season hasn't started
-        if self.weeks.len() == 0 {
+        if self.weeks.is_empty() {
             return false;
         }
 
@@ -517,7 +560,7 @@ impl LeagueSeason {
     /// ```
     pub fn complete(&self) -> bool {
         // If no season weeks, then the season isn't complete
-        if self.weeks.len() == 0 {
+        if self.weeks.is_empty() {
             return false;
         }
 
@@ -564,7 +607,7 @@ impl LeagueSeason {
                 )
             );
         }
-        if num_teams % 2 != 0 {
+        if !num_teams.is_multiple_of(2) {
             return Err(
                 format!(
                     "Odd number of teams, cannot generate a schedule: {}",
@@ -621,7 +664,7 @@ impl LeagueSeason {
         }
 
         // If the schedule is already non-empty then empty it before re-gen
-        if self.weeks.len() > 0 {
+        if !self.weeks.is_empty() {
             self.weeks.clear()
         }
 
@@ -663,7 +706,7 @@ impl LeagueSeason {
                     ),
                 };
                 let matchup = LeagueSeasonMatchup::new(*home_id, *away_id);
-                week.matchups_mut().push(matchup.into());
+                week.matchups_mut().push(matchup);
             }
 
             // Add the week to the season
@@ -1054,12 +1097,9 @@ mod tests {
                     });
 
                 // Assert that no team plays three away games in a row
-                match home_away.get(away_id) {
-                    Some(entry) => {
-                        let (_, _, cons_away) = entry;
-                        assert!(*cons_away < 3);
-                    },
-                    None => ()
+                if let Some(entry) = home_away.get(away_id) {
+                    let (_, _, cons_away) = entry;
+                    assert!(*cons_away < 3);
                 }
             }
         }

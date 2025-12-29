@@ -83,7 +83,7 @@ impl GameContextRaw {
         }
 
         // Ensure half seconds is not greater than 900 if quarter is even or greater than 4
-        if self.half_seconds > 900 && (self.quarter % 2 == 0 || self.quarter > 4) {
+        if self.half_seconds > 900 && (self.quarter.is_multiple_of(2) || self.quarter > 4) {
             return Err(
                 format!(
                     "Half seconds is not in range [0, 900] for quarter {}: {}",
@@ -217,6 +217,26 @@ impl GameContextRaw {
         }
         Ok(())
     }
+}
+
+/// # `GameContextUpdateOptions` struct
+///
+/// A `GameContextUpdateOptions` contains the parameters required to derive
+/// the next game context
+#[derive(Clone, Eq, PartialEq, Ord, PartialOrd, Debug, Default)]
+pub struct GameContextUpdateOptions {
+    pub duration: u32,
+    pub net_yards: i32,
+    pub off_score: ScoreResult,
+    pub def_score: ScoreResult,
+    pub turnover: bool,
+    pub touchback: bool,
+    pub kickoff_oob: bool,
+    pub off_timeout: bool,
+    pub def_timeout: bool,
+    pub next_play_extra_point: bool,
+    pub between_play: bool,
+    pub end_of_game: bool
 }
 
 /// # `GameContext` struct
@@ -785,25 +805,27 @@ impl GameContext {
         } else {
             self.yard_line as i32
         };
-        safety_yards * -1_i32
+        -safety_yards
     }
 
     /// Get the updated home score
     ///
     /// ### Example
     /// ```
-    /// use fbsim_core::game::context::GameContext;
+    /// use fbsim_core::game::context::{GameContext, GameContextUpdateOptions};
     /// use fbsim_core::game::play::result::ScoreResult;
     /// 
+    /// let mut update_opts = GameContextUpdateOptions::default();
+    /// update_opts.off_score = ScoreResult::Touchdown;
     /// let my_context = GameContext::new();
-    /// let home_score = my_context.next_home_score(ScoreResult::Touchdown, ScoreResult::None);
+    /// let home_score = my_context.next_home_score(&update_opts);
     /// assert!(home_score == 6);
     /// ```
-    pub fn next_home_score(&self, offense_score: ScoreResult, defense_score: ScoreResult) -> u32 {
+    pub fn next_home_score(&self, update_opts: &GameContextUpdateOptions) -> u32 {
         if self.home_possession {
-            self.home_score + offense_score.points()
+            self.home_score + update_opts.off_score.points()
         } else {
-            self.home_score + defense_score.points()
+            self.home_score + update_opts.def_score.points()
         }
     }
 
@@ -811,18 +833,20 @@ impl GameContext {
     ///
     /// ### Example
     /// ```
-    /// use fbsim_core::game::context::GameContext;
+    /// use fbsim_core::game::context::{GameContext, GameContextUpdateOptions};
     /// use fbsim_core::game::play::result::ScoreResult;
     /// 
+    /// let mut update_opts = GameContextUpdateOptions::default();
+    /// update_opts.def_score = ScoreResult::Safety;
     /// let my_context = GameContext::new();
-    /// let away_score = my_context.next_away_score(ScoreResult::None, ScoreResult::Safety);
+    /// let away_score = my_context.next_away_score(&update_opts);
     /// assert!(away_score == 2);
     /// ```
-    pub fn next_away_score(&self, offense_score: ScoreResult, defense_score: ScoreResult) -> u32 {
+    pub fn next_away_score(&self, update_opts: &GameContextUpdateOptions) -> u32 {
         if self.home_possession {
-            self.away_score + defense_score.points()
+            self.away_score + update_opts.def_score.points()
         } else {
-            self.away_score + offense_score.points()
+            self.away_score + update_opts.off_score.points()
         }
     }
 
@@ -830,16 +854,17 @@ impl GameContext {
     ///
     /// ### Example
     /// ```
-    /// use fbsim_core::game::context::GameContext;
+    /// use fbsim_core::game::context::{GameContext, GameContextUpdateOptions};
     /// use fbsim_core::game::play::result::ScoreResult;
     /// 
+    /// let update_opts = GameContextUpdateOptions::default();
     /// let my_context = GameContext::new();
-    /// let score_tied = my_context.next_score_tied(ScoreResult::None, ScoreResult::None);
+    /// let score_tied = my_context.next_score_tied(&update_opts);
     /// assert!(score_tied);
     /// ```
-    pub fn next_score_tied(&self, offense_score: ScoreResult, defense_score: ScoreResult) -> bool {
-        let next_home_score = self.next_home_score(offense_score, defense_score);
-        let next_away_score = self.next_away_score(offense_score, defense_score);
+    pub fn next_score_tied(&self, update_opts: &GameContextUpdateOptions) -> bool {
+        let next_home_score = self.next_home_score(update_opts);
+        let next_away_score = self.next_away_score(update_opts);
         next_home_score == next_away_score
     }
 
@@ -847,18 +872,18 @@ impl GameContext {
     ///
     /// ### Example
     /// ```
-    /// use fbsim_core::game::context::GameContext;
+    /// use fbsim_core::game::context::{GameContext, GameContextUpdateOptions};
     /// use fbsim_core::game::play::result::ScoreResult;
     /// 
+    /// let mut update_opts = GameContextUpdateOptions::default();
+    /// update_opts.duration = 10;
     /// let my_context = GameContext::new();
-    /// let half_seconds = my_context.next_half_seconds(10, false, false, ScoreResult::None, ScoreResult::None);
+    /// let half_seconds = my_context.next_half_seconds(&update_opts);
     /// assert!(half_seconds == 1790);
     /// ```
-    pub fn next_half_seconds(&self, play_duration: u32, end_of_half: bool, post_play_end_of_half: bool, offense_score: ScoreResult, defense_score: ScoreResult) -> u32 {
-        let next_clock = match u32::try_from(self.half_seconds as i32 - play_duration as i32) {
-            Ok(n) => n,
-            Err(_) => 0
-        };
+    pub fn next_half_seconds(&self, update_opts: &GameContextUpdateOptions) -> u32 {
+        let next_clock = u32::try_from(self.half_seconds as i32 - update_opts.duration as i32).unwrap_or_default();
+        let end_of_half = self.next_end_of_half(update_opts) || (self.end_of_half && update_opts.between_play);
 
         // If end of quarter, max out at 900 seconds
         if (self.quarter == 1 || self.quarter == 3) && self.half_seconds > 900 && next_clock <= 900 {
@@ -866,18 +891,18 @@ impl GameContext {
         }
 
         // If end of half, return 0 seconds
-        if end_of_half {
+        if end_of_half && !(update_opts.between_play || update_opts.end_of_game) {
             return 0;
         }
 
         // If start of second half, return to 1800 seconds
-        if (post_play_end_of_half && self.quarter < 4) || (self.end_of_half && self.quarter == 2) {
+        if (end_of_half && update_opts.between_play && self.quarter < 4) || (self.end_of_half && self.quarter == 2) {
             return 1800;
         }
 
         // Check if end of game
         if self.quarter >= 4 && next_clock == 0 {
-            if !self.next_score_tied(offense_score, defense_score) {
+            if !self.next_score_tied(update_opts) {
                 // If end of game, max out at 0 seconds
                 return 0;
             } else {
@@ -892,22 +917,21 @@ impl GameContext {
     ///
     /// ### Example
     /// ```
-    /// use fbsim_core::game::context::GameContext;
+    /// use fbsim_core::game::context::{GameContext, GameContextUpdateOptions};
     /// use fbsim_core::game::play::result::ScoreResult;
     /// 
+    /// let mut update_opts = GameContextUpdateOptions::default();
+    /// update_opts.duration = 10;
     /// let my_context = GameContext::new();
-    /// let end_of_half = my_context.next_end_of_half(10, ScoreResult::None, ScoreResult::None);
+    /// let end_of_half = my_context.next_end_of_half(&update_opts);
     /// assert!(!end_of_half);
     /// ```
-    pub fn next_end_of_half(&self, play_duration: u32, offense_score: ScoreResult, defense_score: ScoreResult) -> bool {
-        let next_clock = match u32::try_from(self.half_seconds as i32 - play_duration as i32) {
-            Ok(n) => n,
-            Err(_) => 0
-        };
+    pub fn next_end_of_half(&self, update_opts: &GameContextUpdateOptions) -> bool {
+        let next_clock = u32::try_from(self.half_seconds as i32 - update_opts.duration as i32).unwrap_or_default();
 
         // Check if end of half
         if next_clock == 0 && (self.quarter == 2 || self.quarter >=4) &&
-            !(offense_score == ScoreResult::Touchdown || defense_score == ScoreResult::Touchdown) {
+            !(update_opts.off_score == ScoreResult::Touchdown || update_opts.def_score == ScoreResult::Touchdown) {
             return true;
         }
         false
@@ -917,48 +941,38 @@ impl GameContext {
     ///
     /// ### Example
     /// ```
-    /// use fbsim_core::game::context::GameContext;
+    /// use fbsim_core::game::context::{GameContext, GameContextUpdateOptions};
     /// use fbsim_core::game::play::result::ScoreResult;
     /// 
+    /// let mut update_opts = GameContextUpdateOptions::default();
+    /// update_opts.duration = 10;
     /// let my_context = GameContext::new();
-    /// let game_over = my_context.next_game_over(10, ScoreResult::None, ScoreResult::None);
+    /// let game_over = my_context.next_game_over(&update_opts);
     /// assert!(!game_over);
     /// ```
-    pub fn next_game_over(&self, play_duration: u32, offense_score: ScoreResult, defense_score: ScoreResult) -> bool {
-        let next_clock = match u32::try_from(self.half_seconds as i32 - play_duration as i32) {
-            Ok(n) => n,
-            Err(_) => 0
-        };
-
-        // Check if end of game
-        if self.quarter >= 4 && next_clock == 0 {
-            if !self.next_score_tied(offense_score, defense_score) {
-                // If end of game, max out at 0 seconds
-                return true;
-            }
-        }
-        false
+    pub fn next_game_over(&self, update_opts: &GameContextUpdateOptions) -> bool {
+        let next_clock = u32::try_from(self.half_seconds as i32 - update_opts.duration as i32).unwrap_or_default();
+        self.quarter >= 4 && next_clock == 0 && !self.next_score_tied(update_opts)
     }
 
     /// Get the updated quarter
     ///
     /// ### Example
     /// ```
-    /// use fbsim_core::game::context::GameContext;
+    /// use fbsim_core::game::context::{GameContext, GameContextUpdateOptions};
     /// use fbsim_core::game::play::result::ScoreResult;
     /// 
+    /// let mut update_opts = GameContextUpdateOptions::default();
+    /// update_opts.duration = 10;
     /// let my_context = GameContext::new();
-    /// let quarter = my_context.next_quarter(10, ScoreResult::None, ScoreResult::None);
+    /// let quarter = my_context.next_quarter(&update_opts);
     /// assert!(quarter == 1);
     /// ```
-    pub fn next_quarter(&self, play_duration: u32, offense_score: ScoreResult, defense_score: ScoreResult) -> u32 {
-        let next_clock = match u32::try_from(self.half_seconds as i32 - play_duration as i32) {
-            Ok(n) => n,
-            Err(_) => 0
-        };
+    pub fn next_quarter(&self, update_opts: &GameContextUpdateOptions) -> u32 {
+        let next_clock = u32::try_from(self.half_seconds as i32 - update_opts.duration as i32).unwrap_or_default();
 
         // Don't increment quarter if extra point still needs to be kicked
-        if offense_score == ScoreResult::Touchdown || defense_score == ScoreResult::Touchdown {
+        if update_opts.off_score == ScoreResult::Touchdown || update_opts.def_score == ScoreResult::Touchdown {
             return self.quarter
         }
 
@@ -966,7 +980,7 @@ impl GameContext {
         // If end of 4th - OT, increment quarter only if tied
         if ((self.quarter == 1 || self.quarter == 3) && self.half_seconds >= 900 && next_clock <= 900) ||
             (self.quarter == 2 && next_clock == 0) ||
-            (self.quarter >= 4 && next_clock == 0 && self.next_score_tied(offense_score, defense_score)) {
+            (self.quarter >= 4 && next_clock == 0 && self.next_score_tied(update_opts)) {
             return self.quarter + 1;
         }
         self.quarter
@@ -976,15 +990,18 @@ impl GameContext {
     ///
     /// ### Example
     /// ```
-    /// use fbsim_core::game::context::GameContext;
+    /// use fbsim_core::game::context::{GameContext, GameContextUpdateOptions};
     /// use fbsim_core::game::play::result::ScoreResult;
     /// 
+    /// let mut update_opts = GameContextUpdateOptions::default();
+    /// update_opts.duration = 10;
     /// let my_context = GameContext::new();
-    /// let next_home_positive_direction = my_context.next_home_positive_direction(10, false, ScoreResult::None, ScoreResult::None);
+    /// let next_home_positive_direction = my_context.next_home_positive_direction(&update_opts);
     /// assert!(next_home_positive_direction);
     /// ```
-    pub fn next_home_positive_direction(&self, play_duration: u32, end_of_half: bool, offense_score: ScoreResult, defense_score: ScoreResult) -> bool {
-        let qtr = self.next_quarter(play_duration, offense_score, defense_score);
+    pub fn next_home_positive_direction(&self, update_opts: &GameContextUpdateOptions) -> bool {
+        let qtr = self.next_quarter(update_opts);
+        let end_of_half = self.next_end_of_half(update_opts) || (self.end_of_half && update_opts.between_play);
 
         // Flip the field if end of quarter
         let home_dir = self.home_positive_direction;
@@ -998,14 +1015,19 @@ impl GameContext {
     ///
     /// ### Example
     /// ```
-    /// use fbsim_core::game::context::GameContext;
+    /// use fbsim_core::game::context::{GameContext, GameContextUpdateOptions};
     /// use fbsim_core::game::play::result::ScoreResult;
     /// 
+    /// let mut update_opts = GameContextUpdateOptions::default();
+    /// update_opts.net_yards = 10;
+    /// update_opts.turnover = true;
     /// let my_context = GameContext::new();
-    /// let down = my_context.next_down(10, true, false, ScoreResult::None, ScoreResult::None);
+    /// let down = my_context.next_down(&update_opts);
     /// assert!(down == 1);
     /// ```
-    pub fn next_down(&self, net_yards: i32, turnover: bool, end_of_half: bool, offense_score: ScoreResult, defense_score: ScoreResult) -> u32 {
+    pub fn next_down(&self, update_opts: &GameContextUpdateOptions) -> u32 {
+        let end_of_half = self.next_end_of_half(update_opts) || (self.end_of_half && update_opts.between_play);
+
         // If this is the end of the half, next play is a kickoff
         if end_of_half {
             return 0;
@@ -1018,36 +1040,32 @@ impl GameContext {
 
         // If the result was for a kickoff, check if a score occurred
         if self.next_play_kickoff {
-            if !(offense_score == ScoreResult::None && defense_score == ScoreResult::None) {
+            if !(update_opts.off_score == ScoreResult::None && update_opts.def_score == ScoreResult::None) {
                 return 0;
             }
             return 1;
         }
 
         // If a touchdown, safety, or field goal occurred then next play is a down-0 play
-        let off_zero_down = match offense_score {
-            ScoreResult::Touchdown => true,
-            ScoreResult::FieldGoal => true,
-            ScoreResult::Safety => true,
-            _ => false
-        };
-        let def_zero_down = match defense_score {
-            ScoreResult::Touchdown => true,
-            ScoreResult::FieldGoal => true,
-            ScoreResult::Safety => true,
-            _ => false
-        };
+        let off_zero_down = matches!(
+            update_opts.off_score,
+            ScoreResult::Touchdown | ScoreResult::FieldGoal | ScoreResult::Safety
+        );
+        let def_zero_down = matches!(
+            update_opts.def_score,
+            ScoreResult::Touchdown | ScoreResult::FieldGoal | ScoreResult::Safety
+        );
         if off_zero_down || def_zero_down {
             return 0;
         }
 
         // If a turnover occurred then next play is first down
-        if turnover {
+        if update_opts.turnover {
             return 1;
         }
 
         // Check if a first down was reached
-        if net_yards >= self.distance as i32 {
+        if update_opts.net_yards >= self.distance as i32 {
             return 1;
         }
 
@@ -1063,30 +1081,34 @@ impl GameContext {
     ///
     /// ### Example
     /// ```
-    /// use fbsim_core::game::context::GameContext;
+    /// use fbsim_core::game::context::{GameContext, GameContextUpdateOptions};
     /// use fbsim_core::game::play::result::ScoreResult;
     /// 
+    /// let mut update_opts = GameContextUpdateOptions::default();
+    /// update_opts.net_yards = 10;
     /// let my_context = GameContext::new();
-    /// let next_home_possession = my_context.next_home_possession(10_i32, false, false, ScoreResult::None, ScoreResult::None);
+    /// let next_home_possession = my_context.next_home_possession(&update_opts);
     /// assert!(!next_home_possession);
     /// ```
-    pub fn next_home_possession(&self, net_yards: i32, turnover: bool, end_of_half: bool, offense_score: ScoreResult, defense_score: ScoreResult) -> bool {
+    pub fn next_home_possession(&self, update_opts: &GameContextUpdateOptions) -> bool {
+        let end_of_half = self.next_end_of_half(update_opts) || (self.end_of_half && update_opts.between_play);
+
         // If end of half, possession goes to whomever received the opening kickoff
         if end_of_half {
             return self.home_opening_kickoff;
         }
 
         // Change possession on successful kickoffs, defensive TDs, turnovers
-        if (self.next_play_kickoff && !turnover) || defense_score == ScoreResult::Touchdown || turnover {
+        if self.next_play_kickoff || update_opts.def_score == ScoreResult::Touchdown || update_opts.turnover {
             return !self.home_possession;
         }
 
         // Maintain possession on first downs, offensive scores
-        if net_yards >= self.distance as i32 ||
-            offense_score == ScoreResult::Touchdown ||
-            offense_score == ScoreResult::FieldGoal ||
-            offense_score == ScoreResult::ExtraPoint ||
-            offense_score == ScoreResult::TwoPointConversion {
+        if update_opts.net_yards >= self.distance as i32 ||
+            update_opts.off_score == ScoreResult::Touchdown ||
+            update_opts.off_score == ScoreResult::FieldGoal ||
+            update_opts.off_score == ScoreResult::ExtraPoint ||
+            update_opts.off_score == ScoreResult::TwoPointConversion {
             return self.home_possession;
         }
 
@@ -1102,14 +1124,18 @@ impl GameContext {
     ///
     /// ### Example
     /// ```
-    /// use fbsim_core::game::context::GameContext;
+    /// use fbsim_core::game::context::{GameContext, GameContextUpdateOptions};
     /// use fbsim_core::game::play::result::ScoreResult;
     /// 
+    /// let mut update_opts = GameContextUpdateOptions::default();
+    /// update_opts.net_yards = 10;
     /// let my_context = GameContext::new();
-    /// let yard_line = my_context.next_yard_line(0, 10, false, false, false, ScoreResult::None, ScoreResult::None);
+    /// let yard_line = my_context.next_yard_line(&update_opts);
     /// assert!(yard_line == 45);
     /// ```
-    pub fn next_yard_line(&self, play_duration: u32, net_yards: i32, touchback: bool, kickoff_oob: bool, end_of_half: bool, offense_score: ScoreResult, defense_score: ScoreResult) -> u32 {
+    pub fn next_yard_line(&self, update_opts: &GameContextUpdateOptions) -> u32 {
+        let end_of_half = self.next_end_of_half(update_opts) || (self.end_of_half && update_opts.between_play);
+
         // Kickoff and flip the field at the end of the half
         if end_of_half {
             if self.home_opening_kickoff ^ self.home_positive_direction {
@@ -1119,9 +1145,9 @@ impl GameContext {
         }
 
         // Kickoff after PAT, field goals, safeties
-        let qtr = self.next_quarter(play_duration, offense_score, defense_score);
+        let qtr = self.next_quarter(update_opts);
         let end_of_quarter = qtr != self.quarter;
-        if self.next_play_extra_point || defense_score == ScoreResult::Safety || offense_score == ScoreResult::FieldGoal {
+        if self.next_play_extra_point || update_opts.def_score == ScoreResult::Safety || update_opts.off_score == ScoreResult::FieldGoal {
             let next_yl = if self.home_possession ^ self.home_positive_direction {
                 65
             } else {
@@ -1136,7 +1162,7 @@ impl GameContext {
         }
 
         // Extra point after touchdowns
-        if offense_score == ScoreResult::Touchdown {
+        if update_opts.off_score == ScoreResult::Touchdown {
             let next_yl = if self.home_possession ^ self.home_positive_direction {
                 2
             } else {
@@ -1148,7 +1174,7 @@ impl GameContext {
                 next_yl
             };
             return eoq_yl;
-        } else if defense_score == ScoreResult::Touchdown {
+        } else if update_opts.def_score == ScoreResult::Touchdown {
             let next_yl = if self.home_possession ^ self.home_positive_direction {
                 98
             } else {
@@ -1163,7 +1189,7 @@ impl GameContext {
         }
 
         // Touchbacks and kickoffs out of bounds
-        if touchback {
+        if update_opts.touchback {
             let next_yl = if self.home_possession ^ self.home_positive_direction {
                 25
             } else {
@@ -1175,7 +1201,7 @@ impl GameContext {
                 next_yl
             };
             return eoq_yl;
-        } else if kickoff_oob {
+        } else if update_opts.kickoff_oob {
             let next_yl = if self.home_possession ^ self.home_positive_direction {
                 35
             } else {
@@ -1191,20 +1217,14 @@ impl GameContext {
 
         // Increment the yard line
         if self.home_possession ^ self.home_positive_direction {
-            let next_yl = match u32::try_from(0.max(100.min(self.yard_line as i32 - net_yards))) {
-                Ok(n) => n,
-                Err(_) => 0
-            };
+            let next_yl = u32::try_from(0.max(100.min(self.yard_line as i32 - update_opts.net_yards))).unwrap_or_default();
             if end_of_quarter {
                 100 - next_yl
             } else {
                 next_yl
             }
         } else {
-            let next_yl = match u32::try_from(0.max(100.min(self.yard_line as i32 + net_yards))) {
-                Ok(n) => n,
-                Err(_) => 0
-            };
+            let next_yl = u32::try_from(0.max(100.min(self.yard_line as i32 + update_opts.net_yards))).unwrap_or_default();
             if end_of_quarter {
                 100 - next_yl
             } else {
@@ -1217,35 +1237,44 @@ impl GameContext {
     ///
     /// ### Example
     /// ```
-    /// use fbsim_core::game::context::GameContext;
+    /// use fbsim_core::game::context::{GameContext, GameContextUpdateOptions};
     /// use fbsim_core::game::play::result::ScoreResult;
-    /// 
+    ///
+    /// let mut update_opts = GameContextUpdateOptions::default();
+    /// update_opts.net_yards = 10;
     /// let my_context = GameContext::new();
-    /// let distance = my_context.next_distance(0, 10, true, false, false, false, false, ScoreResult::None, ScoreResult::None);
+    /// let distance = my_context.next_distance(&update_opts);
     /// assert!(distance == 10);
     /// ```
-    pub fn next_distance(&self, play_duration: u32, net_yards: i32, turnover: bool, touchback: bool, kickoff_oob: bool, end_of_half: bool, between_play: bool, offense_score: ScoreResult, defense_score: ScoreResult) -> u32 {
+    pub fn next_distance(&self, update_opts: &GameContextUpdateOptions) -> u32 {
+        let end_of_half = if update_opts.between_play {
+            self.end_of_half
+        } else {
+            self.next_end_of_half(update_opts)
+        };
+
         // Kickoff after PAT, field goals, safeties, end of half
-        if self.next_play_extra_point || end_of_half || defense_score == ScoreResult::Safety || offense_score == ScoreResult::FieldGoal {
+        if self.next_play_extra_point || end_of_half ||
+            update_opts.def_score == ScoreResult::Safety || update_opts.off_score == ScoreResult::FieldGoal {
             return 10;
         }
 
         // Extra point after touchdowns
-        if offense_score == ScoreResult::Touchdown || defense_score == ScoreResult::Touchdown {
+        if update_opts.off_score == ScoreResult::Touchdown || update_opts.def_score == ScoreResult::Touchdown {
             return 2;
         }
 
         // If a turnover occurred, determine the distance based on the defense's direction
         // Note it will always be a first down after a turnover
-        let qtr = self.next_quarter(play_duration, offense_score, defense_score);
+        let qtr = self.next_quarter(update_opts);
         let end_of_quarter = qtr != self.quarter;
-        let mut next_yl = self.next_yard_line(play_duration, net_yards, touchback, kickoff_oob, false, offense_score, defense_score);
+        let mut next_yl = self.next_yard_line(update_opts);
         next_yl = if end_of_quarter {
             100 - next_yl
         } else {
             next_yl
         };
-        if turnover || (self.next_play_kickoff && !between_play) {
+        if update_opts.turnover || (self.next_play_kickoff && !update_opts.between_play) {
             if self.home_possession ^ self.home_positive_direction {
                 return 0.max(10.min(100_i32 - next_yl as i32)) as u32;
             }
@@ -1253,46 +1282,45 @@ impl GameContext {
         }
 
         // If no turnover occurred, check for a first down
-        if net_yards >= self.distance as i32 {
+        if update_opts.net_yards >= self.distance as i32 {
             if self.home_possession ^ self.home_positive_direction {
                 return 10.min(next_yl);
             }
             return 0.max(10.min(100_i32 - next_yl as i32)) as u32;
-        } else if self.down == 4 && !between_play {
+        } else if self.down == 4 && !update_opts.between_play {
             if self.home_possession ^ self.home_positive_direction {
                 return 0.max(10.min(100_i32 - next_yl as i32)) as u32;
             }
             return 10.min(next_yl);
         }
-        let next_dist = self.distance as i32 - net_yards;
-        match u32::try_from(next_dist) {
-            Ok(n) => n,
-            Err(_) => 0
-        }
+        let next_dist = self.distance as i32 - update_opts.net_yards;
+        u32::try_from(next_dist).unwrap_or_default()
     }
 
     /// Get the updated home timetous
     ///
     /// ### Example
     /// ```
-    /// use fbsim_core::game::context::GameContext;
+    /// use fbsim_core::game::context::{GameContext, GameContextUpdateOptions};
     /// 
+    /// let mut update_opts = GameContextUpdateOptions::default();
+    /// update_opts.off_timeout = true;
     /// let my_context = GameContext::new();
-    /// let next_home_timeouts = my_context.next_home_timeouts(true, false);
+    /// let next_home_timeouts = my_context.next_home_timeouts(&update_opts);
     /// assert!(next_home_timeouts == 2);
     /// ```
-    pub fn next_home_timeouts(&self, offense_timeout: bool, defense_timeout: bool) -> u32 {
+    pub fn next_home_timeouts(&self, update_opts: &GameContextUpdateOptions) -> u32 {
         if self.end_of_half {
             return 3; // Reset at end of half
         }
         let home_tos = self.home_timeouts;
         if self.home_possession {
-            if offense_timeout {
+            if update_opts.off_timeout {
                 return 0.max(home_tos as i32 - 1_i32) as u32;
             }
             return home_tos;
         }
-        if defense_timeout {
+        if update_opts.def_timeout {
             return 0.max(home_tos as i32 - 1_i32) as u32;
         }
         home_tos
@@ -1302,23 +1330,23 @@ impl GameContext {
     ///
     /// ### Example
     /// ```
-    /// use fbsim_core::game::context::GameContext;
+    /// use fbsim_core::game::context::{GameContext, GameContextUpdateOptions};
     /// 
+    /// let mut update_opts = GameContextUpdateOptions::default();
+    /// update_opts.def_timeout = true;
     /// let my_context = GameContext::new();
-    /// let next_away_timeouts = my_context.next_away_timeouts(false, true);
+    /// let next_away_timeouts = my_context.next_away_timeouts(&update_opts);
     /// assert!(next_away_timeouts == 2);
     /// ```
-    pub fn next_away_timeouts(&self, offense_timeout: bool, defense_timeout: bool) -> u32 {
+    pub fn next_away_timeouts(&self, update_opts: &GameContextUpdateOptions) -> u32 {
         if self.end_of_half {
             return 3; // Reset at end of half
         }
         let away_tos = self.away_timeouts;
-        if self.home_possession {
-            if defense_timeout {
-                return 0.max(away_tos as i32 - 1_i32) as u32;
-            }
+        if self.home_possession && update_opts.def_timeout {
+            return 0.max(away_tos as i32 - 1_i32) as u32;
         }
-        if offense_timeout {
+        if update_opts.off_timeout {
             return 0.max(away_tos as i32 - 1_i32) as u32;
         }
         away_tos
@@ -1327,50 +1355,61 @@ impl GameContext {
     /// Get the next context given the results of the previous play
     pub fn next_context(&self, result: &(impl PlayResult + ?Sized)) -> GameContext {
         let duration = result.play_duration();
-        let net_yards = result.net_yards();
         let off_score = result.offense_score();
         let def_score = result.defense_score();
-        let turnover = result.turnover();
-        let touchback = result.touchback();
-        let kickoff_oob = result.kickoff() && result.out_of_bounds();
         let off_timeout = result.offense_timeout();
         let def_timeout = result.defense_timeout();
         let next_play_extra_point = result.next_play_extra_point();
+        let turnover = result.turnover();
+        let update_opts = GameContextUpdateOptions{
+            duration,
+            net_yards: result.net_yards(),
+            off_score,
+            def_score,
+            turnover,
+            touchback: result.touchback(),
+            kickoff_oob: result.kickoff() && result.out_of_bounds(),
+            off_timeout,
+            def_timeout,
+            next_play_extra_point,
+            between_play: false,
+            end_of_game: false
+        };
         let end_of_half = if self.end_of_half {
             false
         } else {
-            self.next_end_of_half(duration, off_score, def_score) && !(next_play_extra_point)
+            self.next_end_of_half(&update_opts) && !next_play_extra_point
         };
         let next_quarter = if end_of_half {
             self.quarter()
         } else {
-            self.next_quarter(duration, off_score, def_score)
+            self.next_quarter(&update_opts)
         };
         let raw = GameContextRaw{
             home_team_short: self.home_team_short.clone(),
             away_team_short: self.away_team_short.clone(),
             quarter: next_quarter,
-            half_seconds: self.next_half_seconds(duration, end_of_half, false, off_score, def_score),
-            down: self.next_down(net_yards, turnover, false, off_score, def_score),
-            distance: self.next_distance(duration, net_yards, turnover, touchback, kickoff_oob, end_of_half, false, off_score, def_score),
-            yard_line: self.next_yard_line(duration, net_yards, touchback, kickoff_oob, end_of_half, off_score, def_score),
-            home_score: self.next_home_score(off_score, def_score),
-            away_score: self.next_away_score(off_score, def_score),
-            home_timeouts: self.next_home_timeouts(off_timeout, def_timeout),
-            away_timeouts: self.next_away_timeouts(off_timeout, def_timeout),
-            home_positive_direction: self.next_home_positive_direction(duration, end_of_half, off_score, def_score),
+            half_seconds: self.next_half_seconds(&update_opts),
+            down: self.next_down(&update_opts),
+            distance: self.next_distance(&update_opts),
+            yard_line: self.next_yard_line(&update_opts),
+            home_score: self.next_home_score(&update_opts),
+            away_score: self.next_away_score(&update_opts),
+            home_timeouts: self.next_home_timeouts(&update_opts),
+            away_timeouts: self.next_away_timeouts(&update_opts),
+            home_positive_direction: self.next_home_positive_direction(&update_opts),
             home_opening_kickoff: self.home_opening_kickoff,
-            home_possession: self.next_home_possession(net_yards, turnover, end_of_half, off_score, def_score),
+            home_possession: self.next_home_possession(&update_opts),
             last_play_turnover: turnover,
             last_play_incomplete: result.incomplete(),
             last_play_out_of_bounds: result.out_of_bounds(),
             last_play_timeout: off_timeout || def_timeout,
             last_play_kickoff: result.kickoff(),
             last_play_punt: result.punt(),
-            next_play_extra_point: next_play_extra_point,
+            next_play_extra_point,
             next_play_kickoff: result.next_play_kickoff() || (end_of_half && !next_play_extra_point),
-            end_of_half: end_of_half,
-            game_over: self.next_game_over(duration, off_score, def_score)
+            end_of_half,
+            game_over: self.next_game_over(&update_opts)
         };
         GameContext::try_from(raw).unwrap()
     }
@@ -1972,6 +2011,7 @@ impl GameContextBuilder {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::game::play::result::betweenplay::{BetweenPlayResult, BetweenPlayResultBuilder};
     use crate::game::play::result::kickoff::{KickoffResult, KickoffResultBuilder};
 
     #[test]
@@ -1999,5 +2039,76 @@ mod tests {
 
         // Assert the next distance is 10
         assert!(next_context.distance() == 10);
+    }
+
+    #[test]
+    fn test_end_of_game_next_yl_1() {
+        // Create a context
+        let context: GameContext = GameContextBuilder::default()
+            .home_score(52)
+            .away_score(34)
+            .half_seconds(28)
+            .quarter(4)
+            .down(3)
+            .distance(6)
+            .yard_line(4)
+            .home_possession(false)
+            .home_positive_direction(false)
+            .home_opening_kickoff(true)
+            .build()
+            .unwrap();
+        
+        // Create a between play result
+        let between_play: BetweenPlayResult = BetweenPlayResultBuilder::new()
+            .duration(30)
+            .offense_timeout(false)
+            .defense_timeout(false)
+            .build()
+            .unwrap();
+        
+        // Get the next context
+        let next_context: GameContext = between_play.next_context(&context);
+
+        // Assert the correct context is derived
+        assert!(next_context.home_possession());
+        assert!(next_context.home_positive_direction());
+        assert!(next_context.end_of_half());
+        assert_eq!(next_context.yard_line(), 35);
+    }
+
+    #[test]
+    fn test_end_of_game_next_yl_2() {
+        // Create a context
+        let context: GameContext = GameContextBuilder::default()
+            .home_score(52)
+            .away_score(34)
+            .half_seconds(23)
+            .quarter(4)
+            .down(4)
+            .distance(2)
+            .yard_line(96)
+            .home_possession(true)
+            .home_positive_direction(true)
+            .home_opening_kickoff(true)
+            .build()
+            .unwrap();
+
+        // Create a between play result
+        let between_play: BetweenPlayResult = BetweenPlayResultBuilder::new()
+            .duration(30)
+            .offense_timeout(false)
+            .defense_timeout(false)
+            .build()
+            .unwrap();
+
+        // Get the next context
+        let next_context: GameContext = between_play.next_context(&context);
+
+        // Assert the correct context is derived
+        assert_eq!(next_context.down(), 0);
+        assert!(next_context.home_possession());
+        assert!(!next_context.home_positive_direction());
+        assert!(next_context.end_of_half());
+        assert_eq!(next_context.yard_line(), 65);
     }
 }

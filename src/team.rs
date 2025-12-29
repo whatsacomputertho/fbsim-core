@@ -223,21 +223,15 @@ impl FootballTeam {
     /// let my_team = FootballTeam::from_overalls("My Team", "TEAM", 25, 75);
     /// ```
     pub fn from_overalls(name: &str, short_name: &str, offense_overall: u32, defense_overall: u32) -> Result<FootballTeam, String> {
-        let offense = match FootballTeamOffense::from_overall(offense_overall) {
-            Ok(o) => o,
-            Err(msg) => return Err(msg)
-        };
-        let defense = match FootballTeamDefense::from_overall(defense_overall) {
-            Ok(d) => d,
-            Err(msg) => return Err(msg)
-        };
+        let offense = FootballTeamOffense::from_overall(offense_overall)?;
+        let defense = FootballTeamDefense::from_overall(defense_overall)?;
         Ok(
             FootballTeam{
                 name: String::from(name),
                 short_name: String::from(short_name),
                 coach: FootballTeamCoach::new(),
-                offense: offense,
-                defense: defense
+                offense,
+                defense
             }
         )
     }
@@ -261,9 +255,9 @@ impl FootballTeam {
         FootballTeam{
             name: String::from(name),
             short_name: String::from(short_name),
-            coach: coach,
-            offense: offense,
-            defense: defense
+            coach,
+            offense,
+            defense
         }
     }
 

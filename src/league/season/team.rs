@@ -133,6 +133,25 @@ impl<'de> Deserialize<'de> for LeagueSeasonTeam {
     }
 }
 
+impl Default for LeagueSeasonTeam {
+    /// Default constructor for the `LeagueSeasonTeam` struct
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::league::season::team::LeagueSeasonTeam;
+    ///
+    /// let my_season_team = LeagueSeasonTeam::default();
+    /// ```
+    fn default() -> Self {
+        LeagueSeasonTeam{
+            name: String::from(DEFAULT_TEAM_NAME), 
+            logo: "".to_string(), // TODO: Default logo
+            offense_overall: 50_u32,
+            defense_overall: 50_u32
+        }
+    }
+}
+
 impl LeagueSeasonTeam {
     /// Constructor for the `LeagueSeasonTeam` struct in which the properties
     /// are zeroed
@@ -144,12 +163,7 @@ impl LeagueSeasonTeam {
     /// let my_season_team = LeagueSeasonTeam::new();
     /// ```
     pub fn new() -> LeagueSeasonTeam {
-        LeagueSeasonTeam{
-            name: String::from(DEFAULT_TEAM_NAME), 
-            logo: "".to_string(), // TODO: Default logo
-            offense_overall: 50_u32,
-            defense_overall: 50_u32
-        }
+        LeagueSeasonTeam::default()
     }
 
     /// Constructor for the `LeagueSeasonTeam` struct in which the properties
@@ -168,10 +182,10 @@ impl LeagueSeasonTeam {
     /// ```
     pub fn from_properties(name: String, logo: String, offense_overall: u32, defense_overall: u32) -> Result<LeagueSeasonTeam, String> {
         let raw = LeagueSeasonTeamRaw{
-            name: name, 
-            logo: logo,
-            offense_overall: offense_overall,
-            defense_overall: defense_overall
+            name, 
+            logo,
+            offense_overall,
+            defense_overall
         };
         LeagueSeasonTeam::try_from(raw)
     }

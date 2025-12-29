@@ -235,7 +235,7 @@ impl std::fmt::Display for FieldGoalResult {
             result_str,
             &return_str
         );
-        f.write_str(&fg_str.trim())
+        f.write_str(fg_str.trim())
     }
 }
 
@@ -675,10 +675,7 @@ impl FieldGoalResultSimulator {
         } else {
             SkewNormal::new(FIELD_GOAL_NOT_BLOCKED_DURATION_MEAN, FIELD_GOAL_NOT_BLOCKED_DURATION_STD, FIELD_GOAL_NOT_BLOCKED_DURATION_SKEW).unwrap()
         };
-        match u32::try_from(duration_dist.sample(rng).round() as i32) {
-            Ok(n) => n,
-            Err(_) => 0
-        }
+        u32::try_from(duration_dist.sample(rng).round() as i32).unwrap_or_default()
     }
 }
 
@@ -735,11 +732,11 @@ impl PlayResultSimulator for FieldGoalResultSimulator {
         let touchdown: bool = blocked && (return_yards > safety_yards.abs());
         let raw = FieldGoalResultRaw{
             field_goal_distance: td_yards + 17,
-            return_yards: return_yards,
-            play_duration: play_duration,
-            made: made,
-            blocked: blocked,
-            touchdown: touchdown,
+            return_yards,
+            play_duration,
+            made,
+            blocked,
+            touchdown,
             extra_point: context.next_play_extra_point()
         };
         let fg_res = FieldGoalResult::try_from(raw).unwrap();

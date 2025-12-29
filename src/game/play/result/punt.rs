@@ -324,7 +324,7 @@ impl std::fmt::Display for PuntResult {
             String::from(" out of bounds.")
         } else if self.fair_catch {
             if self.muffed {
-                format!(" fair catch MUFFED.")
+                String::from(" fair catch MUFFED.")
             } else {
                 String::from(" for a fair catch.")
             }
@@ -349,7 +349,7 @@ impl std::fmt::Display for PuntResult {
             &return_str,
             &fumble_str
         );
-        f.write_str(&punt_str.trim())
+        f.write_str(punt_str.trim())
     }
 }
 
@@ -886,7 +886,7 @@ impl PuntResultSimulator {
         let p_inside_20_skill: f64 = P_PUNT_INSIDE_20_SKILL_INTR + (P_PUNT_INSIDE_20_SKILL_COEF * norm_punting);
         let p_inside_20_yardline: f64 = P_PUNT_INSIDE_20_YARD_LINE_PARAM_1 / (
             1_f64 + (
-                -1_f64 * P_PUNT_INSIDE_20_YARD_LINE_PARAM_2 * (
+                -P_PUNT_INSIDE_20_YARD_LINE_PARAM_2 * (
                     yard_line as f64 - P_PUNT_INSIDE_20_YARD_LINE_PARAM_3
                 )
             ).exp() + P_PUNT_INSIDE_20_YARD_LINE_PARAM_4
@@ -981,10 +981,7 @@ impl PuntResultSimulator {
     fn play_duration(&self, total_yards: u32, rng: &mut impl Rng) -> u32 {
         let mean_duration: f64 = PUNT_PLAY_DURATION_INTR + (PUNT_PLAY_DURATION_COEF * total_yards as f64);
         let duration_dist = Normal::new(mean_duration, 2_f64).unwrap();
-        match u32::try_from(duration_dist.sample(rng).round() as i32) {
-            Ok(n) => n,
-            Err(_) => 0
-        }
+        u32::try_from(duration_dist.sample(rng).round() as i32).unwrap_or_default()
     }
 }
 
@@ -1089,26 +1086,26 @@ impl PlayResultSimulator for PuntResultSimulator {
 
         // Determine if a fumble recovery touchdown occurred
         touchdown = if fumble {
-            punt_landing as i32 + punt_return_yards - fumble_return_yards <= 0
+            punt_landing + punt_return_yards - fumble_return_yards <= 0
         } else {
             touchdown
         };
 
         // Calculate total yardage and play duration
-        let total_yards: u32 = punt_distance.abs() as u32 + punt_return_yards.abs() as u32 + fumble_return_yards.abs() as u32;
+        let total_yards: u32 = punt_distance.unsigned_abs() + punt_return_yards.unsigned_abs() + fumble_return_yards.unsigned_abs();
         let play_duration: u32 = self.play_duration(total_yards, rng);
         let punt_res = PuntResult{
-            fumble_return_yards: fumble_return_yards,
+            fumble_return_yards,
             punt_yards: punt_distance,
-            punt_return_yards: punt_return_yards,
-            play_duration: play_duration,
-            blocked: blocked,
-            touchback: touchback,
-            out_of_bounds: out_of_bounds,
-            fair_catch: fair_catch,
+            punt_return_yards,
+            play_duration,
+            blocked,
+            touchback,
+            out_of_bounds,
+            fair_catch,
             muffed: punt_muffed,
-            fumble: fumble,
-            touchdown: touchdown
+            fumble,
+            touchdown
         };
         PlayTypeResult::Punt(punt_res)
     }

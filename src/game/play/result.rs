@@ -314,9 +314,9 @@ pub trait PlayResultSimulator {
 /// `ScoreResult` enum
 ///
 /// Enumerates the various ways a team can score points in football
-#[derive(PartialEq, Clone, Copy)]
+#[derive(PartialEq, Clone, Copy, Eq, Ord, PartialOrd, Debug, Default)]
 pub enum ScoreResult {
-    None,
+    #[default] None,
     ExtraPoint,
     TwoPointConversion,
     Safety,

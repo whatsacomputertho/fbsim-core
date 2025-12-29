@@ -33,8 +33,8 @@ impl LeagueSeasonMatchup {
     /// ```
     pub fn new(home_team: usize, away_team: usize) -> LeagueSeasonMatchup {
         LeagueSeasonMatchup {
-            home_team: home_team,
-            away_team: away_team,
+            home_team,
+            away_team,
             home_score: 0,
             away_score: 0,
             complete: false
@@ -203,16 +203,14 @@ impl LeagueSeasonMatchup {
         }
         if self.is_home_team(id) {
             if self.home_score > self.away_score {
-                return Some(FootballMatchupResult::Win);
+                Some(FootballMatchupResult::Win)
             } else {
-                return Some(FootballMatchupResult::Loss);
+                Some(FootballMatchupResult::Loss)
             }
+        } else if self.home_score > self.away_score {
+            Some(FootballMatchupResult::Loss)
         } else {
-            if self.home_score > self.away_score {
-                return Some(FootballMatchupResult::Loss);
-            } else {
-                return Some(FootballMatchupResult::Win);
-            }
+            Some(FootballMatchupResult::Win)
         }
     }
 }
@@ -237,8 +235,8 @@ impl LeagueSeasonMatchups {
     /// ```
     pub fn new(team_id: usize, matchups: Vec<Option<LeagueSeasonMatchup>>) -> LeagueSeasonMatchups {
         LeagueSeasonMatchups{
-            team_id: team_id,
-            matchups: matchups
+            team_id,
+            matchups
         }
     }
 
@@ -271,17 +269,13 @@ impl LeagueSeasonMatchups {
         let mut record = LeagueTeamRecord::new();
 
         // Loop through the matchups and increment the team record
-        for matchup in self.matchups.iter() {
-            match matchup {
-                Some(m) => match m.result(self.team_id) {
-                    Some(r) => match r {
-                        FootballMatchupResult::Win => record.increment_wins(1),
-                        FootballMatchupResult::Loss => record.increment_losses(1),
-                        FootballMatchupResult::Tie => record.increment_ties(1)
-                    },
-                    None => ()
-                },
-                None => ()
+        for matchup in self.matchups.iter().flatten() {
+            if let Some(r) = matchup.result(self.team_id) {
+                match r {
+                    FootballMatchupResult::Win => record.increment_wins(1),
+                    FootballMatchupResult::Loss => record.increment_losses(1),
+                    FootballMatchupResult::Tie => record.increment_ties(1)
+                }
             }
         }
         record

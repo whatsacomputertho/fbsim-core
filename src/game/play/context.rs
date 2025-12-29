@@ -55,10 +55,7 @@ impl From<&GameContext> for PlayContext {
 
         // Determine yard line based on possession and direction
         let yard_line: u32 = if item.home_possession() ^ item.home_positive_direction() {
-            match u32::try_from(100_i32 - item.yard_line() as i32) {
-                Ok(n) => n,
-                Err(_) => 0
-            }
+            u32::try_from(100_i32 - item.yard_line() as i32).unwrap_or_default()
         } else {
             item.yard_line()
         };
@@ -69,10 +66,10 @@ impl From<&GameContext> for PlayContext {
             half_seconds: item.half_seconds(),
             down: item.down(),
             distance: item.distance(),
-            yard_line: yard_line,
-            score_diff: score_diff,
-            off_timeouts: off_timeouts,
-            def_timeouts: def_timeouts,
+            yard_line,
+            score_diff,
+            off_timeouts,
+            def_timeouts,
             clock_running: item.clock_running()
         }
     }
@@ -209,14 +206,11 @@ impl PlayContext {
         }
         let scores_up_by: f32 = self.score_diff as f32 / 8_f32;
         let drain_threshold_sig: i32 = (scores_up_by * 4_f32 * 60_f32) as i32;
-        let drain_threshold: u32 = match u32::try_from(drain_threshold_sig) {
-            Ok(n) => n,
-            Err(_) => 0
-        };
+        let drain_threshold: u32 = u32::try_from(drain_threshold_sig).unwrap_or_default();
         if self.quarter >= 4 && self.half_seconds < drain_threshold {
             return true
         }
-        return false
+        false
     }
 
     /// Whether this is an up-tempo scenario for the offense
@@ -333,7 +327,7 @@ impl PlayContext {
     /// ```
     pub fn can_kneel(&self) -> bool {
         let downs_remaining = 4 - self.down;
-        let runoff_seconds = 42 * 0.max(downs_remaining - self.def_timeouts);
+        let runoff_seconds = 42 * downs_remaining.checked_sub(self.def_timeouts).unwrap_or_default();
         runoff_seconds >= self.half_seconds
     }
 
@@ -359,10 +353,7 @@ impl PlayContext {
         }
         let non_timeout_drive_time = (42 * 3) + 8;
         let timeout_drives_remaining: u32 = 1;
-        let non_timeout_drive_time_remaining = match u32::try_from(self.half_seconds - timeout_drive_time) {
-            Ok(n) => n,
-            Err(_) => 0
-        };
+        let non_timeout_drive_time_remaining = self.half_seconds.checked_sub(timeout_drive_time).unwrap_or_default();
         let non_timeout_drives_remaining = (
             non_timeout_drive_time_remaining as f32 / non_timeout_drive_time as f32
         ).ceil() as u32;
@@ -424,7 +415,7 @@ impl std::fmt::Display for PlayContext {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         // Format the clock
         let clock_total = if self.half_seconds < 900 || 
-            (self.half_seconds == 900 && self.quarter % 2 == 0 && self.quarter <= 4) {
+            (self.half_seconds == 900 && self.quarter.is_multiple_of(2) && self.quarter <= 4) {
             self.half_seconds
         } else {
             self.half_seconds - 900
