@@ -285,10 +285,7 @@ impl PlaySimulator {
                 PlayCall::QbSpike => self.pass.sim(away, home, &context, rng)
             }
         };
-        println!("{}", context);
-        println!("{}", result);
         let next_context = result.next_context(&context);
-        println!("{}", next_context);
 
         // Simulate between plays
         let between_res = if context.home_possession() {
@@ -296,9 +293,7 @@ impl PlaySimulator {
         } else {
             self.betweenplay.sim(away, home, &next_context, rng)
         };
-        println!("{}", between_res);
         let new_context = between_res.next_context(&next_context);
-        println!("{}", new_context);
         (Play::new(context, result, between_res), new_context)
     }
 }
