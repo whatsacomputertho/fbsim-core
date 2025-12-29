@@ -126,7 +126,7 @@ impl KickoffResultRaw {
         }
 
         // Ensure mutual exclusivity of touchback, oob, and fair catch
-        if self.out_of_bounds && (self.fair_catch || self.touchback) ||
+        if (self.out_of_bounds && (self.fair_catch || self.touchback)) ||
             (self.fair_catch && self.touchback) {
             return Err(
                 format!(
@@ -642,6 +642,7 @@ impl KickoffResultBuilder {
     /// use fbsim_core::game::play::result::kickoff::KickoffResultBuilder;
     /// 
     /// let my_result = KickoffResultBuilder::new()
+    ///     .touchback(false)
     ///     .fair_catch(true)
     ///     .build()
     ///     .unwrap();

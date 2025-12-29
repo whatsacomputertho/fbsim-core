@@ -7,10 +7,10 @@ use rocket_okapi::okapi::schemars::JsonSchema;
 use serde::{Serialize, Deserialize, Deserializer};
 use rand_distr::{SkewNormal, Normal, Distribution};
 
-use crate::game::context::{GameContext, GameContextBuilder};
+use crate::game::context::{GameContext, GameContextBuilder, GameContextUpdateOptions};
 use crate::game::play::PlaySimulatable;
 use crate::game::play::context::PlayContext;
-use crate::game::play::result::{PlayResult, PlayTypeResult, PlayResultSimulator, ScoreResult};
+use crate::game::play::result::{PlayResult, PlayTypeResult, PlayResultSimulator};
 
 // Up-tempo probability regression
 const P_UP_TEMPO_INTR: f64 = -4.539512521135468_f64; // Adjusted -1
@@ -183,28 +183,36 @@ impl PlayResult for BetweenPlayResult {
         if context.next_play_extra_point() {
             return context.clone();
         }
-        let off_score = ScoreResult::None;
-        let def_score = ScoreResult::None;
-        let end_of_half = context.end_of_half() || context.next_end_of_half(self.duration, off_score, def_score);
-        let end_of_game = context.next_game_over(self.duration, off_score, def_score);
-        let next_quarter = context.next_quarter(self.duration, off_score, def_score);
+        let default_update_opts = GameContextUpdateOptions::default();
+        let between_update_opts = GameContextUpdateOptions{
+            duration: self.duration,
+            off_timeout: self.offense_timeout,
+            def_timeout: self.defense_timeout,
+            between_play: true,
+            ..Default::default()
+        };
+        let end_of_half = context.end_of_half() || context.next_end_of_half(&between_update_opts);
+        let end_of_game = context.next_game_over(&between_update_opts);
+        let mut eog_update_opts = between_update_opts.clone();
+        eog_update_opts.end_of_game = end_of_game;
+        let next_quarter = context.next_quarter(&between_update_opts);
         let yard_line = if end_of_half {
-            context.next_yard_line(0, 0, false, false, true, off_score, def_score)
+            context.next_yard_line(&default_update_opts)
         } else {
-            context.next_yard_line(self.duration, 0, false, false, false, off_score, def_score)
+            context.next_yard_line(&between_update_opts)
         };
         let distance = if end_of_half {
-            context.next_distance(0, 0, false, false, false, true, true, off_score, def_score)
+            context.next_distance(&default_update_opts)
         } else {
-            context.next_distance(self.duration, 0, false, false, false, false, true, off_score, def_score)
+            context.next_distance(&between_update_opts)
         };
         let down = if end_of_half {
-            context.next_down(0, false, true, off_score, def_score)
+            context.next_down(&default_update_opts)
         } else {
             context.down()
         };
         let home_possession = if end_of_half {
-            context.next_home_possession(0, false, true, off_score, def_score)
+            context.next_home_possession(&default_update_opts)
         } else {
             context.home_possession()
         };
@@ -213,15 +221,15 @@ impl PlayResult for BetweenPlayResult {
             .home_team_short(context.home_team_short())
             .away_team_short(context.away_team_short())
             .quarter(next_quarter)
-            .half_seconds(context.next_half_seconds(self.duration, false, end_of_half && !end_of_game, off_score, def_score))
+            .half_seconds(context.next_half_seconds(&eog_update_opts))
             .down(down)
             .distance(distance)
             .yard_line(yard_line)
             .home_score(context.home_score())
             .away_score(context.away_score())
-            .home_timeouts(context.next_home_timeouts(self.offense_timeout, self.defense_timeout))
-            .away_timeouts(context.next_away_timeouts(self.offense_timeout, self.defense_timeout))
-            .home_positive_direction(context.next_home_positive_direction(self.duration, end_of_half, off_score, def_score))
+            .home_timeouts(context.next_home_timeouts(&between_update_opts))
+            .away_timeouts(context.next_away_timeouts(&between_update_opts))
+            .home_positive_direction(context.next_home_positive_direction(&between_update_opts))
             .home_opening_kickoff(context.home_opening_kickoff())
             .home_possession(home_possession)
             .last_play_turnover(context.last_play_turnover())
@@ -232,7 +240,7 @@ impl PlayResult for BetweenPlayResult {
             .next_play_extra_point(next_play_extra_point)
             .next_play_kickoff(context.next_play_kickoff() || (end_of_half && !next_play_extra_point))
             .end_of_half(end_of_half)
-            .game_over(context.next_game_over(self.duration, off_score, def_score))
+            .game_over(context.next_game_over(&between_update_opts))
             .build()
             .unwrap()
     }
