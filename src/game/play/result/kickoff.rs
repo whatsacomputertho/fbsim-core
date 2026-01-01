@@ -9,6 +9,7 @@ use rand_distr::{Normal, Distribution, Exp, SkewNormal};
 
 use crate::game::context::GameContext;
 use crate::game::play::PlaySimulatable;
+use crate::game::play::context::PlayContext;
 use crate::game::play::result::{PlayResult, PlayTypeResult, PlayResultSimulator, ScoreResult};
 
 // Touchback probability regression
@@ -60,6 +61,7 @@ const SKEW_KICKOFF_RETURN_YARDS_INTR: f64 = 3.62041405111988_f64;
 const SKEW_KICKOFF_RETURN_YARDS_COEF: f64 = -2.65709746_f64;
 
 // Kickoff return fumble probability
+const P_ONSIDE_KICK_RECOVERY: f64 = 0.06_f64;
 const P_KICKOFF_RETURN_FUMBLE: f64 = 0.007_f64;
 
 // Kickoff return play duration regression
@@ -80,7 +82,8 @@ pub struct KickoffResultRaw {
     out_of_bounds: bool,
     fair_catch: bool,
     fumble: bool,
-    touchdown: bool
+    touchdown: bool,
+    onside_kick: bool
 }
 
 impl KickoffResultRaw {
@@ -163,7 +166,8 @@ pub struct KickoffResult {
     out_of_bounds: bool,
     fair_catch: bool,
     fumble: bool,
-    touchdown: bool
+    touchdown: bool,
+    onside_kick: bool
 }
 
 impl TryFrom<KickoffResultRaw> for KickoffResult {
@@ -187,7 +191,8 @@ impl TryFrom<KickoffResultRaw> for KickoffResult {
                 out_of_bounds: item.out_of_bounds,
                 fair_catch: item.fair_catch,
                 fumble: item.fumble,
-                touchdown: item.touchdown
+                touchdown: item.touchdown,
+                onside_kick: item.onside_kick
             }
         )
     }
@@ -223,7 +228,8 @@ impl Default for KickoffResult {
             out_of_bounds: false,
             fair_catch: false,
             fumble: false,
-            touchdown: false
+            touchdown: false,
+            onside_kick: false
         }
     }
 }
@@ -240,13 +246,19 @@ impl std::fmt::Display for KickoffResult {
     /// println!("{}", my_result);
     /// ```
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let distance_str = format!("Kickoff {} yards", self.kickoff_yards);
+        let distance_str = if self.onside_kick {
+            format!("Onside kick {} yards", self.kickoff_yards)
+        } else {
+            format!("Kickoff {} yards", self.kickoff_yards)
+        };
         let landing_suffix = if self.touchback {
             " for a touchback."
         } else if self.out_of_bounds {
             " out of bounds."
         } else if self.fair_catch && !self.fumble {
             " for a fair catch."
+        } else if self.onside_kick && ! self.fumble {
+            " recovered by the receiving team."
         } else {
             " fielded."
         };
@@ -259,8 +271,10 @@ impl std::fmt::Display for KickoffResult {
         } else {
             String::from("")
         };
-        let fumble_str = if self.fumble {
+        let fumble_str = if self.fumble && !self.onside_kick {
             format!(" FUMBLED recovered by the kicking team, returned {} yards.", self.fumble_return_yards)
+        } else if self.fumble && self.onside_kick {
+            format!(" RECOVERED by the kicking team, returned {} yards.", self.fumble_return_yards)
         } else {
             String::from("")
         };
@@ -492,7 +506,8 @@ pub struct KickoffResultBuilder {
     out_of_bounds: bool,
     fair_catch: bool,
     fumble: bool,
-    touchdown: bool
+    touchdown: bool,
+    onside_kick: bool
 }
 
 impl Default for KickoffResultBuilder {
@@ -514,7 +529,8 @@ impl Default for KickoffResultBuilder {
             out_of_bounds: false,
             fair_catch: false,
             fumble: false,
-            touchdown: false
+            touchdown: false,
+            onside_kick: false
         }
     }
 }
@@ -688,6 +704,23 @@ impl KickoffResultBuilder {
         self
     }
 
+    /// Set the onside_kick property
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::game::play::result::kickoff::KickoffResultBuilder;
+    /// 
+    /// let my_result = KickoffResultBuilder::new()
+    ///     .onside_kick(true)
+    ///     .build()
+    ///     .unwrap();
+    /// assert!(my_result.onside_kick());
+    /// ```
+    pub fn onside_kick(mut self, onside_kick: bool) -> Self {
+        self.onside_kick = onside_kick;
+        self
+    }
+
     /// Build the KickoffResult
     ///
     /// ### Example
@@ -708,7 +741,8 @@ impl KickoffResultBuilder {
             out_of_bounds: self.out_of_bounds,
             fair_catch: self.fair_catch,
             fumble: self.fumble,
-            touchdown: self.touchdown
+            touchdown: self.touchdown,
+            onside_kick: self.onside_kick
         };
         KickoffResult::try_from(raw)
     }
@@ -798,6 +832,12 @@ impl KickoffResultSimulator {
         rng.gen::<f64>() < P_KICKOFF_RETURN_FUMBLE
     }
 
+    /// Generates whether an onside kick was recovered
+    fn onside_kick_recovery(&self, rng: &mut impl Rng) -> bool {
+        // TODO: Make this based on skill
+        rng.gen::<f64>() < P_ONSIDE_KICK_RECOVERY
+    }
+
     /// Generates the fumble recovery return yards
     fn fumble_return_yards(&self, rng: &mut impl Rng) -> i32 {
         Exp::new(1_f64).unwrap().sample(rng).round() as i32
@@ -839,9 +879,17 @@ impl PlayResultSimulator for KickoffResultSimulator {
         let norm_diff_returning: f64 = 0.5_f64 + ((defense.defense().kick_returning() as f64 - offense.offense().kick_return_defense() as f64) / 200_f64);
         let td_yards: i32 = context.yards_to_touchdown();
         let safety_yards: i32 = context.yards_to_safety();
+        let play_context = PlayContext::from(context);
+
+        // Generate whether this was an onside kick
+        let onside_kick: bool = play_context.onside_kick();
 
         // Generate whether the kickoff was a touchback
-        let touchback: bool = self.touchback(norm_kicking, rng);
+        let touchback: bool = if !onside_kick {
+            self.touchback(norm_kicking, rng)
+        } else {
+            false
+        };
 
         // Generate whether the kickoff went out of bounds
         let out_of_bounds: bool = if !touchback {
@@ -851,35 +899,40 @@ impl PlayResultSimulator for KickoffResultSimulator {
         };
 
         // Generate whether the kickoff landed inside the 20
-        let inside_20: bool = if !touchback {
+        let inside_20: bool = if !(touchback || onside_kick) {
             self.inside_20(rng)
         } else {
             false
         };
 
         // Generate the kickoff distance
-        let kickoff_distance: i32 = if !touchback {
+        let kickoff_distance: i32 = if onside_kick {
+            // TODO: Make this more dynamic
+            10
+        } else if !touchback {
             td_yards.min(self.distance(norm_kicking, inside_20, rng))
         } else {
             td_yards
         };
 
         // Generate whether a fair catch was called on the kickoff
-        let fair_catch: bool = if !(touchback || out_of_bounds) {
+        let fair_catch: bool = if !(touchback || out_of_bounds || onside_kick) {
             self.fair_catch(norm_diff_returning, rng)
         } else {
             false
         };
 
         // Generate the kickoff return yards
-        let return_yards: i32 = if !(touchback || out_of_bounds || fair_catch) {
+        let return_yards: i32 = if !(touchback || out_of_bounds || fair_catch || onside_kick) {
             self.return_yards(norm_diff_returning, rng).min(safety_yards + kickoff_distance)
         } else {
             0
         };
 
         // Generate whether a fumble occurred on the kickoff
-        let fumble: bool = if !(touchback || out_of_bounds || fair_catch) {
+        let fumble: bool = if onside_kick {
+            self.onside_kick_recovery(rng)
+        } else if !(touchback || out_of_bounds || fair_catch) {
             self.fumble(rng)
         } else {
             false
@@ -918,7 +971,8 @@ impl PlayResultSimulator for KickoffResultSimulator {
             out_of_bounds,
             fair_catch,
             fumble,
-            touchdown
+            touchdown,
+            onside_kick
         };
         let kickoff_res = KickoffResult::try_from(raw).unwrap();
         PlayTypeResult::Kickoff(kickoff_res)

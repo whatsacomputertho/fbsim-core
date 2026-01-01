@@ -251,9 +251,7 @@ impl PlaySimulator {
     /// ```
     pub fn sim(&self, home: &FootballTeam, away: &FootballTeam, context: GameContext, rng: &mut impl Rng) -> (Play, GameContext) {
         // Determine the play call
-        let play_call = if context.next_play_extra_point() {
-            PlayCall::ExtraPoint
-        } else if context.next_play_kickoff() {
+        let play_call = if context.next_play_kickoff() {
             PlayCall::Kickoff
         } else if context.home_possession() {
             self.playcall.sim(home, &context, rng)
