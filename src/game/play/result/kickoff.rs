@@ -489,6 +489,20 @@ impl KickoffResult {
     pub fn touchdown(&self) -> bool {
         self.touchdown
     }
+
+    /// Get a kickoff result's onside_kick property
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::game::play::result::kickoff::KickoffResult;
+    /// 
+    /// let my_res = KickoffResult::new();
+    /// let onside_kick = my_res.onside_kick();
+    /// assert!(!onside_kick);
+    /// ```
+    pub fn onside_kick(&self) -> bool {
+        self.onside_kick
+    }
 }
 
 /// # `KickoffResultBuilder` struct

@@ -118,7 +118,7 @@ impl PlayContext {
     /// let game_context = GameContext::new();
     /// let play_context = PlayContext::from(&game_context);
     /// let two_point_conversion = play_context.two_point_conversion();
-    /// assert!(two_point_conversion);
+    /// assert!(!two_point_conversion);
     /// ```
     pub fn two_point_conversion(&self) -> bool {
         self.quarter == 4 && (
