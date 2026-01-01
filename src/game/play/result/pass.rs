@@ -1203,7 +1203,7 @@ impl PassResultSimulator {
 
     /// Generates whether the quarterback threw an interception
     fn interception(&self, norm_diff_turnovers: f64, rng: &mut impl Rng) -> bool {
-        let p_interception: f64 = 1_f64.min(0_f64.max(P_INTERCEPTION_INTR + (P_INTERCEPTION_COEF * norm_diff_turnovers)));
+        let p_interception: f64 = 0.995_f64.min(0.005_f64.max(P_INTERCEPTION_INTR + (P_INTERCEPTION_COEF * norm_diff_turnovers)));
         rng.gen::<f64>() < p_interception
     }
 
@@ -1335,7 +1335,7 @@ impl PlayResultSimulator for PassResultSimulator {
 
         // Generate scramble yards if scramble occurred
         let scramble_yards: i32 = if scramble {
-            self.scramble_yards(norm_diff_scrambling, rng)
+            td_yards.min(self.scramble_yards(norm_diff_scrambling, rng))
         } else {
             0
         };
@@ -1353,9 +1353,13 @@ impl PlayResultSimulator for PassResultSimulator {
 
         // Generate pass distance
         let pass_distance: i32 = if pass && !short_pass {
-            self.deep_pass_distance(yard_line, rng)
+            if short_pass {
+                self.short_pass_distance(yard_line, rng)
+            } else {
+                self.deep_pass_distance(yard_line, rng)
+            }
         } else {
-            self.short_pass_distance(yard_line, rng)
+            0
         };
 
         // Generate whether an interception occurred
