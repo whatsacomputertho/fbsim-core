@@ -1291,11 +1291,38 @@ impl PlayResultSimulator for PassResultSimulator {
     /// ```
     fn sim(&self, offense: &impl PlaySimulatable, defense: &impl PlaySimulatable, context: &GameContext, rng: &mut impl Rng) -> PlayTypeResult {
         // Derive the normalized skill differentials for each team
-        let norm_diff_blocking: f64 = 0.5_f64 + ((offense.offense().blocking() as f64 - defense.defense().blitzing() as f64) / 200_f64);
-        let norm_diff_passing: f64 = 0.5_f64 + ((offense.offense().passing() as f64 - defense.defense().pass_defense() as f64) / 200_f64);
-        let norm_diff_receiving: f64 = 0.5_f64 + ((offense.offense().receiving() as f64 - defense.defense().coverage() as f64) / 200_f64);
-        let norm_diff_turnovers: f64 = 0.5_f64 + ((offense.offense().turnovers() as f64 - defense.defense().turnovers() as f64) / 200_f64);
-        let norm_diff_scrambling: f64 = 0.5_f64 + ((offense.offense().scrambling() as f64 - defense.defense().rush_defense() as f64) / 200_f64);
+        let offense_advantage: bool = context.offense_advantage();
+        let defense_advantage: bool = context.defense_advantage();
+        let norm_diff_blocking: f64 = 0.5_f64 + (
+            (
+                offense.offense().blocking_advantage(offense_advantage) as f64 -
+                defense.defense().blitzing_advantage(defense_advantage) as f64
+            ) / 200_f64
+        );
+        let norm_diff_passing: f64 = 0.5_f64 + (
+            (
+                offense.offense().passing_advantage(offense_advantage) as f64 -
+                defense.defense().pass_defense_advantage(defense_advantage) as f64
+            ) / 200_f64
+        );
+        let norm_diff_receiving: f64 = 0.5_f64 + (
+            (
+                offense.offense().receiving_advantage(offense_advantage) as f64 -
+                defense.defense().coverage_advantage(defense_advantage) as f64
+            ) / 200_f64
+        );
+        let norm_diff_turnovers: f64 = 0.5_f64 + (
+            (
+                offense.offense().turnovers_advantage(offense_advantage) as f64 -
+                defense.defense().turnovers_advantage(defense_advantage) as f64
+            ) / 200_f64
+        );
+        let norm_diff_scrambling: f64 = 0.5_f64 + (
+            (
+                offense.offense().scrambling_advantage(offense_advantage) as f64 -
+                defense.defense().rush_defense_advantage(defense_advantage) as f64
+            ) / 200_f64
+        );
         let norm_scrambling: f64 = offense.offense().scrambling() as f64 / 100_f64;
         let td_yards = context.yards_to_touchdown();
         let yard_line = u32::try_from(td_yards).unwrap_or_default();
