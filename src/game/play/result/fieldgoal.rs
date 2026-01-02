@@ -707,8 +707,15 @@ impl PlayResultSimulator for FieldGoalResultSimulator {
     /// ```
     fn sim(&self, offense: &impl PlaySimulatable, defense: &impl PlaySimulatable, context: &GameContext, rng: &mut impl Rng) -> PlayTypeResult {
         // Calculate normalized skill levels and skill diffs
-        let norm_diff_blocking: f64 = 0.5_f64 + ((offense.offense().blocking() as f64 - defense.defense().blitzing() as f64) / 200_f64);
-        let norm_kicking: f64 = offense.offense().field_goals() as f64 / 100_f64;
+        let offense_advantage: bool = context.offense_advantage();
+        let defense_advantage: bool = context.defense_advantage();
+        let norm_diff_blocking: f64 = 0.5_f64 + (
+            (
+                offense.offense().blocking_advantage(offense_advantage) as f64 -
+                defense.defense().blitzing_advantage(defense_advantage) as f64
+            ) / 200_f64
+        );
+        let norm_kicking: f64 = offense.offense().field_goals_advantage(offense_advantage) as f64 / 100_f64;
         let td_yards: i32 = context.yards_to_touchdown();
         let safety_yards: i32 = context.yards_to_safety();
 

@@ -1009,9 +1009,21 @@ impl PlayResultSimulator for PuntResultSimulator {
     /// ```
     fn sim(&self, offense: &impl PlaySimulatable, defense: &impl PlaySimulatable, context: &GameContext, rng: &mut impl Rng) -> PlayTypeResult {
         // Calculate normalized skill levels and skill diffs
-        let norm_diff_blocking: f64 = 0.5_f64 + ((offense.offense().blocking() as f64 - defense.defense().blitzing() as f64) / 200_f64);
-        let norm_diff_returning: f64 = 0.5_f64 + ((defense.defense().kick_returning() as f64 - offense.offense().kick_return_defense() as f64) / 200_f64);
-        let norm_punting: f64 = offense.offense().punting() as f64 / 100_f64;
+        let offense_advantage: bool = context.offense_advantage();
+        let defense_advantage: bool = context.defense_advantage();
+        let norm_diff_blocking: f64 = 0.5_f64 + (
+            (
+                offense.offense().blocking_advantage(offense_advantage) as f64 -
+                defense.defense().blitzing_advantage(defense_advantage) as f64
+            ) / 200_f64
+        );
+        let norm_diff_returning: f64 = 0.5_f64 + (
+            (
+                defense.defense().kick_returning_advantage(defense_advantage) as f64 -
+                offense.offense().kick_return_defense_advantage(offense_advantage) as f64
+            ) / 200_f64
+        );
+        let norm_punting: f64 = offense.offense().punting_advantage(offense_advantage) as f64 / 100_f64;
         let td_yards: i32 = context.yards_to_touchdown();
         
         // Generate whether the punt was blocked

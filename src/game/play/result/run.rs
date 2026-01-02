@@ -736,8 +736,20 @@ impl PlayResultSimulator for RunResultSimulator {
     /// ```
     fn sim(&self, offense: &impl PlaySimulatable, defense: &impl PlaySimulatable, context: &GameContext, rng: &mut impl Rng) -> PlayTypeResult {
         // Derive the normalized skill differentials for each team
-        let norm_diff_rushing: f64 = 0.5_f64 + ((offense.offense().rushing() as f64 - defense.defense().rush_defense() as f64) / 200_f64);
-        let norm_diff_turnovers: f64 = 0.5_f64 + ((offense.offense().turnovers() as f64 - defense.defense().turnovers() as f64) / 200_f64);
+        let offense_advantage: bool = context.offense_advantage();
+        let defense_advantage: bool = context.defense_advantage();
+        let norm_diff_rushing: f64 = 0.5_f64 + (
+            (
+                offense.offense().rushing_advantage(offense_advantage) as f64 -
+                defense.defense().rush_defense_advantage(defense_advantage) as f64
+            ) / 200_f64
+        );
+        let norm_diff_turnovers: f64 = 0.5_f64 + (
+            (
+                offense.offense().turnovers_advantage(offense_advantage) as f64 -
+                defense.defense().turnovers_advantage(defense_advantage) as f64
+            ) / 200_f64
+        );
         let td_yards = context.yards_to_touchdown();
         let safety_yards = context.yards_to_safety();
 
