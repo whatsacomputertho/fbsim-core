@@ -216,7 +216,7 @@ impl League {
     /// let _ = my_league.add_season();
     ///
     /// // Borrow the past seasons from the League
-    /// let my_season = my_league.season(2025);
+    /// let my_season = my_league.season(2026);
     /// ```
     pub fn season(&self, year: usize) -> Option<&LeagueSeason> {
         // If the year corresponds to the current season, return it
@@ -563,7 +563,7 @@ impl League {
     /// my_league.sim(&mut rng);
     ///
     /// // Get the season matchups for team 0
-    /// let matchups: LeagueSeasonMatchups = my_league.team_season_matchups(0, 2025).unwrap();
+    /// let matchups: LeagueSeasonMatchups = my_league.team_season_matchups(0, 2026).unwrap();
     /// ```
     pub fn team_season_matchups(&self, id: usize, year: usize) -> Result<LeagueSeasonMatchups, String> {
         // Ensure the team ID exists
