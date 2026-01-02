@@ -12,7 +12,7 @@ use crate::game::play::context::PlayContext;
 
 // Run probabilities on 1st-3rd down clock management scenarios
 const P_RUN_CLOCK_MANAGEMENT: f64 = 0.15_f64;
-const P_RUN_CLOCK_MANAGEMENT_NO_TIMEOUTS: f64 = 0.01_f64;
+const P_RUN_CLOCK_MANAGEMENT_NO_TIMEOUTS: f64 = 0.001_f64;
 
 // Run probability regression on 1st down
 const P_RUN_FIRST_DOWN_INTR: f64 = 0.41649529080915104_f64;
@@ -149,9 +149,13 @@ impl PlayCallSimulator {
         let p_field_goal_risk: f64 = P_FIELD_GOAL_RISK_INTR + (P_FIELD_GOAL_RISK_COEF * risk_taking);
         let p_field_goal_yardline: f64 = P_FIELD_GOAL_YARD_LINE_INTR + (P_FIELD_GOAL_YARD_LINE_COEF_1 * yard_line as f64) +
             (P_FIELD_GOAL_YARD_LINE_COEF_2 * yard_line.pow(2) as f64);
-        let p_field_goal: f64 = 1_f64.min(0_f64.max(
-            (p_field_goal_risk * 0.4_f64) + (p_field_goal_yardline * 0.6_f64)
-        ));
+        let p_field_goal: f64 = 0.9999_f64.min(
+            0_f64.max(
+                (
+                    (p_field_goal_risk * 0.7_f64) + (p_field_goal_yardline * 0.3_f64)
+                ).max(0.0001).ln() * 0.8
+            ) * 1.6 + 0.0001
+        );
 
         // Go for it scenario
         if go_for_it_scenario {
@@ -194,7 +198,17 @@ impl PlayCallSimulator {
         // Compute normalized skill levels and context
         let norm_risk_taking: f64 = offense.coach().risk_taking() as f64 / 100_f64;
         let norm_run_pass: f64 = offense.coach().run_pass() as f64 / 100_f64;
+        let extra_point = context.next_play_extra_point();
         let play_context = PlayContext::from(context);
+
+        // Extra point playcalling
+        if extra_point {
+            if play_context.two_point_conversion() {
+                return self.normal_play_call(&play_context, norm_run_pass, rng);
+            } else {
+                return PlayCall::ExtraPoint;
+            }
+        }
 
         // Fourth down playcalling
         if play_context.down() == 4 {

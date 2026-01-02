@@ -662,9 +662,13 @@ impl FieldGoalResultSimulator {
         let p_made_skill: f64 = P_FIELD_GOAL_MADE_SKILL_INTR + (P_FIELD_GOAL_MADE_SKILL_COEF * norm_kicking);
         let p_made_yardline: f64 = P_FIELD_GOAL_MADE_YARD_LINE_INTR + (P_FIELD_GOAL_MADE_YARD_LINE_COEF_1 * yard_line as f64) +
             (P_FIELD_GOAL_MADE_YARD_LINE_COEF_2 * yard_line.pow(2) as f64);
-        let p_made: f64 = 1_f64.min(0_f64.max(
-            1.18_f64 * ((p_made_skill * 0.6_f64) + (p_made_yardline * 0.4_f64))
-        ));
+        let p_made: f64 = 0.9999_f64.min(
+            0.0001_f64.max(
+                (
+                    1.18_f64 * ((p_made_skill * 0.5_f64) + (p_made_yardline * 0.5_f64))
+                ).max(0.0001).ln() + 1.0
+            )
+        );
         rng.gen::<f64>() < p_made
     }
 

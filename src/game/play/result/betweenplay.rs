@@ -582,7 +582,9 @@ impl BetweenPlayResultSimulator {
         if (!context.clock_running()) || (context.offense_timeouts() == 0) {
             return false;
         }
-        if context.offense_conserve_clock() {
+        if context.offense_conserve_clock() || (
+            (context.losing() || context.tied()) && context.last_play_clock_running()
+        ) {
             return true;
         }
         false
@@ -593,7 +595,9 @@ impl BetweenPlayResultSimulator {
         if (!context.clock_running()) || (context.defense_timeouts() == 0) {
             return false;
         }
-        if context.defense_conserve_clock() {
+        if context.defense_conserve_clock() || (
+            (context.losing() || context.tied()) && context.last_play_clock_running()
+        ) {
             return true;
         }
         false
