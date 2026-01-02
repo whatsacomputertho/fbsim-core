@@ -5,6 +5,8 @@ use rocket_okapi::okapi::schemars;
 use rocket_okapi::okapi::schemars::JsonSchema;
 use serde::{Serialize, Deserialize, Deserializer};
 
+const DEFENSE_ADVANTAGE: u32 = 3_u32;
+
 /// # `FootballTeamDefenseRaw` struct
 ///
 /// A `FootballTeamDefenseRaw` is a `FootballTeamDefense` before its properties
@@ -214,6 +216,25 @@ impl FootballTeamDefense {
         self.rush_defense
     }
 
+    /// Get the defense's rush defense skill level with home field advantage
+    /// applied
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::team::defense::FootballTeamDefense;
+    /// 
+    /// let my_defense = FootballTeamDefense::new();
+    /// let rush_defense = my_defense.rush_defense_advantage(true);
+    /// assert!(rush_defense == 53_u32);
+    /// ```
+    pub fn rush_defense_advantage(&self, defense_advantage: bool) -> u32 {
+        if defense_advantage {
+            100_u32.min(self.rush_defense + DEFENSE_ADVANTAGE)
+        } else {
+            self.rush_defense
+        }
+    }
+
     /// Get the defense's pass defense skill level
     ///
     /// ### Example
@@ -226,6 +247,25 @@ impl FootballTeamDefense {
     /// ```
     pub fn pass_defense(&self) -> u32 {
         self.pass_defense
+    }
+
+    /// Get the defense's pass defense skill level with home field advantage
+    /// applied
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::team::defense::FootballTeamDefense;
+    /// 
+    /// let my_defense = FootballTeamDefense::new();
+    /// let pass_defense = my_defense.pass_defense_advantage(true);
+    /// assert!(pass_defense == 53_u32);
+    /// ```
+    pub fn pass_defense_advantage(&self, defense_advantage: bool) -> u32 {
+        if defense_advantage {
+            100_u32.min(self.pass_defense + DEFENSE_ADVANTAGE)
+        } else {
+            self.pass_defense
+        }
     }
 
     /// Get the defense's coverage skill level
@@ -242,6 +282,25 @@ impl FootballTeamDefense {
         self.coverage
     }
 
+    /// Get the defense's coverage skill level with home field advantage
+    /// applied
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::team::defense::FootballTeamDefense;
+    /// 
+    /// let my_defense = FootballTeamDefense::new();
+    /// let coverage = my_defense.coverage_advantage(true);
+    /// assert!(coverage == 53_u32);
+    /// ```
+    pub fn coverage_advantage(&self, defense_advantage: bool) -> u32 {
+        if defense_advantage {
+            100_u32.min(self.coverage + DEFENSE_ADVANTAGE)
+        } else {
+            self.coverage
+        }
+    }
+
     /// Get the defense's blitzing skill level
     ///
     /// ### Example
@@ -254,6 +313,25 @@ impl FootballTeamDefense {
     /// ```
     pub fn blitzing(&self) -> u32 {
         self.blitzing
+    }
+
+    /// Get the defense's blitzing skill level with home field advantage
+    /// applied
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::team::defense::FootballTeamDefense;
+    /// 
+    /// let my_defense = FootballTeamDefense::new();
+    /// let blitzing = my_defense.blitzing_advantage(true);
+    /// assert!(blitzing == 53_u32);
+    /// ```
+    pub fn blitzing_advantage(&self, defense_advantage: bool) -> u32 {
+        if defense_advantage {
+            100_u32.min(self.blitzing + DEFENSE_ADVANTAGE)
+        } else {
+            self.blitzing
+        }
     }
 
     /// Get the defense's turnovers skill level
@@ -270,6 +348,25 @@ impl FootballTeamDefense {
         self.turnovers
     }
 
+    /// Get the defense's turnovers skill level with home field advantage
+    /// applied
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::team::defense::FootballTeamDefense;
+    /// 
+    /// let my_defense = FootballTeamDefense::new();
+    /// let turnovers = my_defense.turnovers_advantage(true);
+    /// assert!(turnovers == 53_u32);
+    /// ```
+    pub fn turnovers_advantage(&self, defense_advantage: bool) -> u32 {
+        if defense_advantage {
+            100_u32.min(self.turnovers + DEFENSE_ADVANTAGE)
+        } else {
+            self.turnovers
+        }
+    }
+
     /// Get the defense's kick returning skill level
     ///
     /// ### Example
@@ -282,6 +379,25 @@ impl FootballTeamDefense {
     /// ```
     pub fn kick_returning(&self) -> u32 {
         self.kick_returning
+    }
+
+    /// Get the defense's kick returning skill level with home field advantage
+    /// applied
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::team::defense::FootballTeamDefense;
+    /// 
+    /// let my_defense = FootballTeamDefense::new();
+    /// let kick_returning = my_defense.kick_returning_advantage(true);
+    /// assert!(kick_returning == 53_u32);
+    /// ```
+    pub fn kick_returning_advantage(&self, defense_advantage: bool) -> u32 {
+        if defense_advantage {
+            100_u32.min(self.kick_returning + DEFENSE_ADVANTAGE)
+        } else {
+            self.kick_returning
+        }
     }
 }
 

@@ -5,6 +5,8 @@ use rocket_okapi::okapi::schemars;
 use rocket_okapi::okapi::schemars::JsonSchema;
 use serde::{Serialize, Deserialize, Deserializer};
 
+const OFFENSE_ADVANTAGE: u32 = 3_u32;
+
 /// # `FootballTeamOffenseRaw` struct
 ///
 /// A `FootballTeamOffenseRaw` is a `FootballTeamOffense` before its properties
@@ -268,6 +270,24 @@ impl FootballTeamOffense {
         self.rushing
     }
 
+    /// Get the offense's rushing skill level with home-field advantage applied
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::team::offense::FootballTeamOffense;
+    /// 
+    /// let my_offense = FootballTeamOffense::new();
+    /// let rushing = my_offense.rushing_advantage(true);
+    /// assert!(rushing == 53_u32);
+    /// ```
+    pub fn rushing_advantage(&self, offense_advantage: bool) -> u32 {
+        if offense_advantage {
+            100_u32.min(self.rushing + OFFENSE_ADVANTAGE)
+        } else {
+            self.rushing
+        }
+    }
+
     /// Get the offense's passing skill level
     ///
     /// ### Example
@@ -280,6 +300,24 @@ impl FootballTeamOffense {
     /// ```
     pub fn passing(&self) -> u32 {
         self.passing
+    }
+
+    /// Get the offense's passing skill level with home-field advantage applied
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::team::offense::FootballTeamOffense;
+    /// 
+    /// let my_offense = FootballTeamOffense::new();
+    /// let passing = my_offense.passing_advantage(true);
+    /// assert!(passing == 53_u32);
+    /// ```
+    pub fn passing_advantage(&self, offense_advantage: bool) -> u32 {
+        if offense_advantage {
+            100_u32.min(self.passing + OFFENSE_ADVANTAGE)
+        } else {
+            self.passing
+        }
     }
 
     /// Get the offense's receiving skill level
@@ -296,6 +334,24 @@ impl FootballTeamOffense {
         self.receiving
     }
 
+    /// Get the offense's receiving skill level with home-field advantage applied
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::team::offense::FootballTeamOffense;
+    /// 
+    /// let my_offense = FootballTeamOffense::new();
+    /// let receiving = my_offense.receiving_advantage(true);
+    /// assert!(receiving == 53_u32);
+    /// ```
+    pub fn receiving_advantage(&self, offense_advantage: bool) -> u32 {
+        if offense_advantage {
+            100_u32.min(self.receiving + OFFENSE_ADVANTAGE)
+        } else {
+            self.receiving
+        }
+    }
+
     /// Get the offense's scrambling skill level
     ///
     /// ### Example
@@ -308,6 +364,24 @@ impl FootballTeamOffense {
     /// ```
     pub fn scrambling(&self) -> u32 {
         self.scrambling
+    }
+
+    /// Get the offense's scrambling skill level with home-field advantage applied
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::team::offense::FootballTeamOffense;
+    /// 
+    /// let my_offense = FootballTeamOffense::new();
+    /// let scrambling = my_offense.scrambling_advantage(true);
+    /// assert!(scrambling == 53_u32);
+    /// ```
+    pub fn scrambling_advantage(&self, offense_advantage: bool) -> u32 {
+        if offense_advantage {
+            100_u32.min(self.scrambling + OFFENSE_ADVANTAGE)
+        } else {
+            self.scrambling
+        }
     }
 
     /// Get the offense's blocking skill level
@@ -324,6 +398,24 @@ impl FootballTeamOffense {
         self.blocking
     }
 
+    /// Get the offense's blocking skill level with home-field advantage applied
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::team::offense::FootballTeamOffense;
+    /// 
+    /// let my_offense = FootballTeamOffense::new();
+    /// let blocking = my_offense.blocking_advantage(true);
+    /// assert!(blocking == 53_u32);
+    /// ```
+    pub fn blocking_advantage(&self, offense_advantage: bool) -> u32 {
+        if offense_advantage {
+            100_u32.min(self.blocking + OFFENSE_ADVANTAGE)
+        } else {
+            self.blocking
+        }
+    }
+
     /// Get the offense's turnovers skill level
     ///
     /// ### Example
@@ -336,6 +428,24 @@ impl FootballTeamOffense {
     /// ```
     pub fn turnovers(&self) -> u32 {
         self.turnovers
+    }
+
+    /// Get the offense's turnovers skill level with home-field advantage applied
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::team::offense::FootballTeamOffense;
+    /// 
+    /// let my_offense = FootballTeamOffense::new();
+    /// let turnovers = my_offense.turnovers_advantage(true);
+    /// assert!(turnovers == 53_u32);
+    /// ```
+    pub fn turnovers_advantage(&self, offense_advantage: bool) -> u32 {
+        if offense_advantage {
+            100_u32.min(self.turnovers + OFFENSE_ADVANTAGE)
+        } else {
+            self.turnovers
+        }
     }
 
     /// Get the offense's field goal kicking skill level
@@ -352,6 +462,25 @@ impl FootballTeamOffense {
         self.field_goals
     }
 
+    /// Get the offense's field goal kicking skill level with home-field
+    /// advantage applied
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::team::offense::FootballTeamOffense;
+    /// 
+    /// let my_offense = FootballTeamOffense::new();
+    /// let field_goals = my_offense.field_goals_advantage(true);
+    /// assert!(field_goals == 53_u32);
+    /// ```
+    pub fn field_goals_advantage(&self, offense_advantage: bool) -> u32 {
+        if offense_advantage {
+            100_u32.min(self.field_goals + OFFENSE_ADVANTAGE)
+        } else {
+            self.field_goals
+        }
+    }
+
     /// Get the offense's punting skill level
     ///
     /// ### Example
@@ -364,6 +493,24 @@ impl FootballTeamOffense {
     /// ```
     pub fn punting(&self) -> u32 {
         self.punting
+    }
+
+    /// Get the offense's punting skill level with home-field advantage applied
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::team::offense::FootballTeamOffense;
+    /// 
+    /// let my_offense = FootballTeamOffense::new();
+    /// let punting = my_offense.punting_advantage(true);
+    /// assert!(punting == 53_u32);
+    /// ```
+    pub fn punting_advantage(&self, offense_advantage: bool) -> u32 {
+        if offense_advantage {
+            100_u32.min(self.punting + OFFENSE_ADVANTAGE)
+        } else {
+            self.punting
+        }
     }
 
     /// Get the offense's kickoffs skill level
@@ -380,6 +527,25 @@ impl FootballTeamOffense {
         self.kickoffs
     }
 
+    /// Get the offense's kickoffs skill level with home-field advantage
+    /// applied
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::team::offense::FootballTeamOffense;
+    /// 
+    /// let my_offense = FootballTeamOffense::new();
+    /// let kickoffs = my_offense.kickoffs_advantage(true);
+    /// assert!(kickoffs == 53_u32);
+    /// ```
+    pub fn kickoffs_advantage(&self, offense_advantage: bool) -> u32 {
+        if offense_advantage {
+            100_u32.min(self.kickoffs + OFFENSE_ADVANTAGE)
+        } else {
+            self.kickoffs
+        }
+    }
+
     /// Get the offense's kick return defense skill level
     ///
     /// ### Example
@@ -392,6 +558,25 @@ impl FootballTeamOffense {
     /// ```
     pub fn kick_return_defense(&self) -> u32 {
         self.kick_return_defense
+    }
+
+    /// Get the offense's kick return defense skill level with home-field
+    /// advantage applied
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::team::offense::FootballTeamOffense;
+    /// 
+    /// let my_offense = FootballTeamOffense::new();
+    /// let kick_return_defense = my_offense.kick_return_defense_advantage(true);
+    /// assert!(kick_return_defense == 53_u32);
+    /// ```
+    pub fn kick_return_defense_advantage(&self, offense_advantage: bool) -> u32 {
+        if offense_advantage {
+            100_u32.min(self.kick_return_defense + OFFENSE_ADVANTAGE)
+        } else {
+            self.kick_return_defense
+        }
     }
 }
 
