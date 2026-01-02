@@ -251,9 +251,7 @@ impl PlaySimulator {
     /// ```
     pub fn sim(&self, home: &FootballTeam, away: &FootballTeam, context: GameContext, rng: &mut impl Rng) -> (Play, GameContext) {
         // Determine the play call
-        let play_call = if context.next_play_extra_point() {
-            PlayCall::ExtraPoint
-        } else if context.next_play_kickoff() {
+        let play_call = if context.next_play_kickoff() {
             PlayCall::Kickoff
         } else if context.home_possession() {
             self.playcall.sim(home, &context, rng)
@@ -457,6 +455,11 @@ impl Drive {
         for play in self.plays().iter() {
             match play.result() {
                 PlayTypeResult::Run(res) => {
+                    // Skip tallying stats for two-point conversions
+                    if res.two_point_conversion() {
+                        continue
+                    }
+
                     // Increment rushes & rushing yards
                     stats.increment_rushes();
                     stats.increment_yards(res.net_yards());
@@ -467,6 +470,21 @@ impl Drive {
                     }
                     if res.fumble() {
                         stats.increment_fumbles();
+                    }
+                },
+                PlayTypeResult::Pass(res) => {
+                    if res.scramble() && !res.two_point_conversion() {
+                        // Increment rushes & rushing yards
+                        stats.increment_rushes();
+                        stats.increment_yards(res.net_yards());
+
+                        // Increment rushing TDs & fumbles if either occur
+                        if res.touchdown() {
+                            stats.increment_touchdowns();
+                        }
+                        if res.fumble() {
+                            stats.increment_fumbles();
+                        }
                     }
                 },
                 _ => continue
@@ -491,8 +509,15 @@ impl Drive {
         for play in self.plays().iter() {
             match play.result() {
                 PlayTypeResult::Pass(res) => {
+                    // Skip tallying stats for two-point conversions
+                    if res.two_point_conversion() {
+                        continue
+                    }
+
                     // Increment attempts
-                    stats.increment_attempts();
+                    if !(res.scramble() || res.sack()) {
+                        stats.increment_attempts();
+                    }
                     
                     // Increment completions and yards if complete
                     if res.complete() {
@@ -503,6 +528,8 @@ impl Drive {
                         if res.touchdown() {
                             stats.increment_touchdowns();
                         }
+                    } else if res.sack() {
+                        stats.increment_yards(res.net_yards());
                     }
 
                     // Increment interceptions if this was an INT
@@ -963,6 +990,11 @@ impl Game {
                 if play.context().home_possession() == home {
                     match play.result() {
                         PlayTypeResult::Run(res) => {
+                            // Skip tallying stats for two-point conversions
+                            if res.two_point_conversion() {
+                                continue
+                            }
+
                             // Increment rushes & rushing yards
                             stats.increment_rushes();
                             stats.increment_yards(res.net_yards());
@@ -973,6 +1005,21 @@ impl Game {
                             }
                             if res.fumble() {
                                 stats.increment_fumbles();
+                            }
+                        },
+                        PlayTypeResult::Pass(res) => {
+                            if res.scramble() && !res.two_point_conversion() {
+                                // Increment rushes & rushing yards
+                                stats.increment_rushes();
+                                stats.increment_yards(res.net_yards());
+
+                                // Increment rushing TDs & fumbles if either occur
+                                if res.touchdown() {
+                                    stats.increment_touchdowns();
+                                }
+                                if res.fumble() {
+                                    stats.increment_fumbles();
+                                }
                             }
                         },
                         _ => continue
@@ -1001,8 +1048,15 @@ impl Game {
                 if play.context().home_possession() == home {
                     match play.result() {
                         PlayTypeResult::Pass(res) => {
+                            // Skip tallying stats for two-point conversions
+                            if res.two_point_conversion() {
+                                continue
+                            }
+                            
                             // Increment attempts
-                            stats.increment_attempts();
+                            if !(res.scramble() || res.sack()) {
+                                stats.increment_attempts();
+                            }
                             
                             // Increment completions and yards if complete
                             if res.complete() {
@@ -1013,6 +1067,8 @@ impl Game {
                                 if res.touchdown() {
                                     stats.increment_touchdowns();
                                 }
+                            } else if res.sack() {
+                                stats.increment_yards(res.net_yards());
                             }
 
                             // Increment interceptions if this was an INT
@@ -1046,8 +1102,15 @@ impl Game {
                 if play.context().home_possession() == home {
                     match play.result() {
                         PlayTypeResult::Pass(res) => {
+                            // Skip tallying stats for two-point conversions
+                            if res.two_point_conversion() {
+                                continue
+                            }
+                            
                             // Increment targets
-                            stats.increment_targets(1);
+                            if !(res.scramble() || res.sack()) {
+                                stats.increment_targets(1);
+                            }
                             
                             // Increment receptions and yards if complete
                             if res.complete() {

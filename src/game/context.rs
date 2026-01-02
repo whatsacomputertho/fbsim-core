@@ -1086,6 +1086,7 @@ impl GameContext {
     /// 
     /// let mut update_opts = GameContextUpdateOptions::default();
     /// update_opts.net_yards = 10;
+    /// update_opts.turnover = true;
     /// let my_context = GameContext::new();
     /// let next_home_possession = my_context.next_home_possession(&update_opts);
     /// assert!(!next_home_possession);
@@ -1096,6 +1097,11 @@ impl GameContext {
         // If end of half, possession goes to whomever received the opening kickoff
         if end_of_half {
             return self.home_opening_kickoff;
+        }
+
+        // Maintain possession on kickoff turnovers
+        if self.next_play_kickoff && !update_opts.turnover {
+            return self.home_possession;
         }
 
         // Change possession on successful kickoffs, defensive TDs, turnovers
@@ -1274,7 +1280,12 @@ impl GameContext {
         } else {
             next_yl
         };
-        if update_opts.turnover || (self.next_play_kickoff && !update_opts.between_play) {
+        if self.next_play_kickoff && !update_opts.turnover {
+            if self.home_possession ^ self.home_positive_direction {
+                return 10.min(next_yl);
+            }
+            return 0.max(10.min(100_i32 - next_yl as i32)) as u32;
+        } else if update_opts.turnover || (self.next_play_kickoff && !update_opts.between_play) {
             if self.home_possession ^ self.home_positive_direction {
                 return 0.max(10.min(100_i32 - next_yl as i32)) as u32;
             }
@@ -2039,6 +2050,35 @@ mod tests {
 
         // Assert the next distance is 10
         assert!(next_context.distance() == 10);
+        assert!(next_context.home_possession());
+    }
+
+    #[test]
+    fn test_short_kickoff_return_fumble_result() {
+        // Create a new context
+        let context: GameContext = GameContext::new();
+
+        // Create a kickoff return result in which the return team returns
+        // 60+ yards and then fumbles
+        let kickoff_return: KickoffResult = KickoffResultBuilder::new()
+            .kickoff_yards(60)
+            .kick_return_yards(3)
+            .play_duration(6)
+            .fumble_return_yards(1)
+            .touchback(false)
+            .out_of_bounds(false)
+            .fair_catch(false)
+            .fumble(true)
+            .touchdown(false)
+            .build()
+            .unwrap();
+
+        // Get the next context
+        let next_context: GameContext = kickoff_return.next_context(&context);
+
+        // Assert the next distance is 7
+        assert!(next_context.distance() == 7);
+        assert!(next_context.home_possession());
     }
 
     #[test]

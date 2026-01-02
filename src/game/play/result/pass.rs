@@ -149,7 +149,8 @@ pub struct PassResultRaw {
     complete: bool,
     fumble: bool,
     touchdown: bool,
-    safety: bool
+    safety: bool,
+    two_point_conversion: bool
 }
 
 impl PassResultRaw {
@@ -330,7 +331,8 @@ pub struct PassResult {
     complete: bool,
     fumble: bool,
     touchdown: bool,
-    safety: bool
+    safety: bool,
+    two_point_conversion: bool
 }
 
 impl TryFrom<PassResultRaw> for PassResult {
@@ -359,7 +361,8 @@ impl TryFrom<PassResultRaw> for PassResult {
                 complete: item.complete,
                 fumble: item.fumble,
                 touchdown: item.touchdown,
-                safety: item.safety
+                safety: item.safety,
+                two_point_conversion: item.two_point_conversion
             }
         )
     }
@@ -400,7 +403,8 @@ impl Default for PassResult {
             complete: false,
             fumble: false,
             touchdown: false,
-            safety: false
+            safety: false,
+            two_point_conversion: false
         }
     }
 }
@@ -450,9 +454,15 @@ impl std::fmt::Display for PassResult {
             String::from("")
         };
         let score_str = if self.touchdown {
-            " TOUCHDOWN!"
+            if self.two_point_conversion {
+                " Two point conversion is GOOD!"
+            } else {
+                " TOUCHDOWN!"
+            }
         } else if self.safety {
             " SAFETY!"
+        } else if self.two_point_conversion {
+            " Two point conversion is no good."
         } else {
             ""
         };
@@ -491,6 +501,9 @@ impl PlayResult for PassResult {
 
     fn offense_score(&self) -> ScoreResult {
         if self.touchdown && !(self.fumble || self.interception) {
+            if self.two_point_conversion {
+                return ScoreResult::TwoPointConversion;
+            }
             return ScoreResult::Touchdown;
         }
         ScoreResult::None
@@ -498,7 +511,11 @@ impl PlayResult for PassResult {
 
     fn defense_score(&self) -> ScoreResult {
         if self.touchdown && (self.fumble || self.interception) {
-            ScoreResult::Touchdown
+            if self.two_point_conversion {
+                ScoreResult::TwoPointConversion
+            } else {
+                ScoreResult::Touchdown
+            }
         } else if self.safety {
             ScoreResult::Safety
         } else {
@@ -519,11 +536,11 @@ impl PlayResult for PassResult {
     fn kickoff(&self) -> bool { false }
 
     fn next_play_kickoff(&self) -> bool {
-        self.safety
+        self.safety || self.two_point_conversion
     }
 
     fn next_play_extra_point(&self) -> bool {
-        self.touchdown
+        self.touchdown && !self.two_point_conversion
     }
 }
 
@@ -735,6 +752,20 @@ impl PassResult {
     pub fn safety(&self) -> bool {
         self.safety
     }
+
+    /// Get a pass result's two_point_conversion property
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::game::play::result::pass::PassResult;
+    /// 
+    /// let my_res = PassResult::new();
+    /// let two_point_conversion = my_res.two_point_conversion();
+    /// assert!(!two_point_conversion);
+    /// ```
+    pub fn two_point_conversion(&self) -> bool {
+        self.two_point_conversion
+    }
 }
 
 /// # `PassResultBuilder` struct
@@ -757,7 +788,8 @@ pub struct PassResultBuilder {
     complete: bool,
     fumble: bool,
     touchdown: bool,
-    safety: bool
+    safety: bool,
+    two_point_conversion: bool
 }
 
 impl Default for PassResultBuilder {
@@ -784,7 +816,8 @@ impl Default for PassResultBuilder {
             complete: false,
             fumble: false,
             touchdown: false,
-            safety: false
+            safety: false,
+            two_point_conversion: false
         }
     }
 }
@@ -1045,6 +1078,23 @@ impl PassResultBuilder {
         self
     }
 
+    /// Set the two_point_conversion property
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::game::play::result::pass::PassResultBuilder;
+    /// 
+    /// let my_result = PassResultBuilder::new()
+    ///     .two_point_conversion(true)
+    ///     .build()
+    ///     .unwrap();
+    /// assert!(my_result.two_point_conversion());
+    /// ```
+    pub fn two_point_conversion(mut self, two_point_conversion: bool) -> Self {
+        self.two_point_conversion = two_point_conversion;
+        self
+    }
+
     /// Build the PassResult
     ///
     /// ### Example
@@ -1070,7 +1120,8 @@ impl PassResultBuilder {
             complete: self.complete,
             fumble: self.fumble,
             touchdown: self.touchdown,
-            safety: self.safety
+            safety: self.safety,
+            two_point_conversion: self.two_point_conversion
         };
         PassResult::try_from(raw)
     }
@@ -1152,7 +1203,7 @@ impl PassResultSimulator {
 
     /// Generates whether the quarterback threw an interception
     fn interception(&self, norm_diff_turnovers: f64, rng: &mut impl Rng) -> bool {
-        let p_interception: f64 = 1_f64.min(0_f64.max(P_INTERCEPTION_INTR + (P_INTERCEPTION_COEF * norm_diff_turnovers)));
+        let p_interception: f64 = 0.995_f64.min(0.005_f64.max(P_INTERCEPTION_INTR + (P_INTERCEPTION_COEF * norm_diff_turnovers)));
         rng.gen::<f64>() < p_interception
     }
 
@@ -1284,7 +1335,7 @@ impl PlayResultSimulator for PassResultSimulator {
 
         // Generate scramble yards if scramble occurred
         let scramble_yards: i32 = if scramble {
-            self.scramble_yards(norm_diff_scrambling, rng)
+            td_yards.min(self.scramble_yards(norm_diff_scrambling, rng))
         } else {
             0
         };
@@ -1301,10 +1352,14 @@ impl PlayResultSimulator for PassResultSimulator {
         };
 
         // Generate pass distance
-        let pass_distance: i32 = if pass && !short_pass {
-            self.deep_pass_distance(yard_line, rng)
+        let pass_distance: i32 = if pass {
+            if short_pass {
+                self.short_pass_distance(yard_line, rng)
+            } else {
+                self.deep_pass_distance(yard_line, rng)
+            }
         } else {
-            self.short_pass_distance(yard_line, rng)
+            0
         };
 
         // Generate whether an interception occurred
@@ -1404,7 +1459,8 @@ impl PlayResultSimulator for PassResultSimulator {
             complete,
             fumble,
             touchdown,
-            safety
+            safety,
+            two_point_conversion: context.next_play_extra_point()
         };
         PlayTypeResult::Pass(pass_res)
     }

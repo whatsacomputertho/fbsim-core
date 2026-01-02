@@ -76,6 +76,59 @@ impl From<&GameContext> for PlayContext {
 }
 
 impl PlayContext {
+    /// Whether the offense is losing
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::game::context::GameContext;
+    /// use fbsim_core::game::play::context::PlayContext;
+    /// 
+    /// let game_context = GameContext::new();
+    /// let play_context = PlayContext::from(&game_context);
+    /// let losing = play_context.losing();
+    /// assert!(!losing);
+    /// ```
+    pub fn losing(&self) -> bool {
+        self.score_diff < 0
+    }
+
+    /// Whether the score is tied
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::game::context::GameContext;
+    /// use fbsim_core::game::play::context::PlayContext;
+    /// 
+    /// let game_context = GameContext::new();
+    /// let play_context = PlayContext::from(&game_context);
+    /// let tied = play_context.tied();
+    /// assert!(tied);
+    /// ```
+    pub fn tied(&self) -> bool {
+        self.score_diff == 0
+    }
+
+    /// Whether to go for 2 after a touchdown
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::game::context::GameContext;
+    /// use fbsim_core::game::play::context::PlayContext;
+    /// 
+    /// let game_context = GameContext::new();
+    /// let play_context = PlayContext::from(&game_context);
+    /// let two_point_conversion = play_context.two_point_conversion();
+    /// assert!(!two_point_conversion);
+    /// ```
+    pub fn two_point_conversion(&self) -> bool {
+        self.quarter == 4 && (
+            matches!(
+                self.score_diff,
+                25 | 22 | 19 | 5 | 4 | 1 | -2 | -5 | -10 | -12 | -13
+            ) || self.score_diff < -15
+        )
+    }
+
     /// Whether the clock is running
     ///
     /// ### Example
@@ -226,7 +279,7 @@ impl PlayContext {
     /// assert!(!up_tempo);
     /// ```
     pub fn up_tempo(&self) -> bool {
-        self.quarter >= 4 && self.half_seconds <= 180 &&
+        (self.quarter == 2 || self.quarter >= 4) && self.half_seconds <= 180 &&
         self.score_diff < 0 && self.score_diff >= -17
     }
 
@@ -260,7 +313,7 @@ impl PlayContext {
     /// assert!(!conserve_clock);
     /// ```
     pub fn offense_conserve_clock(&self) -> bool {
-        self.quarter >= 4 && self.half_seconds <= 180 &&
+        (self.quarter == 2 || self.quarter >= 4) && self.half_seconds <= 180 &&
         self.score_diff < 0 && self.score_diff > -18
     }
 
@@ -279,6 +332,22 @@ impl PlayContext {
     pub fn defense_conserve_clock(&self) -> bool {
         self.quarter >= 4 && self.half_seconds <= 180 &&
         self.score_diff > 0 && self.score_diff < 18
+    }
+
+    /// Whether the clock could run out if left running
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::game::context::GameContext;
+    /// use fbsim_core::game::play::context::PlayContext;
+    /// 
+    /// let game_context = GameContext::new();
+    /// let play_context = PlayContext::from(&game_context);
+    /// let last_play_clock_running = play_context.last_play_clock_running();
+    /// assert!(!last_play_clock_running);
+    /// ```
+    pub fn last_play_clock_running(&self) -> bool {
+        self.half_seconds < 40
     }
 
     /// Whether this is the last play
@@ -311,6 +380,22 @@ impl PlayContext {
     /// ```
     pub fn last_play_need_td(&self) -> bool {
         self.score_diff < -3
+    }
+
+    /// Whether the kicking team needs to kick an onside kick
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::game::context::GameContext;
+    /// use fbsim_core::game::play::context::PlayContext;
+    /// 
+    /// let game_context = GameContext::new();
+    /// let play_context = PlayContext::from(&game_context);
+    /// let onside_kick = play_context.onside_kick();
+    /// assert!(!onside_kick);
+    /// ```
+    pub fn onside_kick(&self) -> bool {
+        self.score_diff < 0 && self.quarter >= 4 && self.must_score()
     }
 
     /// Whether the offense can kneel to end the game

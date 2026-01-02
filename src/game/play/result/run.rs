@@ -54,7 +54,8 @@ pub struct RunResultRaw {
     return_yards: i32,
     out_of_bounds: bool,
     touchdown: bool,
-    safety: bool
+    safety: bool,
+    two_point_conversion: bool
 }
 
 impl RunResultRaw {
@@ -138,7 +139,8 @@ pub struct RunResult {
     return_yards: i32,
     out_of_bounds: bool,
     touchdown: bool,
-    safety: bool
+    safety: bool,
+    two_point_conversion: bool
 }
 
 impl TryFrom<RunResultRaw> for RunResult {
@@ -160,7 +162,8 @@ impl TryFrom<RunResultRaw> for RunResult {
                 return_yards: item.return_yards,
                 out_of_bounds: item.out_of_bounds,
                 touchdown: item.touchdown,
-                safety: item.safety
+                safety: item.safety,
+                two_point_conversion: item.two_point_conversion
             }
         )
     }
@@ -194,7 +197,8 @@ impl Default for RunResult {
             return_yards: 0,
             out_of_bounds: false,
             touchdown: false,
-            safety: false
+            safety: false,
+            two_point_conversion: false
         }
     }
 }
@@ -218,9 +222,15 @@ impl std::fmt::Display for RunResult {
             String::from("")
         };
         let result_str = if self.touchdown {
-            " TOUCHDOWN!"
+            if self.two_point_conversion {
+                " Two point conversion is GOOD!"
+            } else {
+                " TOUCHDOWN!"
+            }
         } else if self.safety {
             " SAFETY!"
+        } else if self.two_point_conversion {
+            " Two point conversion is no good."
         } else {
             ""
         };
@@ -253,6 +263,9 @@ impl PlayResult for RunResult {
 
     fn offense_score(&self) -> ScoreResult {
         if self.touchdown && !self.fumble {
+            if self.two_point_conversion {
+                return ScoreResult::TwoPointConversion;
+            }
             return ScoreResult::Touchdown;
         }
         ScoreResult::None
@@ -260,7 +273,11 @@ impl PlayResult for RunResult {
 
     fn defense_score(&self) -> ScoreResult {
         if self.touchdown && self.fumble {
-            ScoreResult::Touchdown
+            if self.two_point_conversion {
+                ScoreResult::TwoPointConversion
+            } else {
+                ScoreResult::Touchdown
+            }
         } else if self.safety {
             ScoreResult::Safety
         } else {
@@ -279,11 +296,11 @@ impl PlayResult for RunResult {
     fn kickoff(&self) -> bool { false }
 
     fn next_play_kickoff(&self) -> bool {
-        self.safety
+        self.safety || self.two_point_conversion
     }
 
     fn next_play_extra_point(&self) -> bool {
-        self.touchdown
+        self.touchdown && !self.two_point_conversion
     }
 }
 
@@ -397,6 +414,20 @@ impl RunResult {
     pub fn safety(&self) -> bool {
         self.safety
     }
+
+    /// Get a run result's two point conversion property
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::game::play::result::run::RunResult;
+    /// 
+    /// let my_res = RunResult::new();
+    /// let two_point_conversion = my_res.two_point_conversion();
+    /// assert!(!two_point_conversion);
+    /// ```
+    pub fn two_point_conversion(&self) -> bool {
+        self.two_point_conversion
+    }
 }
 
 /// # `RunResultBuilder` struct
@@ -412,7 +443,8 @@ pub struct RunResultBuilder {
     return_yards: i32,
     out_of_bounds: bool,
     touchdown: bool,
-    safety: bool
+    safety: bool,
+    two_point_conversion: bool
 }
 
 impl Default for RunResultBuilder {
@@ -432,7 +464,8 @@ impl Default for RunResultBuilder {
             return_yards: 0,
             out_of_bounds: false,
             touchdown: false,
-            safety: false
+            safety: false,
+            two_point_conversion: false
         }
     }
 }
@@ -570,6 +603,23 @@ impl RunResultBuilder {
         self
     }
 
+    /// Set the two_point_conversion property
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::game::play::result::run::RunResultBuilder;
+    /// 
+    /// let my_result = RunResultBuilder::new()
+    ///     .two_point_conversion(true)
+    ///     .build()
+    ///     .unwrap();
+    /// assert!(my_result.two_point_conversion());
+    /// ```
+    pub fn two_point_conversion(mut self, two_point_conversion: bool) -> Self {
+        self.two_point_conversion = two_point_conversion;
+        self
+    }
+
     /// Build the RunResult
     ///
     /// ### Example
@@ -588,7 +638,8 @@ impl RunResultBuilder {
             return_yards: self.return_yards,
             out_of_bounds: self.out_of_bounds,
             touchdown: self.touchdown,
-            safety: self.safety
+            safety: self.safety,
+            two_point_conversion: self.two_point_conversion
         };
         RunResult::try_from(raw)
     }
@@ -739,7 +790,8 @@ impl PlayResultSimulator for RunResultSimulator {
             return_yards,
             out_of_bounds: false,
             touchdown,
-            safety
+            safety,
+            two_point_conversion: context.next_play_extra_point()
         };
         PlayTypeResult::Run(run_res)
     }
