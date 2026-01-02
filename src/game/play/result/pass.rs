@@ -1352,7 +1352,7 @@ impl PlayResultSimulator for PassResultSimulator {
         };
 
         // Generate pass distance
-        let pass_distance: i32 = if pass && !short_pass {
+        let pass_distance: i32 = if pass {
             if short_pass {
                 self.short_pass_distance(yard_line, rng)
             } else {
