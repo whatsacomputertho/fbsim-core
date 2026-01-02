@@ -37,6 +37,7 @@ pub struct GameContextRaw {
     last_play_punt: bool,
     next_play_extra_point: bool,
     next_play_kickoff: bool,
+    neutral_site: bool,
     end_of_half: bool,
     game_over: bool
 }
@@ -267,6 +268,7 @@ pub struct GameContext {
     last_play_punt: bool,
     next_play_extra_point: bool,
     next_play_kickoff: bool,
+    neutral_site: bool,
     end_of_half: bool,
     game_over: bool
 }
@@ -304,6 +306,7 @@ impl Default for GameContext {
             last_play_punt: false,
             next_play_extra_point: false,
             next_play_kickoff: true,
+            neutral_site: false,
             end_of_half: false,
             game_over: false
         }
@@ -345,6 +348,7 @@ impl TryFrom<GameContextRaw> for GameContext {
                 last_play_punt: item.last_play_punt,
                 next_play_extra_point: item.next_play_extra_point,
                 next_play_kickoff: item.next_play_kickoff,
+                neutral_site: item.neutral_site,
                 end_of_half: item.end_of_half,
                 game_over: item.game_over
             }
@@ -684,6 +688,20 @@ impl GameContext {
         self.next_play_extra_point
     }
 
+    /// Get the GameContext neutral_site property
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::game::context::GameContext;
+    /// 
+    /// let my_context = GameContext::new();
+    /// let neutral_site = my_context.neutral_site();
+    /// assert!(!neutral_site);
+    /// ```
+    pub fn neutral_site(&self) -> bool {
+        self.neutral_site
+    }
+
     /// Borrow the GameContext end_of_half property
     ///
     /// ### Example
@@ -769,6 +787,34 @@ impl GameContext {
                 )
             )
         )
+    }
+
+    /// Determine whether to apply home field advantage to offense skill levels
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::game::context::GameContext;
+    /// 
+    /// let my_context = GameContext::new();
+    /// let home_field_advantage = my_context.offense_advantage();
+    /// assert!(home_field_advantage);
+    /// ```
+    pub fn offense_advantage(&self) -> bool {
+        self.home_possession && !self.neutral_site
+    }
+
+    /// Determine whether to apply home field advantage to defense skill levels
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::game::context::GameContext;
+    /// 
+    /// let my_context = GameContext::new();
+    /// let home_field_advantage = my_context.defense_advantage();
+    /// assert!(!home_field_advantage);
+    /// ```
+    pub fn defense_advantage(&self) -> bool {
+        !(self.home_possession || self.neutral_site)
     }
 
     /// Get the yards remaining until the defense's goal line
@@ -1419,6 +1465,7 @@ impl GameContext {
             last_play_punt: result.punt(),
             next_play_extra_point,
             next_play_kickoff: result.next_play_kickoff() || (end_of_half && !next_play_extra_point),
+            neutral_site: self.neutral_site,
             end_of_half,
             game_over: self.next_game_over(&update_opts)
         };
@@ -1486,6 +1533,7 @@ pub struct GameContextBuilder {
     last_play_punt: bool,
     next_play_extra_point: bool,
     next_play_kickoff: bool,
+    neutral_site: bool,
     end_of_half: bool,
     game_over: bool
 }
@@ -1523,6 +1571,7 @@ impl Default for GameContextBuilder {
             last_play_punt: false,
             next_play_extra_point: false,
             next_play_kickoff: true,
+            neutral_site: false,
             end_of_half: false,
             game_over: false
         }
@@ -1919,6 +1968,23 @@ impl GameContextBuilder {
         self
     }
     
+    /// Set the neutral site property
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::game::context::{GameContext, GameContextBuilder};
+    /// 
+    /// let my_context = GameContextBuilder::new()
+    ///     .neutral_site(true)
+    ///     .build()
+    ///     .unwrap();
+    /// assert!(my_context.neutral_site());
+    /// ```
+    pub fn neutral_site(mut self, neutral_site: bool) -> Self {
+        self.neutral_site = neutral_site;
+        self
+    }
+    
     /// Set the end of half property
     ///
     /// ### Example
@@ -2012,6 +2078,7 @@ impl GameContextBuilder {
             last_play_punt: self.last_play_punt,
             next_play_extra_point: self.next_play_extra_point,
             next_play_kickoff: self.next_play_kickoff,
+            neutral_site: self.neutral_site,
             end_of_half: self.end_of_half,
             game_over: self.game_over
         };

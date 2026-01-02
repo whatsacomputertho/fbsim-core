@@ -889,8 +889,15 @@ impl PlayResultSimulator for KickoffResultSimulator {
     /// ```
     fn sim(&self, offense: &impl PlaySimulatable, defense: &impl PlaySimulatable, context: &GameContext, rng: &mut impl Rng) -> PlayTypeResult {
         // Calculate normalized skill diffs & skill levels
-        let norm_kicking: f64 = offense.offense().kickoffs() as f64 / 100_f64;
-        let norm_diff_returning: f64 = 0.5_f64 + ((defense.defense().kick_returning() as f64 - offense.offense().kick_return_defense() as f64) / 200_f64);
+        let offense_advantage: bool = context.offense_advantage();
+        let defense_advantage: bool = context.defense_advantage();
+        let norm_kicking: f64 = offense.offense().kickoffs_advantage(offense_advantage) as f64 / 100_f64;
+        let norm_diff_returning: f64 = 0.5_f64 + (
+            (
+                defense.defense().kick_returning_advantage(defense_advantage) as f64 -
+                offense.offense().kick_return_defense_advantage(offense_advantage) as f64
+            ) / 200_f64
+        );
         let td_yards: i32 = context.yards_to_touchdown();
         let safety_yards: i32 = context.yards_to_safety();
         let play_context = PlayContext::from(context);
