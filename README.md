@@ -4,6 +4,10 @@
 
 > A library for american football simulation
 
+**Docs**: https://docs.rs/fbsim-core/latest/fbsim_core/
+
+**Contributing**: [CONTRIBUTING.md](https://github.com/whatsacomputertho/fbsim-core/blob/main/CONTRIBUTING.md)
+
 ## Overview
 
 Provides utilities for simulating american football games and leagues. It is based on various statistical models derived in repositories
