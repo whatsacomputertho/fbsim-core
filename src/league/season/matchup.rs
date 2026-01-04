@@ -5,6 +5,8 @@ use rocket_okapi::okapi::schemars;
 use rocket_okapi::okapi::schemars::JsonSchema;
 use serde::{Serialize, Deserialize};
 
+use crate::game::context::GameContext;
+use crate::game::play::Game;
 use crate::game::matchup::FootballMatchupResult;
 use crate::league::matchup::LeagueTeamRecord;
 
@@ -16,9 +18,8 @@ use crate::league::matchup::LeagueTeamRecord;
 pub struct LeagueSeasonMatchup {
     home_team: usize,
     away_team: usize,
-    home_score: usize,
-    away_score: usize,
-    complete: bool
+    context: GameContext,
+    game: Game
 }
 
 impl LeagueSeasonMatchup {
@@ -35,9 +36,8 @@ impl LeagueSeasonMatchup {
         LeagueSeasonMatchup {
             home_team,
             away_team,
-            home_score: 0,
-            away_score: 0,
-            complete: false
+            context: GameContext::new(),
+            game: Game::new()
         }
     }
 
@@ -67,82 +67,56 @@ impl LeagueSeasonMatchup {
         &self.away_team
     }
 
-    /// Borrow the home score
+    /// Borrow the matchup's GameContext
     ///
     /// ### Example
     /// ```
     /// use fbsim_core::league::season::matchup::LeagueSeasonMatchup;
     ///
     /// let my_matchup = LeagueSeasonMatchup::new(0, 1);
-    /// let home_score = my_matchup.home_score();
+    /// let context = my_matchup.context();
     /// ```
-    pub fn home_score(&self) -> &usize {
-        &self.home_score
+    pub fn context(&self) -> &GameContext {
+        &self.context
     }
 
-    /// Mutably borrow the home score
+    /// Mutably borrow the matchup's GameContext
     ///
     /// ### Example
     /// ```
     /// use fbsim_core::league::season::matchup::LeagueSeasonMatchup;
     ///
     /// let mut my_matchup = LeagueSeasonMatchup::new(0, 1);
-    /// let mut home_score = my_matchup.home_score_mut();
+    /// let context = my_matchup.context_mut();
     /// ```
-    pub fn home_score_mut(&mut self) -> &mut usize {
-        &mut self.home_score
+    pub fn context_mut(&mut self) -> &mut GameContext {
+        &mut self.context
     }
 
-    /// Borrow the away score
+    /// Borrow the matchup's Game
     ///
     /// ### Example
     /// ```
     /// use fbsim_core::league::season::matchup::LeagueSeasonMatchup;
     ///
     /// let my_matchup = LeagueSeasonMatchup::new(0, 1);
-    /// let away_score = my_matchup.away_score();
+    /// let game = my_matchup.game();
     /// ```
-    pub fn away_score(&self) -> &usize {
-        &self.away_score
+    pub fn game(&self) -> &Game {
+        &self.game
     }
 
-    /// Mutably borrow the away score
+    /// Mutably borrow the matchup's Game
     ///
     /// ### Example
     /// ```
     /// use fbsim_core::league::season::matchup::LeagueSeasonMatchup;
     ///
     /// let mut my_matchup = LeagueSeasonMatchup::new(0, 1);
-    /// let mut away_score = my_matchup.away_score_mut();
+    /// let game = my_matchup.game_mut();
     /// ```
-    pub fn away_score_mut(&mut self) -> &mut usize {
-        &mut self.away_score
-    }
-
-    /// Borrow the complete property
-    ///
-    /// ### Example
-    /// ```
-    /// use fbsim_core::league::season::matchup::LeagueSeasonMatchup;
-    ///
-    /// let my_matchup = LeagueSeasonMatchup::new(0, 1);
-    /// let complete = my_matchup.complete();
-    /// ```
-    pub fn complete(&self) -> &bool {
-        &self.complete
-    }
-
-    /// Mutably borrow the complete property
-    ///
-    /// ### Example
-    /// ```
-    /// use fbsim_core::league::season::matchup::LeagueSeasonMatchup;
-    ///
-    /// let mut my_matchup = LeagueSeasonMatchup::new(0, 1);
-    /// let mut complete = my_matchup.complete_mut();
-    /// ```
-    pub fn complete_mut(&mut self) -> &mut bool {
-        &mut self.complete
+    pub fn game_mut(&mut self) -> &mut Game {
+        &mut self.game
     }
 
     /// Determine whether the given team participated in the matchup
@@ -193,21 +167,21 @@ impl LeagueSeasonMatchup {
     pub fn result(&self, id: usize) -> Option<FootballMatchupResult> {
         // If the team did not participate or the game is not complete
         // Then it has no result
-        if !(self.complete && self.participated(id)) {
+        if !(self.context.game_over() && self.participated(id)) {
             return None;
         }
 
         // Calculate and return the result
-        if self.home_score == self.away_score {
+        if self.context.home_score() == self.context.away_score() {
             return Some(FootballMatchupResult::Tie);
         }
         if self.is_home_team(id) {
-            if self.home_score > self.away_score {
+            if self.context.home_score() > self.context.away_score() {
                 Some(FootballMatchupResult::Win)
             } else {
                 Some(FootballMatchupResult::Loss)
             }
-        } else if self.home_score > self.away_score {
+        } else if self.context.home_score() > self.context.away_score() {
             Some(FootballMatchupResult::Loss)
         } else {
             Some(FootballMatchupResult::Win)

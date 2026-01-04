@@ -89,7 +89,7 @@ impl LeagueSeasonWeek {
 
         // Loop through the matchups and check if any are complete
         for matchup in self.matchups.iter() {
-            if *matchup.complete() {
+            if matchup.context().game_over() {
                 return true;
             }
         }
@@ -113,7 +113,7 @@ impl LeagueSeasonWeek {
 
         // Loop through the matchups and check if any are not complete
         for matchup in self.matchups.iter() {
-            if !matchup.complete() {
+            if !matchup.context().game_over() {
                 return false;
             }
         }
