@@ -795,7 +795,7 @@ impl PlayResultSimulator for RunResultSimulator {
         };
 
         // Construct the run result
-        let run_res = RunResult{
+        let raw = RunResultRaw{
             yards_gained,
             play_duration: self.play_duration(total_yards, rng),
             fumble,
@@ -805,6 +805,7 @@ impl PlayResultSimulator for RunResultSimulator {
             safety,
             two_point_conversion: context.next_play_extra_point()
         };
+        let run_res = RunResult::try_from(raw).unwrap();
         PlayTypeResult::Run(run_res)
     }
 }

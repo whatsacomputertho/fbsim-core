@@ -1472,7 +1472,8 @@ impl PlayResultSimulator for PassResultSimulator {
             int_return_yards.unsigned_abs() + yards_after_catch.unsigned_abs() + fumble_return_yards.unsigned_abs(),
             rng
         );
-        let pass_res = PassResult{
+
+        let raw = PassResultRaw{
             play_duration,
             sack_yards_lost,
             scramble_yards,
@@ -1489,6 +1490,7 @@ impl PlayResultSimulator for PassResultSimulator {
             safety,
             two_point_conversion: context.next_play_extra_point()
         };
+        let pass_res = PassResult::try_from(raw).unwrap();
         PlayTypeResult::Pass(pass_res)
     }
 }
