@@ -346,6 +346,7 @@ impl std::fmt::Display for DriveResult {
 /// # `Drive` struct
 ///
 /// A `Drive` represents the outcome of a drive
+#[cfg_attr(feature = "rocket_okapi", derive(JsonSchema))]
 #[derive(Clone, Eq, PartialEq, Ord, PartialOrd, Debug, Serialize, Deserialize)]
 pub struct Drive {
     plays: Vec<Play>,
@@ -896,6 +897,7 @@ impl DriveSimulator {
 /// # `Game` struct
 ///
 /// A `Game` represents the outcome of a game
+#[cfg_attr(feature = "rocket_okapi", derive(JsonSchema))]
 #[derive(Clone, Eq, PartialEq, Ord, PartialOrd, Debug, Serialize, Deserialize)]
 pub struct Game {
     drives: Vec<Drive>,

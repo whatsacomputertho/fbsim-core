@@ -3,11 +3,11 @@ pub mod matchup;
 pub mod season;
 pub mod team;
 
+use crate::team::FootballTeam;
 use crate::league::matchup::LeagueMatchups;
 use crate::league::team::LeagueTeam;
 use crate::league::season::{LeagueSeason, LeagueSeasonScheduleOptions};
 use crate::league::season::matchup::LeagueSeasonMatchups;
-use crate::league::season::team::LeagueSeasonTeam;
 
 use std::collections::BTreeMap;
 
@@ -332,13 +332,13 @@ impl League {
         Ok(())
     }
 
-    /// Adds a `LeagueSeasonTeam` to a `LeagueSeason`, and corresponds the
-    /// `LeagueSeasonTeam` to the `LeagueTeam` with the given team ID
+    /// Adds a `FootballTeam` to a `LeagueSeason`, and corresponds the
+    /// `FootballTeam` to the `LeagueTeam` with the given team ID
     ///
     /// ### Example
     /// ```
+    /// use fbsim_core::team::FootballTeam;
     /// use fbsim_core::league::League;
-    /// use fbsim_core::league::season::team::LeagueSeasonTeam;
     ///
     /// // Instantiate a new League
     /// let mut my_league = League::new();
@@ -349,10 +349,10 @@ impl League {
     /// // Create a new season for the new League
     /// let res = my_league.add_season();
     ///
-    /// // Add a new season team to the new season corresponding to the new team
-    /// my_league.add_season_team(0, LeagueSeasonTeam::new());
+    /// // Add a new team to the new season corresponding to the new team
+    /// my_league.add_season_team(0, FootballTeam::new());
     /// ```
-    pub fn add_season_team(&mut self, id: usize, team: LeagueSeasonTeam) -> Result<(), String> {
+    pub fn add_season_team(&mut self, id: usize, team: FootballTeam) -> Result<(), String> {
         // Ensure the given team ID exists in the league
         if !self.teams.contains_key(&id) {
             return Err(format!("No team with ID: {}", id));
@@ -371,9 +371,9 @@ impl League {
     ///
     /// ### Example
     /// ```
+    /// use fbsim_core::team::FootballTeam;
     /// use fbsim_core::league::League;
     /// use fbsim_core::league::season::LeagueSeasonScheduleOptions;
-    /// use fbsim_core::league::season::team::LeagueSeasonTeam;
     ///
     /// // Instantiate a new League
     /// let mut my_league = League::new();
@@ -387,11 +387,11 @@ impl League {
     /// // Create a new season for the new League
     /// let res = my_league.add_season();
     ///
-    /// // Add 4 new season teams to the new season
-    /// my_league.add_season_team(0, LeagueSeasonTeam::new());
-    /// my_league.add_season_team(1, LeagueSeasonTeam::new());
-    /// my_league.add_season_team(2, LeagueSeasonTeam::new());
-    /// my_league.add_season_team(3, LeagueSeasonTeam::new());
+    /// // Add 4 new teams to the new season
+    /// my_league.add_season_team(0, FootballTeam::new());
+    /// my_league.add_season_team(1, FootballTeam::new());
+    /// my_league.add_season_team(2, FootballTeam::new());
+    /// my_league.add_season_team(3, FootballTeam::new());
     ///
     /// // Generate the season schedule
     /// let mut rng = rand::thread_rng();
@@ -409,9 +409,9 @@ impl League {
     ///
     /// ### Example
     /// ```
+    /// use fbsim_core::team::FootballTeam;
     /// use fbsim_core::league::League;
     /// use fbsim_core::league::season::LeagueSeasonScheduleOptions;
-    /// use fbsim_core::league::season::team::LeagueSeasonTeam;
     ///
     /// // Instantiate a new League
     /// let mut my_league = League::new();
@@ -426,10 +426,10 @@ impl League {
     /// let res = my_league.add_season();
     ///
     /// // Add 4 new season teams to the new season
-    /// my_league.add_season_team(0, LeagueSeasonTeam::new());
-    /// my_league.add_season_team(1, LeagueSeasonTeam::new());
-    /// my_league.add_season_team(2, LeagueSeasonTeam::new());
-    /// my_league.add_season_team(3, LeagueSeasonTeam::new());
+    /// my_league.add_season_team(0, FootballTeam::new());
+    /// my_league.add_season_team(1, FootballTeam::new());
+    /// my_league.add_season_team(2, FootballTeam::new());
+    /// my_league.add_season_team(3, FootballTeam::new());
     ///
     /// // Generate the season schedule
     /// let mut rng = rand::thread_rng();
@@ -450,9 +450,9 @@ impl League {
     ///
     /// ### Example
     /// ```
+    /// use fbsim_core::team::FootballTeam;
     /// use fbsim_core::league::League;
     /// use fbsim_core::league::season::LeagueSeasonScheduleOptions;
-    /// use fbsim_core::league::season::team::LeagueSeasonTeam;
     ///
     /// // Instantiate a new League
     /// let mut my_league = League::new();
@@ -467,10 +467,10 @@ impl League {
     /// let res = my_league.add_season();
     ///
     /// // Add 4 new season teams to the new season
-    /// my_league.add_season_team(0, LeagueSeasonTeam::new());
-    /// my_league.add_season_team(1, LeagueSeasonTeam::new());
-    /// my_league.add_season_team(2, LeagueSeasonTeam::new());
-    /// my_league.add_season_team(3, LeagueSeasonTeam::new());
+    /// my_league.add_season_team(0, FootballTeam::new());
+    /// my_league.add_season_team(1, FootballTeam::new());
+    /// my_league.add_season_team(2, FootballTeam::new());
+    /// my_league.add_season_team(3, FootballTeam::new());
     ///
     /// // Generate the season schedule
     /// let mut rng = rand::thread_rng();
@@ -491,9 +491,9 @@ impl League {
     ///
     /// ### Example
     /// ```
+    /// use fbsim_core::team::FootballTeam;
     /// use fbsim_core::league::League;
     /// use fbsim_core::league::season::LeagueSeasonScheduleOptions;
-    /// use fbsim_core::league::season::team::LeagueSeasonTeam;
     ///
     /// // Instantiate a new League
     /// let mut my_league = League::new();
@@ -508,10 +508,10 @@ impl League {
     /// let res = my_league.add_season();
     ///
     /// // Add 4 new season teams to the new season
-    /// my_league.add_season_team(0, LeagueSeasonTeam::new());
-    /// my_league.add_season_team(1, LeagueSeasonTeam::new());
-    /// my_league.add_season_team(2, LeagueSeasonTeam::new());
-    /// my_league.add_season_team(3, LeagueSeasonTeam::new());
+    /// my_league.add_season_team(0, FootballTeam::new());
+    /// my_league.add_season_team(1, FootballTeam::new());
+    /// my_league.add_season_team(2, FootballTeam::new());
+    /// my_league.add_season_team(3, FootballTeam::new());
     ///
     /// // Generate the season schedule
     /// let mut rng = rand::thread_rng();
@@ -532,10 +532,10 @@ impl League {
     ///
     /// ### Example
     /// ```
+    /// use fbsim_core::team::FootballTeam;
     /// use fbsim_core::league::League;
     /// use fbsim_core::league::season::LeagueSeasonScheduleOptions;
     /// use fbsim_core::league::season::matchup::LeagueSeasonMatchups;
-    /// use fbsim_core::league::season::team::LeagueSeasonTeam;
     ///
     /// // Instantiate a new League
     /// let mut my_league = League::new();
@@ -550,10 +550,10 @@ impl League {
     /// let res = my_league.add_season();
     ///
     /// // Add 4 new season teams to the new season
-    /// my_league.add_season_team(0, LeagueSeasonTeam::new());
-    /// my_league.add_season_team(1, LeagueSeasonTeam::new());
-    /// my_league.add_season_team(2, LeagueSeasonTeam::new());
-    /// my_league.add_season_team(3, LeagueSeasonTeam::new());
+    /// my_league.add_season_team(0, FootballTeam::new());
+    /// my_league.add_season_team(1, FootballTeam::new());
+    /// my_league.add_season_team(2, FootballTeam::new());
+    /// my_league.add_season_team(3, FootballTeam::new());
     ///
     /// // Generate the season schedule
     /// let mut rng = rand::thread_rng();
@@ -597,10 +597,10 @@ impl League {
     /// ### Example
     /// ```
     /// use std::collections::BTreeMap;
+    /// use fbsim_core::team::FootballTeam;
     /// use fbsim_core::league::League;
     /// use fbsim_core::league::matchup::LeagueMatchups;
     /// use fbsim_core::league::season::LeagueSeasonScheduleOptions;
-    /// use fbsim_core::league::season::team::LeagueSeasonTeam;
     ///
     /// // Instantiate a new League
     /// let mut my_league = League::new();
@@ -615,10 +615,10 @@ impl League {
     /// let res = my_league.add_season();
     ///
     /// // Add 4 new season teams to the new season
-    /// my_league.add_season_team(0, LeagueSeasonTeam::new());
-    /// my_league.add_season_team(1, LeagueSeasonTeam::new());
-    /// my_league.add_season_team(2, LeagueSeasonTeam::new());
-    /// my_league.add_season_team(3, LeagueSeasonTeam::new());
+    /// my_league.add_season_team(0, FootballTeam::new());
+    /// my_league.add_season_team(1, FootballTeam::new());
+    /// my_league.add_season_team(2, FootballTeam::new());
+    /// my_league.add_season_team(3, FootballTeam::new());
     ///
     /// // Generate the season schedule
     /// let mut rng = rand::thread_rng();
