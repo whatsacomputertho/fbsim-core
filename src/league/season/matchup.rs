@@ -31,7 +31,8 @@ impl LeagueSeasonMatchup {
     /// ```
     /// use fbsim_core::league::season::matchup::LeagueSeasonMatchup;
     ///
-    /// let my_matchup = LeagueSeasonMatchup::new(0, 1);
+    /// let mut rng = rand::thread_rng();
+    /// let my_matchup = LeagueSeasonMatchup::new(0, 1, "HOME", "AWAY", &mut rng);
     /// ```
     pub fn new(home_team: usize, away_team: usize, home_short_name: &str, away_short_name: &str, rng: &mut impl Rng) -> LeagueSeasonMatchup {
         // Generate a GameContext
@@ -60,7 +61,8 @@ impl LeagueSeasonMatchup {
     /// ```
     /// use fbsim_core::league::season::matchup::LeagueSeasonMatchup;
     ///
-    /// let my_matchup = LeagueSeasonMatchup::new(0, 1);
+    /// let mut rng = rand::thread_rng();
+    /// let my_matchup = LeagueSeasonMatchup::new(0, 1, "HOME", "AWAY", &mut rng);
     /// let home_id = my_matchup.home_team();
     /// ```
     pub fn home_team(&self) -> &usize {
@@ -73,7 +75,8 @@ impl LeagueSeasonMatchup {
     /// ```
     /// use fbsim_core::league::season::matchup::LeagueSeasonMatchup;
     ///
-    /// let my_matchup = LeagueSeasonMatchup::new(0, 1);
+    /// let mut rng = rand::thread_rng();
+    /// let my_matchup = LeagueSeasonMatchup::new(0, 1, "HOME", "AWAY", &mut rng);
     /// let away_id = my_matchup.away_team();
     /// ```
     pub fn away_team(&self) -> &usize {
@@ -86,7 +89,8 @@ impl LeagueSeasonMatchup {
     /// ```
     /// use fbsim_core::league::season::matchup::LeagueSeasonMatchup;
     ///
-    /// let my_matchup = LeagueSeasonMatchup::new(0, 1);
+    /// let mut rng = rand::thread_rng();
+    /// let my_matchup = LeagueSeasonMatchup::new(0, 1, "HOME", "AWAY", &mut rng);
     /// let context = my_matchup.context();
     /// ```
     pub fn context(&self) -> &GameContext {
@@ -99,7 +103,8 @@ impl LeagueSeasonMatchup {
     /// ```
     /// use fbsim_core::league::season::matchup::LeagueSeasonMatchup;
     ///
-    /// let mut my_matchup = LeagueSeasonMatchup::new(0, 1);
+    /// let mut rng = rand::thread_rng();
+    /// let mut my_matchup = LeagueSeasonMatchup::new(0, 1, "HOME", "AWAY", &mut rng);
     /// let context = my_matchup.context_mut();
     /// ```
     pub fn context_mut(&mut self) -> &mut GameContext {
@@ -112,7 +117,8 @@ impl LeagueSeasonMatchup {
     /// ```
     /// use fbsim_core::league::season::matchup::LeagueSeasonMatchup;
     ///
-    /// let my_matchup = LeagueSeasonMatchup::new(0, 1);
+    /// let mut rng = rand::thread_rng();
+    /// let my_matchup = LeagueSeasonMatchup::new(0, 1, "HOME", "AWAY", &mut rng);
     /// let game = my_matchup.game();
     /// ```
     pub fn game(&self) -> &Game {
@@ -125,7 +131,8 @@ impl LeagueSeasonMatchup {
     /// ```
     /// use fbsim_core::league::season::matchup::LeagueSeasonMatchup;
     ///
-    /// let mut my_matchup = LeagueSeasonMatchup::new(0, 1);
+    /// let mut rng = rand::thread_rng();
+    /// let mut my_matchup = LeagueSeasonMatchup::new(0, 1, "HOME", "AWAY", &mut rng);
     /// let game = my_matchup.game_mut();
     /// ```
     pub fn game_mut(&mut self) -> &mut Game {
@@ -138,7 +145,8 @@ impl LeagueSeasonMatchup {
     /// ```
     /// use fbsim_core::league::season::matchup::LeagueSeasonMatchup;
     ///
-    /// let mut my_matchup = LeagueSeasonMatchup::new(0, 1);
+    /// let mut rng = rand::thread_rng();
+    /// let my_matchup = LeagueSeasonMatchup::new(0, 1, "HOME", "AWAY", &mut rng);
     /// assert!(my_matchup.participated(0));
     /// assert!(!my_matchup.participated(2));
     /// ```
@@ -155,7 +163,8 @@ impl LeagueSeasonMatchup {
     /// ```
     /// use fbsim_core::league::season::matchup::LeagueSeasonMatchup;
     ///
-    /// let mut my_matchup = LeagueSeasonMatchup::new(0, 1);
+    /// let mut rng = rand::thread_rng();
+    /// let my_matchup = LeagueSeasonMatchup::new(0, 1, "HOME", "AWAY", &mut rng);
     /// assert!(my_matchup.is_home_team(0));
     /// assert!(!my_matchup.is_home_team(1));
     /// assert!(!my_matchup.is_home_team(2));
@@ -173,7 +182,8 @@ impl LeagueSeasonMatchup {
     /// ```
     /// use fbsim_core::league::season::matchup::LeagueSeasonMatchup;
     ///
-    /// let mut my_matchup = LeagueSeasonMatchup::new(0, 1);
+    /// let mut rng = rand::thread_rng();
+    /// let my_matchup = LeagueSeasonMatchup::new(0, 1, "HOME", "AWAY", &mut rng);
     /// let res = my_matchup.result(0);
     /// assert!(res.is_none());
     /// ```
