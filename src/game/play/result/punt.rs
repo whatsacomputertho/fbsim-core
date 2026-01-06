@@ -1067,8 +1067,8 @@ impl PlayResultSimulator for PuntResultSimulator {
         };
 
         // Generate the punt return yards
-        let punt_return_yards: i32 = if !(blocked || out_of_bounds || touchback || punt_muffed) {
-            self.return_yards(100 - punt_landing, norm_diff_returning, rng)
+        let punt_return_yards: i32 = if !(blocked || fair_catch || out_of_bounds || touchback || punt_muffed) {
+            (100 - punt_landing).min(self.return_yards(100 - punt_landing, norm_diff_returning, rng))
         } else {
             0
         };
@@ -1106,7 +1106,7 @@ impl PlayResultSimulator for PuntResultSimulator {
         // Calculate total yardage and play duration
         let total_yards: u32 = punt_distance.unsigned_abs() + punt_return_yards.unsigned_abs() + fumble_return_yards.unsigned_abs();
         let play_duration: u32 = self.play_duration(total_yards, rng);
-        let punt_res = PuntResult{
+        let raw = PuntResultRaw{
             fumble_return_yards,
             punt_yards: punt_distance,
             punt_return_yards,
@@ -1119,6 +1119,7 @@ impl PlayResultSimulator for PuntResultSimulator {
             fumble,
             touchdown
         };
+        let punt_res = PuntResult::try_from(raw).unwrap();
         PlayTypeResult::Punt(punt_res)
     }
 }

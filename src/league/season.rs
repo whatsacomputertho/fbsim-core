@@ -704,7 +704,13 @@ impl LeagueSeason {
                         )
                     ),
                 };
-                let matchup = LeagueSeasonMatchup::new(*home_id, *away_id);
+                
+                // Get the home & away short names
+                let home_short_name = self.teams.get(&home_id).unwrap().short_name();
+                let away_short_name = self.teams.get(&away_id).unwrap().short_name();
+
+                // Create the matchup and add to the week
+                let matchup = LeagueSeasonMatchup::new(*home_id, *away_id, home_short_name, away_short_name, rng);
                 week.matchups_mut().push(matchup);
             }
 

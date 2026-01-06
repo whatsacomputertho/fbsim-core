@@ -3,9 +3,10 @@
 use rocket_okapi::okapi::schemars;
 #[cfg(feature = "rocket_okapi")]
 use rocket_okapi::okapi::schemars::JsonSchema;
+use rand::Rng;
 use serde::{Serialize, Deserialize};
 
-use crate::game::context::GameContext;
+use crate::game::context::{GameContext, GameContextBuilder};
 use crate::game::play::Game;
 use crate::game::matchup::FootballMatchupResult;
 use crate::league::matchup::LeagueTeamRecord;
@@ -32,11 +33,23 @@ impl LeagueSeasonMatchup {
     ///
     /// let my_matchup = LeagueSeasonMatchup::new(0, 1);
     /// ```
-    pub fn new(home_team: usize, away_team: usize) -> LeagueSeasonMatchup {
+    pub fn new(home_team: usize, away_team: usize, home_short_name: &str, away_short_name: &str, rng: &mut impl Rng) -> LeagueSeasonMatchup {
+        // Generate a GameContext
+        let home_opening_kickoff: bool = rng.gen::<bool>();
+        let context: GameContext = GameContextBuilder::new()
+            .home_team_short(home_short_name)
+            .away_team_short(away_short_name)
+            .home_possession(!home_opening_kickoff)
+            .home_positive_direction(!home_opening_kickoff)
+            .home_opening_kickoff(home_opening_kickoff)
+            .build()
+            .unwrap();
+        
+        // Instantiate and return a LeagueSeasonMatchup
         LeagueSeasonMatchup {
             home_team,
             away_team,
-            context: GameContext::new(),
+            context,
             game: Game::new()
         }
     }
