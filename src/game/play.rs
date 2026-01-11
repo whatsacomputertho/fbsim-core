@@ -19,7 +19,7 @@ use crate::game::play::result::kickoff::KickoffResultSimulator;
 use crate::game::play::result::punt::PuntResultSimulator;
 use crate::game::play::result::pass::PassResultSimulator;
 use crate::game::play::result::run::RunResultSimulator;
-use crate::game::stat::{PassingStats, RushingStats, ReceivingStats};
+use crate::game::stat::{PassingStats, RushingStats, ReceivingStats, OffensiveStats};
 use crate::team::FootballTeam;
 use crate::team::coach::FootballTeamCoach;
 use crate::team::defense::FootballTeamDefense;
@@ -1134,6 +1134,40 @@ impl Game {
             }
         }
         stats
+    }
+
+    /// Get the offensive stats for the home team
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::game::play::Game;
+    ///
+    /// let game = Game::new();
+    /// let home_stats = game.home_stats();
+    /// ```
+    pub fn home_stats(&self) -> OffensiveStats {
+        OffensiveStats::from_properties(
+            self.passing_stats(true),
+            self.rushing_stats(true),
+            self.receiving_stats(true)
+        )
+    }
+
+    /// Get the offensive stats for the away team
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::game::play::Game;
+    ///
+    /// let game = Game::new();
+    /// let away_stats = game.away_stats();
+    /// ```
+    pub fn away_stats(&self) -> OffensiveStats {
+        OffensiveStats::from_properties(
+            self.passing_stats(false),
+            self.rushing_stats(false),
+            self.receiving_stats(false)
+        )
     }
 }
 
