@@ -19,7 +19,7 @@ use crate::game::play::result::kickoff::KickoffResultSimulator;
 use crate::game::play::result::punt::PuntResultSimulator;
 use crate::game::play::result::pass::PassResultSimulator;
 use crate::game::play::result::run::RunResultSimulator;
-use crate::game::stat::{PassingStats, RushingStats, ReceivingStats};
+use crate::game::stat::{PassingStats, RushingStats, ReceivingStats, OffensiveStats};
 use crate::team::FootballTeam;
 use crate::team::coach::FootballTeamCoach;
 use crate::team::defense::FootballTeamDefense;
@@ -462,29 +462,29 @@ impl Drive {
                     }
 
                     // Increment rushes & rushing yards
-                    stats.increment_rushes();
+                    stats.increment_rushes(1);
                     stats.increment_yards(res.net_yards());
 
                     // Increment rushing TDs & fumbles if either occur
                     if res.touchdown() {
-                        stats.increment_touchdowns();
+                        stats.increment_touchdowns(1);
                     }
                     if res.fumble() {
-                        stats.increment_fumbles();
+                        stats.increment_fumbles(1);
                     }
                 },
                 PlayTypeResult::Pass(res) => {
                     if res.scramble() && !res.two_point_conversion() {
                         // Increment rushes & rushing yards
-                        stats.increment_rushes();
+                        stats.increment_rushes(1);
                         stats.increment_yards(res.net_yards());
 
                         // Increment rushing TDs & fumbles if either occur
                         if res.touchdown() {
-                            stats.increment_touchdowns();
+                            stats.increment_touchdowns(1);
                         }
                         if res.fumble() {
-                            stats.increment_fumbles();
+                            stats.increment_fumbles(1);
                         }
                     }
                 },
@@ -517,17 +517,17 @@ impl Drive {
 
                     // Increment attempts
                     if !(res.scramble() || res.sack()) {
-                        stats.increment_attempts();
+                        stats.increment_attempts(1);
                     }
                     
                     // Increment completions and yards if complete
                     if res.complete() {
-                        stats.increment_completions();
+                        stats.increment_completions(1);
                         stats.increment_yards(res.net_yards());
                         
                         // Increment TDs if completion and touchdown
                         if res.touchdown() {
-                            stats.increment_touchdowns();
+                            stats.increment_touchdowns(1);
                         }
                     } else if res.sack() {
                         stats.increment_yards(res.net_yards());
@@ -535,7 +535,7 @@ impl Drive {
 
                     // Increment interceptions if this was an INT
                     if res.interception() {
-                        stats.increment_interceptions();
+                        stats.increment_interceptions(1);
                     }
                 },
                 _ => continue
@@ -998,29 +998,29 @@ impl Game {
                             }
 
                             // Increment rushes & rushing yards
-                            stats.increment_rushes();
+                            stats.increment_rushes(1);
                             stats.increment_yards(res.net_yards());
 
                             // Increment rushing TDs & fumbles if either occur
                             if res.touchdown() {
-                                stats.increment_touchdowns();
+                                stats.increment_touchdowns(1);
                             }
                             if res.fumble() {
-                                stats.increment_fumbles();
+                                stats.increment_fumbles(1);
                             }
                         },
                         PlayTypeResult::Pass(res) => {
                             if res.scramble() && !res.two_point_conversion() {
                                 // Increment rushes & rushing yards
-                                stats.increment_rushes();
+                                stats.increment_rushes(1);
                                 stats.increment_yards(res.net_yards());
 
                                 // Increment rushing TDs & fumbles if either occur
                                 if res.touchdown() {
-                                    stats.increment_touchdowns();
+                                    stats.increment_touchdowns(1);
                                 }
                                 if res.fumble() {
-                                    stats.increment_fumbles();
+                                    stats.increment_fumbles(1);
                                 }
                             }
                         },
@@ -1057,17 +1057,17 @@ impl Game {
                             
                             // Increment attempts
                             if !(res.scramble() || res.sack()) {
-                                stats.increment_attempts();
+                                stats.increment_attempts(1);
                             }
                             
                             // Increment completions and yards if complete
                             if res.complete() {
-                                stats.increment_completions();
+                                stats.increment_completions(1);
                                 stats.increment_yards(res.net_yards());
                                 
                                 // Increment TDs if completion and touchdown
                                 if res.touchdown() {
-                                    stats.increment_touchdowns();
+                                    stats.increment_touchdowns(1);
                                 }
                             } else if res.sack() {
                                 stats.increment_yards(res.net_yards());
@@ -1075,7 +1075,7 @@ impl Game {
 
                             // Increment interceptions if this was an INT
                             if res.interception() {
-                                stats.increment_interceptions();
+                                stats.increment_interceptions(1);
                             }
                         },
                         _ => continue
@@ -1134,6 +1134,40 @@ impl Game {
             }
         }
         stats
+    }
+
+    /// Get the offensive stats for the home team
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::game::play::Game;
+    ///
+    /// let game = Game::new();
+    /// let home_stats = game.home_stats();
+    /// ```
+    pub fn home_stats(&self) -> OffensiveStats {
+        OffensiveStats::from_properties(
+            self.passing_stats(true),
+            self.rushing_stats(true),
+            self.receiving_stats(true)
+        )
+    }
+
+    /// Get the offensive stats for the away team
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::game::play::Game;
+    ///
+    /// let game = Game::new();
+    /// let away_stats = game.away_stats();
+    /// ```
+    pub fn away_stats(&self) -> OffensiveStats {
+        OffensiveStats::from_properties(
+            self.passing_stats(false),
+            self.rushing_stats(false),
+            self.receiving_stats(false)
+        )
     }
 }
 

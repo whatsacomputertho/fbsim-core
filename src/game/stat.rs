@@ -51,11 +51,11 @@ impl RushingStats {
     /// use fbsim_core::game::stat::RushingStats;
     ///
     /// let mut my_stats = RushingStats::new();
-    /// my_stats.increment_rushes();
+    /// my_stats.increment_rushes(1);
     /// assert!(my_stats.rushes() == 1);
     /// ```
-    pub fn increment_rushes(&mut self) {
-        self.rushes += 1;
+    pub fn increment_rushes(&mut self, rushes: u32) {
+        self.rushes += rushes;
     }
 
     /// Get the number of fumbles from the RushingStats struct
@@ -79,11 +79,11 @@ impl RushingStats {
     /// use fbsim_core::game::stat::RushingStats;
     ///
     /// let mut my_stats = RushingStats::new();
-    /// my_stats.increment_fumbles();
+    /// my_stats.increment_fumbles(1);
     /// assert!(my_stats.fumbles() == 1);
     /// ```
-    pub fn increment_fumbles(&mut self) {
-        self.fumbles += 1;
+    pub fn increment_fumbles(&mut self, fumbles: u32) {
+        self.fumbles += fumbles;
     }
 
     /// Get the number of touchdowns in the RushingStats struct
@@ -107,11 +107,11 @@ impl RushingStats {
     /// use fbsim_core::game::stat::RushingStats;
     ///
     /// let mut my_stats = RushingStats::new();
-    /// my_stats.increment_touchdowns();
+    /// my_stats.increment_touchdowns(1);
     /// assert!(my_stats.touchdowns() == 1);
     /// ```
-    pub fn increment_touchdowns(&mut self) {
-        self.touchdowns += 1;
+    pub fn increment_touchdowns(&mut self, touchdowns: u32) {
+        self.touchdowns += touchdowns;
     }
 
     /// Get the rushing yards in the RushingStats struct
@@ -224,11 +224,11 @@ impl PassingStats {
     /// use fbsim_core::game::stat::PassingStats;
     ///
     /// let mut my_stats = PassingStats::new();
-    /// my_stats.increment_attempts();
+    /// my_stats.increment_attempts(1);
     /// assert!(my_stats.attempts() == 1);
     /// ```
-    pub fn increment_attempts(&mut self) {
-        self.attempts += 1;
+    pub fn increment_attempts(&mut self, attempts: u32) {
+        self.attempts += attempts;
     }
 
     /// Get the completions from the PassingStats
@@ -252,11 +252,11 @@ impl PassingStats {
     /// use fbsim_core::game::stat::PassingStats;
     ///
     /// let mut my_stats = PassingStats::new();
-    /// my_stats.increment_completions();
+    /// my_stats.increment_completions(1);
     /// assert!(my_stats.completions() == 1);
     /// ```
-    pub fn increment_completions(&mut self) {
-        self.completions += 1;
+    pub fn increment_completions(&mut self, completions: u32) {
+        self.completions += completions;
     }
 
     /// Get the touchdowns from the PassingStats
@@ -280,11 +280,11 @@ impl PassingStats {
     /// use fbsim_core::game::stat::PassingStats;
     ///
     /// let mut my_stats = PassingStats::new();
-    /// my_stats.increment_touchdowns();
+    /// my_stats.increment_touchdowns(1);
     /// assert!(my_stats.touchdowns() == 1);
     /// ```
-    pub fn increment_touchdowns(&mut self) {
-        self.touchdowns += 1;
+    pub fn increment_touchdowns(&mut self, touchdowns: u32) {
+        self.touchdowns += touchdowns;
     }
 
     /// Get the interceptions from the PassingStats
@@ -308,11 +308,11 @@ impl PassingStats {
     /// use fbsim_core::game::stat::PassingStats;
     ///
     /// let mut my_stats = PassingStats::new();
-    /// my_stats.increment_interceptions();
+    /// my_stats.increment_interceptions(1);
     /// assert!(my_stats.interceptions() == 1);
     /// ```
-    pub fn increment_interceptions(&mut self) {
-        self.interceptions += 1;
+    pub fn increment_interceptions(&mut self, interceptions: u32) {
+        self.interceptions += interceptions;
     }
 
     /// Get the yards from the PassingStats
@@ -578,5 +578,214 @@ impl std::fmt::Display for ReceivingStats {
             );
         }
         f.write_str(&receiving_str)
+    }
+}
+
+/// # `ReceivingStats` struct
+///
+/// A `ReceivingStats` represents aggregated receiving statistics
+#[cfg_attr(feature = "rocket_okapi", derive(JsonSchema))]
+#[derive(Clone, Eq, PartialEq, Ord, PartialOrd, Debug, Default, Serialize, Deserialize)]
+pub struct OffensiveStats {
+    passing: PassingStats,
+    rushing: RushingStats,
+    receiving: ReceivingStats
+}
+
+impl OffensiveStats {
+    /// Initialize a new OffensiveStats instance
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::game::stat::OffensiveStats;
+    /// 
+    /// let my_stats = OffensiveStats::new();
+    /// ```
+    pub fn new() -> OffensiveStats {
+        OffensiveStats {
+            passing: PassingStats::new(),
+            rushing: RushingStats::new(),
+            receiving: ReceivingStats::new()
+        }
+    }
+
+    /// Initialize a new OffensiveStats instance given each stat category
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::game::stat::{
+    ///     RushingStats,
+    ///     PassingStats,
+    ///     ReceivingStats,
+    ///     OffensiveStats
+    /// };
+    /// 
+    /// let my_stats = OffensiveStats::from_properties(
+    ///     PassingStats::new(),
+    ///     RushingStats::new(),
+    ///     ReceivingStats::new()
+    /// );
+    /// ```
+    pub fn from_properties(passing: PassingStats, rushing: RushingStats, receiving: ReceivingStats) -> OffensiveStats {
+        OffensiveStats {
+            passing,
+            rushing,
+            receiving
+        }
+    }
+
+    /// Borrow the passing stats
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::game::stat::OffensiveStats;
+    /// 
+    /// let my_stats = OffensiveStats::new();
+    /// let my_passing = my_stats.passing();
+    /// assert!(my_passing.completions() == 0);
+    /// ```
+    pub fn passing(&self) -> &PassingStats {
+        &self.passing
+    }
+
+    /// Mutably borrow the passing stats
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::game::stat::OffensiveStats;
+    /// 
+    /// let mut my_stats = OffensiveStats::new();
+    /// let my_passing = my_stats.passing_mut();
+    /// ```
+    pub fn passing_mut(&mut self) -> &mut PassingStats {
+        &mut self.passing
+    }
+
+    /// Increment the passing stats
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::game::stat::{OffensiveStats, PassingStats};
+    /// 
+    /// let my_passing_stats = PassingStats::new();
+    /// let mut my_stats = OffensiveStats::new();
+    /// my_stats.increment_passing(&my_passing_stats);
+    /// ```
+    pub fn increment_passing(&mut self, passing: &PassingStats) {
+        self.passing.increment_attempts(passing.attempts());
+        self.passing.increment_completions(passing.completions());
+        self.passing.increment_touchdowns(passing.touchdowns());
+        self.passing.increment_interceptions(passing.interceptions());
+        self.passing.increment_yards(passing.yards());
+    }
+
+    /// Borrow the rushing stats
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::game::stat::OffensiveStats;
+    /// 
+    /// let my_stats = OffensiveStats::new();
+    /// let my_rushing = my_stats.rushing();
+    /// assert!(my_rushing.rushes() == 0);
+    /// ```
+    pub fn rushing(&self) -> &RushingStats {
+        &self.rushing
+    }
+
+    /// Mutably borrow the rushing stats
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::game::stat::OffensiveStats;
+    /// 
+    /// let mut my_stats = OffensiveStats::new();
+    /// let my_rushing = my_stats.rushing_mut();
+    /// ```
+    pub fn rushing_mut(&mut self) -> &mut RushingStats {
+        &mut self.rushing
+    }
+
+    /// Increment the rushing stats
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::game::stat::{OffensiveStats, RushingStats};
+    /// 
+    /// let my_rushing_stats = RushingStats::new();
+    /// let mut my_stats = OffensiveStats::new();
+    /// my_stats.increment_rushing(&my_rushing_stats);
+    /// ```
+    pub fn increment_rushing(&mut self, rushing: &RushingStats) {
+        self.rushing.increment_rushes(rushing.rushes());
+        self.rushing.increment_fumbles(rushing.fumbles());
+        self.rushing.increment_touchdowns(rushing.touchdowns());
+        self.rushing.increment_yards(rushing.yards());
+    }
+
+    /// Borrow the receiving stats
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::game::stat::OffensiveStats;
+    /// 
+    /// let my_stats = OffensiveStats::new();
+    /// let my_receiving = my_stats.receiving();
+    /// assert!(my_receiving.targets() == 0);
+    /// ```
+    pub fn receiving(&self) -> &ReceivingStats {
+        &self.receiving
+    }
+
+    /// Mutably borrow the receiving stats
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::game::stat::OffensiveStats;
+    /// 
+    /// let mut my_stats = OffensiveStats::new();
+    /// let my_receiving = my_stats.receiving_mut();
+    /// ```
+    pub fn receiving_mut(&mut self) -> &mut ReceivingStats {
+        &mut self.receiving
+    }
+
+    /// Increment the receiving stats
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::game::stat::{OffensiveStats, ReceivingStats};
+    /// 
+    /// let my_receiving_stats = ReceivingStats::new();
+    /// let mut my_stats = OffensiveStats::new();
+    /// my_stats.increment_receiving(&my_receiving_stats);
+    /// ```
+    pub fn increment_receiving(&mut self, receiving: &ReceivingStats) {
+        self.receiving.increment_targets(receiving.targets());
+        self.receiving.increment_receptions(receiving.receptions());
+        self.receiving.increment_touchdowns(receiving.touchdowns());
+        self.receiving.increment_fumbles(receiving.fumbles());
+        self.receiving.increment_yards(receiving.yards());
+    }
+}
+
+impl std::fmt::Display for OffensiveStats {
+    /// Display offensive stats as a human readable string
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::game::stat::OffensiveStats;
+    /// 
+    /// let my_stats = OffensiveStats::new();
+    /// println!("{}", my_stats);
+    /// ```
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let stat_str = format!(
+            "Passing: {}\nRushing: {}\nReceiving: {}",
+            &self.passing,
+            &self.rushing,
+            &self.receiving
+        );
+        f.write_str(&stat_str)
     }
 }
