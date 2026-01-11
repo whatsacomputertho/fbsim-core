@@ -7,7 +7,7 @@ use std::collections::BTreeMap;
 use crate::team::FootballTeam;
 use crate::league::season::week::LeagueSeasonWeek;
 use crate::league::season::matchup::{LeagueSeasonMatchup, LeagueSeasonMatchups};
-use crate::game::play::GameSimulator;
+use crate::game::play::{Game, GameSimulator};
 
 #[cfg(feature = "rocket_okapi")]
 use rocket_okapi::okapi::schemars;
@@ -744,6 +744,124 @@ impl LeagueSeason {
         Ok(())
     }
 
+    /// Simulate the next play of a season matchup
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::team::FootballTeam;
+    /// use fbsim_core::league::season::LeagueSeason;
+    /// use fbsim_core::league::season::LeagueSeasonScheduleOptions;
+    ///
+    /// // Create a new season
+    /// let mut my_league_season = LeagueSeason::new();
+    ///
+    /// // Add 4 teams to the season
+    /// my_league_season.add_team(0, FootballTeam::new());
+    /// my_league_season.add_team(1, FootballTeam::new());
+    /// my_league_season.add_team(2, FootballTeam::new());
+    /// my_league_season.add_team(3, FootballTeam::new());
+    ///
+    /// // Generate the season schedule
+    /// let mut rng = rand::thread_rng();
+    /// my_league_season.generate_schedule(LeagueSeasonScheduleOptions::new(), &mut rng);
+    ///
+    /// // Simulate the first game of the first week
+    /// my_league_season.sim_play(0, 0, &mut rng);
+    /// ```
+    pub fn sim_play(&mut self, week: usize, matchup: usize, rng: &mut impl Rng) -> Result<Option<Game>, String> {
+        // Check if the prior week is not complete
+        if week > 0 {
+            let prev_week = match self.weeks.get(week - 1) {
+                Some(w) => w,
+                None => return Err(format!("Failed to get previous week {} from season {}", week-1, self.year))
+            };
+            if !prev_week.complete() {
+                return Err(
+                    format!(
+                        "Cannot simulate week {} for season {}: previous week {} not complete",
+                        week, self.year, week-1
+                    )
+                );
+            }
+        }
+
+        // Try to get the given week
+        let mut _week_to_sim = match self.weeks.get_mut(week) {
+            Some(w) => w,
+            None => return Err(format!("No such week for season {}: {}", self.year, week)),
+        };
+
+        // Try to get the given matchup
+        let mut _matchup_to_sim = match _week_to_sim.matchups_mut().get_mut(matchup) {
+            Some(m) => m,
+            None => return Err(format!("No such matchup in season {} week {}: {}", self.year, week, matchup)),
+        };
+
+        // Ensure the matchup is not already complete
+        if _matchup_to_sim.context().game_over() {
+            return Err(format!("Season {} week {} matchup {} is already complete", self.year, week, matchup));
+        }
+
+        // Try to get the home team for the matchup
+        let home_id = _matchup_to_sim.home_team();
+        let home_team = match self.teams.get(home_id) {
+            Some(t) => t,
+            None => return Err(
+                format!(
+                    "Season {} week {} matchup {} references nonexistent home team ID: {}",
+                    self.year, week, matchup, home_id
+                )
+            )
+        };
+
+        // Try to get the away team for the matchup
+        let away_id = _matchup_to_sim.away_team();
+        let away_team = match self.teams.get(away_id) {
+            Some(t) => t,
+            None => return Err(
+                format!(
+                    "Season {} week {} matchup {} references nonexistent away team ID: {}",
+                    self.year, week, matchup, away_id
+                )
+            )
+        };
+
+        // Create a new game if game has not started, or get existing game
+        if _matchup_to_sim.game().is_none() {
+            *_matchup_to_sim.game_mut() = Some(Game::new());
+        }
+
+        // Simulate the next play
+        let simulator = GameSimulator::new();
+        let context = match simulator.sim_play(
+            home_team, away_team,
+            _matchup_to_sim.context().clone(),
+            _matchup_to_sim.game_mut().as_mut().unwrap(),
+            rng
+        ) {
+            Ok(c) => c,
+            Err(e) => return Err(format!("Error while simulating matchup: {}", e))
+        };
+
+        // If game is over, archive game stats, clear game, update context
+        if context.game_over() {
+            *_matchup_to_sim.home_stats_mut() = Some(
+                _matchup_to_sim.game().as_ref().ok_or(
+                    "Failed to archive home stats for game"
+                )?.home_stats()
+            );
+            *_matchup_to_sim.away_stats_mut() = Some(
+                _matchup_to_sim.game().as_ref().ok_or(
+                    "Failed to archive away stats for game"
+                )?.away_stats()
+            );
+            *_matchup_to_sim.context_mut() = context;
+            return Ok(_matchup_to_sim.take_game());
+        }
+        *_matchup_to_sim.context_mut() = context;
+        Ok(None)
+    }
+
     /// Simulate a season matchup
     ///
     /// ### Example
@@ -768,7 +886,7 @@ impl LeagueSeason {
     /// // Simulate the first game of the first week
     /// my_league_season.sim_matchup(0, 0, &mut rng);
     /// ```
-    pub fn sim_matchup(&mut self, week: usize, matchup: usize, rng: &mut impl Rng) -> Result<(), String> {
+    pub fn sim_matchup(&mut self, week: usize, matchup: usize, rng: &mut impl Rng) -> Result<Game, String> {
         // Check if the prior week is not complete
         if week > 0 {
             let prev_week = match self.weeks.get(week - 1) {
@@ -827,19 +945,22 @@ impl LeagueSeason {
         };
 
         // Simulate the matchup
+        let mut game = Game::new();
         let simulator = GameSimulator::new();
         let context = match simulator.sim_game(
             home_team, away_team,
             _matchup_to_sim.context().clone(),
-            _matchup_to_sim.game_mut(), rng
+            &mut game, rng
         ) {
             Ok(c) => c,
             Err(e) => return Err(format!("Error while simulating matchup: {}", e))
         };
 
-        // Update the status of the matchup
+        // Archive the game stats, clear the game, update the context
+        *_matchup_to_sim.home_stats_mut() = Some(game.home_stats());
+        *_matchup_to_sim.away_stats_mut() = Some(game.away_stats());
         *_matchup_to_sim.context_mut() = context;
-        Ok(())
+        Ok(game)
     }
 
     /// Simulate a full week of season matchups
@@ -926,11 +1047,12 @@ impl LeagueSeason {
             };
 
             // Simulate the matchup
+            let mut game = Game::new();
             let simulator = GameSimulator::new();
             let context = match simulator.sim_game(
                 home_team, away_team,
                 matchup.context().clone(),
-                matchup.game_mut(), rng
+                &mut game, rng
             ) {
                 Ok(c) => c,
                 Err(e) => return Err(format!("Error while simulating matchup: {}", e))

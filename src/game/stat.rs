@@ -580,3 +580,159 @@ impl std::fmt::Display for ReceivingStats {
         f.write_str(&receiving_str)
     }
 }
+
+/// # `ReceivingStats` struct
+///
+/// A `ReceivingStats` represents aggregated receiving statistics
+#[cfg_attr(feature = "rocket_okapi", derive(JsonSchema))]
+#[derive(Clone, Eq, PartialEq, Ord, PartialOrd, Debug, Default, Serialize, Deserialize)]
+pub struct OffensiveStats {
+    passing: PassingStats,
+    rushing: RushingStats,
+    receiving: ReceivingStats
+}
+
+impl OffensiveStats {
+    /// Initialize a new OffensiveStats instance
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::game::stat::OffensiveStats;
+    /// 
+    /// let my_stats = OffensiveStats::new();
+    /// ```
+    pub fn new() -> OffensiveStats {
+        OffensiveStats {
+            passing: PassingStats::new(),
+            rushing: RushingStats::new(),
+            receiving: ReceivingStats::new()
+        }
+    }
+
+    /// Initialize a new OffensiveStats instance given each stat category
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::game::stat::{
+    ///     RushingStats,
+    ///     PassingStats,
+    ///     ReceivingStats,
+    ///     OffensiveStats
+    /// };
+    /// 
+    /// let my_stats = OffensiveStats::from_properties(
+    ///     PassingStats::new(),
+    ///     RushingStats::new(),
+    ///     ReceivingStats::new()
+    /// );
+    /// ```
+    pub fn from_properties(passing: PassingStats, rushing: RushingStats, receiving: ReceivingStats) -> OffensiveStats {
+        OffensiveStats {
+            passing,
+            rushing,
+            receiving
+        }
+    }
+
+    /// Borrow the passing stats
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::game::stat::OffensiveStats;
+    /// 
+    /// let my_stats = OffensiveStats::new();
+    /// let my_passing = my_stats.passing();
+    /// assert!(my_passing.completions() == 0);
+    /// ```
+    pub fn passing(&self) -> &PassingStats {
+        &self.passing
+    }
+
+    /// Mutably borrow the passing stats
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::game::stat::OffensiveStats;
+    /// 
+    /// let mut my_stats = OffensiveStats::new();
+    /// let my_passing = my_stats.passing_mut();
+    /// ```
+    pub fn passing_mut(&mut self) -> &mut PassingStats {
+        &mut self.passing
+    }
+
+    /// Borrow the rushing stats
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::game::stat::OffensiveStats;
+    /// 
+    /// let my_stats = OffensiveStats::new();
+    /// let my_rushing = my_stats.rushing();
+    /// assert!(my_rushing.rushes() == 0);
+    /// ```
+    pub fn rushing(&self) -> &RushingStats {
+        &self.rushing
+    }
+
+    /// Mutably borrow the rushing stats
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::game::stat::OffensiveStats;
+    /// 
+    /// let mut my_stats = OffensiveStats::new();
+    /// let my_rushing = my_stats.rushing_mut();
+    /// ```
+    pub fn rushing_mut(&mut self) -> &mut RushingStats {
+        &mut self.rushing
+    }
+
+    /// Borrow the receiving stats
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::game::stat::OffensiveStats;
+    /// 
+    /// let my_stats = OffensiveStats::new();
+    /// let my_receiving = my_stats.receiving();
+    /// assert!(my_receiving.targets() == 0);
+    /// ```
+    pub fn receiving(&self) -> &ReceivingStats {
+        &self.receiving
+    }
+
+    /// Mutably borrow the receiving stats
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::game::stat::OffensiveStats;
+    /// 
+    /// let mut my_stats = OffensiveStats::new();
+    /// let my_receiving = my_stats.receiving_mut();
+    /// ```
+    pub fn receiving_mut(&mut self) -> &mut ReceivingStats {
+        &mut self.receiving
+    }
+}
+
+impl std::fmt::Display for OffensiveStats {
+    /// Display offensive stats as a human readable string
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::game::stat::OffensiveStats;
+    /// 
+    /// let my_stats = OffensiveStats::new();
+    /// println!("{}", my_stats);
+    /// ```
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let stat_str = format!(
+            "Passing: {}\nRushing: {}\nReceiving: {}",
+            &self.passing,
+            &self.rushing,
+            &self.receiving
+        );
+        f.write_str(&stat_str)
+    }
+}
