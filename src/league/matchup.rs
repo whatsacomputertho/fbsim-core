@@ -2,6 +2,7 @@
 use std::collections::BTreeMap;
 use std::fmt;
 
+use crate::game::stat::OffensiveStats;
 use crate::league::season::matchup::LeagueSeasonMatchups;
 
 /// # `LeagueTeamRecord` type
@@ -206,5 +207,31 @@ impl LeagueMatchups {
             record.increment_ties(*season_record.ties());
         }
         record
+    }
+
+    /// Compute the team stats
+    ///
+    /// ### Example
+    /// ```
+    /// use std::collections::BTreeMap;
+    /// use fbsim_core::game::stat::OffensiveStats;
+    /// use fbsim_core::league::matchup::LeagueMatchups;
+    ///
+    /// let my_matchups = LeagueMatchups::new(BTreeMap::new());
+    /// let stats = my_matchups.stats();
+    /// assert!(stats == OffensiveStats::new());
+    /// ```
+    pub fn stats(&self) -> OffensiveStats {
+        // Initialize a new OffensiveStats
+        let mut stats = OffensiveStats::new();
+
+        // Loop through the matchups and increment the team stats
+        for (_, season) in self.matchups.iter() {
+            let season_stats = season.stats();
+            stats.increment_passing(season_stats.passing());
+            stats.increment_rushing(season_stats.rushing());
+            stats.increment_receiving(season_stats.receiving());
+        }
+        stats
     }
 }

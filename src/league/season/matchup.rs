@@ -352,4 +352,42 @@ impl LeagueSeasonMatchups {
         }
         record
     }
+
+    /// Compute the team stats
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::game::stat::OffensiveStats;
+    /// use fbsim_core::league::season::matchup::LeagueSeasonMatchups;
+    ///
+    /// let my_matchups = LeagueSeasonMatchups::new(0, Vec::new());
+    /// let stats = my_matchups.stats();
+    /// assert!(stats == OffensiveStats::new());
+    /// ```
+    pub fn stats(&self) -> OffensiveStats {
+        // Initialize a new OffensiveStats
+        let mut stats = OffensiveStats::new();
+
+        // Loop through the matchups and increment the team stats
+        for matchup in self.matchups.iter().flatten() {
+            // Get the game stats for the team
+            let game_stat_opt = if self.team_id == *matchup.home_team() {
+                matchup.home_stats()
+            } else {
+                matchup.away_stats()
+            };
+
+            // If no stats, then the game hasn't been simulated
+            let game_stats = match game_stat_opt {
+                Some(s) => s,
+                None => continue
+            };
+
+            // Increment the season stats using the game stats
+            stats.increment_passing(game_stats.passing());
+            stats.increment_rushing(game_stats.rushing());
+            stats.increment_receiving(game_stats.receiving());
+        }
+        stats
+    }
 }
