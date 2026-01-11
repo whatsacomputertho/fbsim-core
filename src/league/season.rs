@@ -1058,8 +1058,10 @@ impl LeagueSeason {
                 Err(e) => return Err(format!("Error while simulating matchup: {}", e))
             };
 
-            // Update the status of the matchup
+            // Update the matchup context and stats
             *matchup.context_mut() = context;
+            *matchup.away_stats_mut() = Some(game.away_stats());
+            *matchup.home_stats_mut() = Some(game.home_stats());
         }
         Ok(())
     }

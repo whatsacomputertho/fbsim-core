@@ -462,29 +462,29 @@ impl Drive {
                     }
 
                     // Increment rushes & rushing yards
-                    stats.increment_rushes();
+                    stats.increment_rushes(1);
                     stats.increment_yards(res.net_yards());
 
                     // Increment rushing TDs & fumbles if either occur
                     if res.touchdown() {
-                        stats.increment_touchdowns();
+                        stats.increment_touchdowns(1);
                     }
                     if res.fumble() {
-                        stats.increment_fumbles();
+                        stats.increment_fumbles(1);
                     }
                 },
                 PlayTypeResult::Pass(res) => {
                     if res.scramble() && !res.two_point_conversion() {
                         // Increment rushes & rushing yards
-                        stats.increment_rushes();
+                        stats.increment_rushes(1);
                         stats.increment_yards(res.net_yards());
 
                         // Increment rushing TDs & fumbles if either occur
                         if res.touchdown() {
-                            stats.increment_touchdowns();
+                            stats.increment_touchdowns(1);
                         }
                         if res.fumble() {
-                            stats.increment_fumbles();
+                            stats.increment_fumbles(1);
                         }
                     }
                 },
@@ -517,17 +517,17 @@ impl Drive {
 
                     // Increment attempts
                     if !(res.scramble() || res.sack()) {
-                        stats.increment_attempts();
+                        stats.increment_attempts(1);
                     }
                     
                     // Increment completions and yards if complete
                     if res.complete() {
-                        stats.increment_completions();
+                        stats.increment_completions(1);
                         stats.increment_yards(res.net_yards());
                         
                         // Increment TDs if completion and touchdown
                         if res.touchdown() {
-                            stats.increment_touchdowns();
+                            stats.increment_touchdowns(1);
                         }
                     } else if res.sack() {
                         stats.increment_yards(res.net_yards());
@@ -535,7 +535,7 @@ impl Drive {
 
                     // Increment interceptions if this was an INT
                     if res.interception() {
-                        stats.increment_interceptions();
+                        stats.increment_interceptions(1);
                     }
                 },
                 _ => continue
@@ -998,29 +998,29 @@ impl Game {
                             }
 
                             // Increment rushes & rushing yards
-                            stats.increment_rushes();
+                            stats.increment_rushes(1);
                             stats.increment_yards(res.net_yards());
 
                             // Increment rushing TDs & fumbles if either occur
                             if res.touchdown() {
-                                stats.increment_touchdowns();
+                                stats.increment_touchdowns(1);
                             }
                             if res.fumble() {
-                                stats.increment_fumbles();
+                                stats.increment_fumbles(1);
                             }
                         },
                         PlayTypeResult::Pass(res) => {
                             if res.scramble() && !res.two_point_conversion() {
                                 // Increment rushes & rushing yards
-                                stats.increment_rushes();
+                                stats.increment_rushes(1);
                                 stats.increment_yards(res.net_yards());
 
                                 // Increment rushing TDs & fumbles if either occur
                                 if res.touchdown() {
-                                    stats.increment_touchdowns();
+                                    stats.increment_touchdowns(1);
                                 }
                                 if res.fumble() {
-                                    stats.increment_fumbles();
+                                    stats.increment_fumbles(1);
                                 }
                             }
                         },
@@ -1057,17 +1057,17 @@ impl Game {
                             
                             // Increment attempts
                             if !(res.scramble() || res.sack()) {
-                                stats.increment_attempts();
+                                stats.increment_attempts(1);
                             }
                             
                             // Increment completions and yards if complete
                             if res.complete() {
-                                stats.increment_completions();
+                                stats.increment_completions(1);
                                 stats.increment_yards(res.net_yards());
                                 
                                 // Increment TDs if completion and touchdown
                                 if res.touchdown() {
-                                    stats.increment_touchdowns();
+                                    stats.increment_touchdowns(1);
                                 }
                             } else if res.sack() {
                                 stats.increment_yards(res.net_yards());
@@ -1075,7 +1075,7 @@ impl Game {
 
                             // Increment interceptions if this was an INT
                             if res.interception() {
-                                stats.increment_interceptions();
+                                stats.increment_interceptions(1);
                             }
                         },
                         _ => continue
