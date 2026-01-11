@@ -8,6 +8,7 @@ use serde::{Serialize, Deserialize};
 
 use crate::game::context::{GameContext, GameContextBuilder};
 use crate::game::play::Game;
+use crate::game::stat::OffensiveStats;
 use crate::game::matchup::FootballMatchupResult;
 use crate::league::matchup::LeagueTeamRecord;
 
@@ -20,7 +21,9 @@ pub struct LeagueSeasonMatchup {
     home_team: usize,
     away_team: usize,
     context: GameContext,
-    game: Game
+    game: Option<Game>,
+    home_stats: Option<OffensiveStats>,
+    away_stats: Option<OffensiveStats>
 }
 
 impl LeagueSeasonMatchup {
@@ -51,7 +54,9 @@ impl LeagueSeasonMatchup {
             home_team,
             away_team,
             context,
-            game: Game::new()
+            game: None,
+            home_stats: None,
+            away_stats: None
         }
     }
 
@@ -121,7 +126,7 @@ impl LeagueSeasonMatchup {
     /// let my_matchup = LeagueSeasonMatchup::new(0, 1, "HOME", "AWAY", &mut rng);
     /// let game = my_matchup.game();
     /// ```
-    pub fn game(&self) -> &Game {
+    pub fn game(&self) -> &Option<Game> {
         &self.game
     }
 
@@ -135,8 +140,78 @@ impl LeagueSeasonMatchup {
     /// let mut my_matchup = LeagueSeasonMatchup::new(0, 1, "HOME", "AWAY", &mut rng);
     /// let game = my_matchup.game_mut();
     /// ```
-    pub fn game_mut(&mut self) -> &mut Game {
+    pub fn game_mut(&mut self) -> &mut Option<Game> {
         &mut self.game
+    }
+
+    /// Take ownership of the matchup's Game
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::league::season::matchup::LeagueSeasonMatchup;
+    ///
+    /// let mut rng = rand::thread_rng();
+    /// let mut my_matchup = LeagueSeasonMatchup::new(0, 1, "HOME", "AWAY", &mut rng);
+    /// let game = my_matchup.take_game();
+    /// ```
+    pub fn take_game(&mut self) -> Option<Game> {
+        self.game.take()
+    }
+
+    /// Borrow the matchup's home stats
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::league::season::matchup::LeagueSeasonMatchup;
+    ///
+    /// let mut rng = rand::thread_rng();
+    /// let my_matchup = LeagueSeasonMatchup::new(0, 1, "HOME", "AWAY", &mut rng);
+    /// let home_stats = my_matchup.home_stats();
+    /// ```
+    pub fn home_stats(&self) -> &Option<OffensiveStats> {
+        &self.home_stats
+    }
+
+    /// Mutably borrow the matchup's home stats
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::league::season::matchup::LeagueSeasonMatchup;
+    ///
+    /// let mut rng = rand::thread_rng();
+    /// let mut my_matchup = LeagueSeasonMatchup::new(0, 1, "HOME", "AWAY", &mut rng);
+    /// let home_stats = my_matchup.home_stats_mut();
+    /// ```
+    pub fn home_stats_mut(&mut self) -> &mut Option<OffensiveStats> {
+        &mut self.home_stats
+    }
+
+    /// Borrow the matchup's away stats
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::league::season::matchup::LeagueSeasonMatchup;
+    ///
+    /// let mut rng = rand::thread_rng();
+    /// let my_matchup = LeagueSeasonMatchup::new(0, 1, "HOME", "AWAY", &mut rng);
+    /// let away_stats = my_matchup.away_stats();
+    /// ```
+    pub fn away_stats(&self) -> &Option<OffensiveStats> {
+        &self.away_stats
+    }
+
+    /// Mutably borrow the matchup's away stats
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::league::season::matchup::LeagueSeasonMatchup;
+    ///
+    /// let mut rng = rand::thread_rng();
+    /// let mut my_matchup = LeagueSeasonMatchup::new(0, 1, "HOME", "AWAY", &mut rng);
+    /// let away_stats = my_matchup.away_stats_mut();
+    /// ```
+    pub fn away_stats_mut(&mut self) -> &mut Option<OffensiveStats> {
+        &mut self.away_stats
     }
 
     /// Determine whether the given team participated in the matchup

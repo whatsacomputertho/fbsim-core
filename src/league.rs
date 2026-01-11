@@ -4,10 +4,12 @@ pub mod season;
 pub mod team;
 
 use crate::team::FootballTeam;
+use crate::game::play::Game;
 use crate::league::matchup::LeagueMatchups;
 use crate::league::team::LeagueTeam;
 use crate::league::season::{LeagueSeason, LeagueSeasonScheduleOptions};
-use crate::league::season::matchup::LeagueSeasonMatchups;
+use crate::league::season::matchup::{LeagueSeasonMatchup, LeagueSeasonMatchups};
+use crate::league::season::week::{LeagueSeasonWeek};
 
 use std::collections::BTreeMap;
 
@@ -228,6 +230,52 @@ impl League {
 
         // Otherwise search for it in the past seasons
         self.seasons().iter().find(|&season| *season.year() == year).map(|v| v as _)
+    }
+
+    /// Borrow a week from a `League` identified by its year
+    ///
+    /// ### Example
+    /// ```
+    /// use std::collections::BTreeMap;
+    /// use fbsim_core::league::League;
+    ///
+    /// // Instantiate a new League
+    /// let mut my_league = League::new();
+    ///
+    /// // Create a new season in the league
+    /// let _ = my_league.add_season();
+    ///
+    /// // Borrow the past seasons from the League
+    /// let my_week = my_league.week(2026, 0);
+    /// ```
+    pub fn week(&self, year: usize, week: usize) -> Option<&LeagueSeasonWeek> {
+        if let Some(season) = self.season(year) {
+            return season.weeks().get(week);
+        }
+        None
+    }
+
+    /// Borrow a matchup from a `League` identified by its year
+    ///
+    /// ### Example
+    /// ```
+    /// use std::collections::BTreeMap;
+    /// use fbsim_core::league::League;
+    ///
+    /// // Instantiate a new League
+    /// let mut my_league = League::new();
+    ///
+    /// // Create a new season in the league
+    /// let _ = my_league.add_season();
+    ///
+    /// // Borrow the past seasons from the League
+    /// let my_matchup = my_league.matchup(2026, 0, 0);
+    /// ```
+    pub fn matchup(&self, year: usize, week: usize, matchup: usize) -> Option<&LeagueSeasonMatchup> {
+        if let Some(week) = self.week(year, week) {
+            return week.matchups().get(matchup);
+        }
+        None
     }
 
     /// Borrows the past seasons from a `League`
@@ -487,7 +535,7 @@ impl League {
         }
     }
 
-    /// Simulate a week of the current season
+    /// Simulate a matchup from the current season
     ///
     /// ### Example
     /// ```
@@ -518,12 +566,53 @@ impl League {
     /// my_league.generate_schedule(LeagueSeasonScheduleOptions::new(), &mut rng);
     ///
     /// // Simulate the first week of the season
-    /// my_league.sim_week(0, &mut rng);
+    /// my_league.sim_matchup(0, 0, &mut rng);
     /// ```
-    pub fn sim_matchup(&mut self, week: usize, matchup: usize, rng: &mut impl Rng) -> Result<(), String> {
+    pub fn sim_matchup(&mut self, week: usize, matchup: usize, rng: &mut impl Rng) -> Result<Game, String> {
         // Simulate a matchup from the current season if it exists, return the result
         match &mut self.current_season {
             Some(ref mut season) => season.sim_matchup(week, matchup, rng),
+            None => Err("No current season to simulate".to_string()),
+        }
+    }
+
+    /// Simulate a play from a matchup in the current season
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::team::FootballTeam;
+    /// use fbsim_core::league::League;
+    /// use fbsim_core::league::season::LeagueSeasonScheduleOptions;
+    ///
+    /// // Instantiate a new League
+    /// let mut my_league = League::new();
+    ///
+    /// // Add 4 new teams to the new league
+    /// my_league.add_team();
+    /// my_league.add_team();
+    /// my_league.add_team();
+    /// my_league.add_team();
+    ///
+    /// // Create a new season for the new League
+    /// let res = my_league.add_season();
+    ///
+    /// // Add 4 new season teams to the new season
+    /// my_league.add_season_team(0, FootballTeam::new());
+    /// my_league.add_season_team(1, FootballTeam::new());
+    /// my_league.add_season_team(2, FootballTeam::new());
+    /// my_league.add_season_team(3, FootballTeam::new());
+    ///
+    /// // Generate the season schedule
+    /// let mut rng = rand::thread_rng();
+    /// my_league.generate_schedule(LeagueSeasonScheduleOptions::new(), &mut rng);
+    ///
+    /// // Simulate the first week of the season
+    /// my_league.sim_play(0, 0, &mut rng);
+    /// ```
+    pub fn sim_play(&mut self, week: usize, matchup: usize, rng: &mut impl Rng) -> Result<Option<Game>, String> {
+        // Simulate a matchup from the current season if it exists, return the result
+        match &mut self.current_season {
+            Some(ref mut season) => season.sim_play(week, matchup, rng),
             None => Err("No current season to simulate".to_string()),
         }
     }
