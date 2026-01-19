@@ -285,6 +285,36 @@ impl LeagueSeasonMatchup {
             Some(FootballMatchupResult::Win)
         }
     }
+
+    /// Returns the winner of the matchup if the matchup is complete
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::league::season::matchup::LeagueSeasonMatchup;
+    ///
+    /// let mut rng = rand::thread_rng();
+    /// let my_matchup = LeagueSeasonMatchup::new(0, 1, "HOME", "AWAY", &mut rng);
+    /// let winner = my_matchup.winner();
+    /// assert!(winner.is_none());
+    /// ```
+    pub fn winner(&self) -> Option<usize> {
+        // There is no winner if the game is not complete
+        if !self.context.game_over() {
+            return None;
+        }
+
+        // If the game is complete, get the result for each team
+        let result = self.result(self.home_team);
+        if let Some(r) = result {
+            match r {
+                FootballMatchupResult::Win => Some(self.home_team),
+                FootballMatchupResult::Loss => Some(self.away_team),
+                FootballMatchupResult::Tie => None
+            }
+        } else {
+            None
+        }
+    }
 }
 
 /// # `LeagueSeasonMatchups` struct

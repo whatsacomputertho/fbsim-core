@@ -1,5 +1,6 @@
 #![doc = include_str!("../../docs/league/season.md")]
 pub mod matchup;
+pub mod playoffs;
 pub mod week;
 
 use std::collections::BTreeMap;
@@ -7,6 +8,7 @@ use std::collections::BTreeMap;
 use crate::team::FootballTeam;
 use crate::league::season::week::LeagueSeasonWeek;
 use crate::league::season::matchup::{LeagueSeasonMatchup, LeagueSeasonMatchups};
+use crate::league::season::playoffs::LeagueSeasonPlayoffs;
 use crate::game::play::{Game, GameSimulator};
 
 #[cfg(feature = "rocket_okapi")]
@@ -26,7 +28,8 @@ use serde::{Serialize, Deserialize, Deserializer};
 pub struct LeagueSeasonRaw {
     pub year: usize,
     pub teams: BTreeMap<usize, FootballTeam>,
-    pub weeks: Vec<LeagueSeasonWeek>
+    pub weeks: Vec<LeagueSeasonWeek>,
+    pub playoffs: LeagueSeasonPlayoffs
 }
 
 impl Default for LeagueSeasonRaw {
@@ -42,7 +45,8 @@ impl Default for LeagueSeasonRaw {
         LeagueSeasonRaw{
             year: chrono::Utc::now().year() as usize,
             teams: BTreeMap::new(),
-            weeks: Vec::new()
+            weeks: Vec::new(),
+            playoffs: LeagueSeasonPlayoffs::new()
         }
     }
 }
@@ -84,16 +88,16 @@ impl LeagueSeasonRaw {
         false
     }
 
-    /// Determine based on the matchups whether the season has completed
+    /// Determine whether the regular season is complete
     ///
     /// ### Example
     /// ```
     /// use fbsim_core::league::season::LeagueSeasonRaw;
     ///
     /// let raw_league_season = LeagueSeasonRaw::new();
-    /// let started = raw_league_season.complete();
+    /// let complete = raw_league_season.regular_season_complete();
     /// ```
-    pub fn complete(&self) -> bool {
+    pub fn regular_season_complete(&self) -> bool {
         // If no season weeks, then the season isn't complete
         if self.weeks.is_empty() {
             return false;
@@ -106,6 +110,24 @@ impl LeagueSeasonRaw {
             }
         }
         true
+    }
+
+    /// Determine whether the season is complete
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::league::season::LeagueSeasonRaw;
+    ///
+    /// let raw_league_season = LeagueSeasonRaw::new();
+    /// let complete = raw_league_season.complete();
+    /// ```
+    pub fn complete(&self) -> bool {
+        // If no season weeks, then the season isn't complete
+        if !self.regular_season_complete() {
+            false
+        } else {
+            self.playoffs.complete()
+        }
     }
 
     /// Validates a LeagueSeasonRaw before deserializing it
@@ -301,7 +323,8 @@ impl LeagueSeasonScheduleOptions {
 pub struct LeagueSeason {
     year: usize,
     teams: BTreeMap<usize, FootballTeam>,
-    weeks: Vec<LeagueSeasonWeek>
+    weeks: Vec<LeagueSeasonWeek>,
+    playoffs: LeagueSeasonPlayoffs
 }
 
 impl TryFrom<LeagueSeasonRaw> for LeagueSeason {
@@ -319,7 +342,8 @@ impl TryFrom<LeagueSeasonRaw> for LeagueSeason {
             LeagueSeason{
                 year: item.year,
                 teams: item.teams,
-                weeks: item.weeks
+                weeks: item.weeks,
+                playoffs: item.playoffs
             }
         )
     }
@@ -350,7 +374,8 @@ impl Default for LeagueSeason {
         LeagueSeason{
             year: chrono::Utc::now().year() as usize,
             teams: BTreeMap::new(),
-            weeks: Vec::new()
+            weeks: Vec::new(),
+            playoffs: LeagueSeasonPlayoffs::new()
         }
     }
 }
@@ -524,6 +549,32 @@ impl LeagueSeason {
         &mut self.weeks
     }
 
+    /// Borrow the playoffs from the season
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::league::season::LeagueSeason;
+    ///
+    /// let my_league_season = LeagueSeason::new();
+    /// let my_season_weeks = my_league_season.weeks();
+    /// ```
+    pub fn playoffs(&self) -> &LeagueSeasonPlayoffs {
+        &self.playoffs
+    }
+
+    /// Mutably borrow the playoffs from the season
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::league::season::LeagueSeason;
+    ///
+    /// let mut my_league_season = LeagueSeason::new();
+    /// let my_season_weeks = my_league_season.weeks_mut();
+    /// ```
+    pub fn playoffs_mut(&mut self) -> &mut LeagueSeasonPlayoffs {
+        &mut self.playoffs_mut
+    }
+
     /// Determine based on the matchups whether the season has started
     ///
     /// ### Example
@@ -548,16 +599,16 @@ impl LeagueSeason {
         false
     }
 
-    /// Determine based on the matchups whether the season has completed
+    /// Determine whether the regular season is complete
     ///
     /// ### Example
     /// ```
-    /// use fbsim_core::league::season::LeagueSeason;
+    /// use fbsim_core::league::season::LeagueSeasonRaw;
     ///
-    /// let my_league_season = LeagueSeason::new();
-    /// let complete = my_league_season.complete();
+    /// let raw_league_season = LeagueSeasonRaw::new();
+    /// let complete = raw_league_season.regular_season_complete();
     /// ```
-    pub fn complete(&self) -> bool {
+    pub fn regular_season_complete(&self) -> bool {
         // If no season weeks, then the season isn't complete
         if self.weeks.is_empty() {
             return false;
@@ -570,6 +621,24 @@ impl LeagueSeason {
             }
         }
         true
+    }
+
+    /// Determine whether the season is complete
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::league::season::LeagueSeasonRaw;
+    ///
+    /// let raw_league_season = LeagueSeasonRaw::new();
+    /// let complete = raw_league_season.complete();
+    /// ```
+    pub fn complete(&self) -> bool {
+        // If no season weeks, then the season isn't complete
+        if !self.regular_season_complete() {
+            false
+        } else {
+            self.playoffs.complete()
+        }
     }
 
     /// Generate a schedule for the season.  The generated schedule is a round
@@ -742,6 +811,22 @@ impl LeagueSeason {
         }
 
         Ok(())
+    }
+
+    pub fn generate_playoffs(&mut self, teams: usize) -> Result<(), String> {
+        // Ensure the regular season is complete
+
+        // Ensure the playoffs are not started
+
+        // Generate the playoffs
+    }
+
+    pub fn generate_next_playoff_week(&mut self, teams: usize, rng: &mut impl Rng) -> Result<(), String> {
+        // Ensure the regular season is complete
+
+        // Ensure the playoffs are not complete
+
+        // Generate the next playoff week
     }
 
     /// Simulate the next play of a season matchup
@@ -1062,6 +1147,61 @@ impl LeagueSeason {
             *matchup.context_mut() = context;
             *matchup.away_stats_mut() = Some(game.away_stats());
             *matchup.home_stats_mut() = Some(game.home_stats());
+        }
+        Ok(())
+    }
+
+    /// Simulate the regular season
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::team::FootballTeam;
+    /// use fbsim_core::league::season::LeagueSeason;
+    /// use fbsim_core::league::season::LeagueSeasonScheduleOptions;
+    ///
+    /// // Create a new season
+    /// let mut my_league_season = LeagueSeason::new();
+    ///
+    /// // Add 4 teams to the season
+    /// my_league_season.add_team(0, FootballTeam::new());
+    /// my_league_season.add_team(1, FootballTeam::new());
+    /// my_league_season.add_team(2, FootballTeam::new());
+    /// my_league_season.add_team(3, FootballTeam::new());
+    ///
+    /// // Generate the season schedule
+    /// let mut rng = rand::thread_rng();
+    /// my_league_season.generate_schedule(LeagueSeasonScheduleOptions::new(), &mut rng);
+    ///
+    /// // Simulate the entire season
+    /// my_league_season.sim_regular_season(&mut rng);
+    /// ```
+    pub fn sim_regular_season(&mut self, rng: &mut impl Rng) -> Result<(), String> {
+        for i in 0..self.weeks.len() {
+            // Skip weeks which have already completed
+            let week = match self.weeks.get(i) {
+                Some(w) => w,
+                None => return Err(
+                    format!(
+                        "Failed to simulate season {} week {}: {}",
+                        self.year, i, "No such week"
+                    )
+                ),
+            };
+            if week.complete() {
+                continue;
+            }
+
+            // Simulate the week
+            match self.sim_week(i, rng) {
+                Ok(()) => (),
+                Err(error) => return Err(
+                    format!(
+                        "Failed to simulate season {} week {}: {}",
+                        self.year,
+                        i, error
+                    )
+                ),
+            }
         }
         Ok(())
     }
