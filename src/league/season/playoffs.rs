@@ -9,6 +9,10 @@ use std::collections::BTreeMap;
 use crate::league::season::week::LeagueSeasonWeek;
 use crate::league::season::matchup::LeagueSeasonMatchup;
 
+/// # `LeagueSeasonPlayoffs` struct
+///
+/// A `LeagueSeasonPlayoffs` represents football season playoffs
+#[cfg_attr(feature = "rocket_okapi", derive(JsonSchema))]
 #[derive(Clone, Eq, PartialEq, Ord, PartialOrd, Default, Debug, Serialize, Deserialize)]
 pub struct LeagueSeasonPlayoffs {
     teams: BTreeMap<usize, (usize, String)>,
