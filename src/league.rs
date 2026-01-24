@@ -311,6 +311,23 @@ impl League {
         &self.current_season
     }
 
+    /// Mutably borrows the current season from a `League`
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::league::League;
+    /// use fbsim_core::league::season::LeagueSeason;
+    ///
+    /// // Instantiate a new League
+    /// let mut my_league = League::new();
+    ///
+    /// // Borrow the current season from the League
+    /// let my_season = my_league.current_season_mut();
+    /// ```
+    pub fn current_season_mut(&mut self) -> &mut Option<LeagueSeason> {
+        &mut self.current_season
+    }
+
     /// Gets the most recent year among the completed seasons
     fn most_recent_year(&self) -> usize {
         let mut most_recent_year = 0_usize;
