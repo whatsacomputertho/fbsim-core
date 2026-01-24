@@ -54,6 +54,45 @@ impl LeagueSeasonPlayoffs {
         false
     }
 
+    /// Borrow the playoff rounds
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::league::season::playoffs::LeagueSeasonPlayoffs;
+    ///
+    /// let my_playoffs = LeagueSeasonPlayoffs::new();
+    /// let rounds = my_playoffs.rounds();
+    /// ```
+    pub fn rounds(&self) -> &Vec<LeagueSeasonWeek> {
+        &self.rounds
+    }
+
+    /// Mutably borrow the playoff rounds
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::league::season::playoffs::LeagueSeasonPlayoffs;
+    ///
+    /// let mut my_playoffs = LeagueSeasonPlayoffs::new();
+    /// let rounds = my_playoffs.rounds_mut();
+    /// ```
+    pub fn rounds_mut(&mut self) -> &mut Vec<LeagueSeasonWeek> {
+        &mut self.rounds
+    }
+
+    /// Get the number of teams in the playoffs
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::league::season::playoffs::LeagueSeasonPlayoffs;
+    ///
+    /// let my_playoffs = LeagueSeasonPlayoffs::new();
+    /// assert!(my_playoffs.num_teams() == 0);
+    /// ```
+    pub fn num_teams(&self) -> usize {
+        self.teams.len()
+    }
+
     /// Determine whether the playoffs are complete
     ///
     /// ### Example
@@ -77,8 +116,10 @@ impl LeagueSeasonPlayoffs {
         }
 
         // If the last round contains one matchup, the playoffs are complete
-        if self.rounds.last().len() == 1 {
-            return true;
+        if let Some(last_round) = self.rounds.last() {
+            if last_round.matchups().len() == 1 {
+                return true;
+            }
         }
         false
     }
@@ -243,7 +284,7 @@ impl LeagueSeasonPlayoffs {
             };
 
             // Create the matchup and add to the week
-            let matchup = LeagueSeasonMatchup::new(*home_id, *away_id, &home_name, &away_name, rng);
+            let matchup = LeagueSeasonMatchup::new(*home_id, *away_id, home_name, away_name, rng);
             week.matchups_mut().push(matchup);
         }
 
@@ -291,13 +332,13 @@ impl LeagueSeasonPlayoffs {
                 };
 
                 // Create the matchup and add to the week
-                let matchup = LeagueSeasonMatchup::new(*home_id, *away_id, &home_name, &away_name, rng);
+                let matchup = LeagueSeasonMatchup::new(*home_id, *away_id, home_name, away_name, rng);
                 week.matchups_mut().push(matchup);
             }
 
             // Add the week to the rounds and return
             self.rounds.push(week);
-            return Ok(())
+            Ok(())
         } else {
             // In this case, we need to determine the winners of the wild card round
             // Ensure only the wild card round exists
@@ -334,13 +375,13 @@ impl LeagueSeasonPlayoffs {
                         Some(t) => t,
                         None => return Err(format!("No team found with seed {}", bye_seed))
                     };
-                    let (away_id, away_name) = match self.teams.get(&winner_seed) {
+                    let (away_id, away_name) = match self.teams.get(winner_seed) {
                         Some(t) => t,
                         None => return Err(format!("No team found with seed {}", winner_seed))
                     };
 
                     // Create the matchup and add to the week
-                    let matchup = LeagueSeasonMatchup::new(*home_id, *away_id, &home_name, &away_name, rng);
+                    let matchup = LeagueSeasonMatchup::new(*home_id, *away_id, home_name, away_name, rng);
                     week.matchups_mut().push(matchup);
                 }
 
@@ -360,30 +401,30 @@ impl LeagueSeasonPlayoffs {
                         None => return Err(format!("No winner found at index {}", t2_index))
                     };
                     let (home_id, home_name) = if t1_seed > t2_seed {
-                        match self.teams.get(&t1_seed) {
+                        match self.teams.get(t1_seed) {
                             Some(t) => t,
                             None => return Err(format!("No team found with seed {}", t1_seed))
                         }
                     } else {
-                        match self.teams.get(&t2_seed) {
+                        match self.teams.get(t2_seed) {
                             Some(t) => t,
                             None => return Err(format!("No team found with seed {}", t2_seed))
                         }
                     };
                     let (away_id, away_name) = if t1_seed > t2_seed {
-                        match self.teams.get(&t2_seed) {
+                        match self.teams.get(t2_seed) {
                             Some(t) => t,
                             None => return Err(format!("No team found with seed {}", t2_seed))
                         }
                     } else {
-                        match self.teams.get(&t1_seed) {
+                        match self.teams.get(t1_seed) {
                             Some(t) => t,
                             None => return Err(format!("No team found with seed {}", t1_seed))
                         }
                     };
 
                     // Create the matchup and add to the week
-                    let matchup = LeagueSeasonMatchup::new(*home_id, *away_id, &home_name, &away_name, rng);
+                    let matchup = LeagueSeasonMatchup::new(*home_id, *away_id, home_name, away_name, rng);
                     week.matchups_mut().push(matchup);
                 }
             } else {
@@ -399,13 +440,13 @@ impl LeagueSeasonPlayoffs {
                         Some(t) => t,
                         None => return Err(format!("No team found with seed {}", bye_seed))
                     };
-                    let (away_id, away_name) = match self.teams.get(&winner_seed) {
+                    let (away_id, away_name) = match self.teams.get(winner_seed) {
                         Some(t) => t,
                         None => return Err(format!("No team found with seed {}", winner_seed))
                     };
 
                     // Create the matchup and add to the week
-                    let matchup = LeagueSeasonMatchup::new(*home_id, *away_id, &home_name, &away_name, rng);
+                    let matchup = LeagueSeasonMatchup::new(*home_id, *away_id, home_name, away_name, rng);
                     week.matchups_mut().push(matchup);
                 }
 
@@ -427,13 +468,37 @@ impl LeagueSeasonPlayoffs {
                     };
 
                     // Create the matchup and add to the week
-                    let matchup = LeagueSeasonMatchup::new(*home_id, *away_id, &home_name, &away_name, rng);
+                    let matchup = LeagueSeasonMatchup::new(*home_id, *away_id, home_name, away_name, rng);
                     week.matchups_mut().push(matchup);
                 }
             }
             self.rounds.push(week);
-            return Ok(());
+            Ok(())
         }
+    }
+
+    /// Get the champion team ID if the playoffs are complete
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::league::season::playoffs::LeagueSeasonPlayoffs;
+    ///
+    /// let my_playoffs = LeagueSeasonPlayoffs::new();
+    /// assert!(my_playoffs.champion().is_none());
+    /// ```
+    pub fn champion(&self) -> Option<usize> {
+        // If playoffs are not complete, there is no champion
+        if !self.complete() {
+            return None;
+        }
+
+        // Get the final round's single matchup and return the winner
+        if let Some(final_round) = self.rounds.last() {
+            if let Some(final_matchup) = final_round.matchups().first() {
+                return final_matchup.winner();
+            }
+        }
+        None
     }
 
     /// Generate the next round of the playoffs
@@ -464,14 +529,14 @@ impl LeagueSeasonPlayoffs {
         if self.rounds.is_empty() {
             // Wild card round or first round
             if first_round_teams != num_teams {
-                return self.gen_wild_card_round(rng);
+                self.gen_wild_card_round(rng)
             } else {
-                return self.gen_first_round(rng);
+                self.gen_first_round(rng)
             }
         } else {
             // First round or later round
             if self.rounds.len() == 1 && first_round_teams != num_teams {
-                return self.gen_first_round(rng);
+                self.gen_first_round(rng)
             } else {
                 // Get winners of previous round and ensure more than one
                 let round = match self.rounds.last() {
@@ -504,34 +569,34 @@ impl LeagueSeasonPlayoffs {
 
                     // Get the home and away teams
                     let (home_id, home_name) = if t1_seed > t2_seed {
-                        match self.teams.get(&t1_seed) {
+                        match self.teams.get(t1_seed) {
                             Some(t) => t,
                             None => return Err(format!("No team found with seed {}", t1_seed))
                         }
                     } else {
-                        match self.teams.get(&t2_seed) {
+                        match self.teams.get(t2_seed) {
                             Some(t) => t,
                             None => return Err(format!("No team found with seed {}", t2_seed))
                         }
                     };
                     let (away_id, away_name) = if t1_seed > t2_seed {
-                        match self.teams.get(&t2_seed) {
+                        match self.teams.get(t2_seed) {
                             Some(t) => t,
                             None => return Err(format!("No team found with seed {}", t2_seed))
                         }
                     } else {
-                        match self.teams.get(&t1_seed) {
+                        match self.teams.get(t1_seed) {
                             Some(t) => t,
                             None => return Err(format!("No team found with seed {}", t1_seed))
                         }
                     };
 
                     // Create the matchup and add to the week
-                    let matchup = LeagueSeasonMatchup::new(*home_id, *away_id, &home_name, &away_name, rng);
+                    let matchup = LeagueSeasonMatchup::new(*home_id, *away_id, home_name, away_name, rng);
                     week.matchups_mut().push(matchup);
                 }
                 self.rounds.push(week);
-                return Ok(());
+                Ok(())
             }
         }
     }

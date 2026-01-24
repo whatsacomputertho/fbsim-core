@@ -6,6 +6,7 @@ pub mod week;
 use std::collections::BTreeMap;
 
 use crate::team::FootballTeam;
+use crate::league::matchup::LeagueTeamRecord;
 use crate::league::season::week::LeagueSeasonWeek;
 use crate::league::season::matchup::{LeagueSeasonMatchup, LeagueSeasonMatchups};
 use crate::league::season::playoffs::LeagueSeasonPlayoffs;
@@ -572,7 +573,7 @@ impl LeagueSeason {
     /// let my_season_weeks = my_league_season.weeks_mut();
     /// ```
     pub fn playoffs_mut(&mut self) -> &mut LeagueSeasonPlayoffs {
-        &mut self.playoffs_mut
+        &mut self.playoffs
     }
 
     /// Determine based on the matchups whether the season has started
@@ -813,20 +814,464 @@ impl LeagueSeason {
         Ok(())
     }
 
-    pub fn generate_playoffs(&mut self, teams: usize) -> Result<(), String> {
-        // Ensure the regular season is complete
+    /// Computes the season standings sorted in descending order, mapping
+    /// team IDs to their season record
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::team::FootballTeam;
+    /// use fbsim_core::league::season::LeagueSeason;
+    /// use fbsim_core::league::season::LeagueSeasonScheduleOptions;
+    ///
+    /// // Create a new season
+    /// let mut my_league_season = LeagueSeason::new();
+    ///
+    /// // Add 4 teams to the season
+    /// my_league_season.add_team(0, FootballTeam::new());
+    /// my_league_season.add_team(1, FootballTeam::new());
+    /// my_league_season.add_team(2, FootballTeam::new());
+    /// my_league_season.add_team(3, FootballTeam::new());
+    ///
+    /// // Generate the season schedule
+    /// let mut rng = rand::thread_rng();
+    /// my_league_season.generate_schedule(LeagueSeasonScheduleOptions::new(), &mut rng);
+    ///
+    /// // Simulate the entire regular season
+    /// my_league_season.sim_regular_season(&mut rng);
+    ///
+    /// // Compute the standings
+    /// let standings = my_league_season.standings();
+    /// ```
+    pub fn standings(&self) -> Vec<(usize, LeagueTeamRecord)> {
+        // Compute each team's record
+        let mut standings: Vec<(usize, LeagueTeamRecord)> = Vec::new();
+        for (id, _) in self.teams.iter() {
+            let matchups = match self.team_matchups(*id) {
+                Ok(m) => m,
+                Err(_) => continue
+            };
+            standings.push((*id, matchups.record()));
+        }
 
-        // Ensure the playoffs are not started
+        // Sort by win percentage (descending), then by wins (descending), then by team ID
+        standings.sort_by(|a, b| {
+            let (id_a, rec_a) = a;
+            let (id_b, rec_b) = b;
 
-        // Generate the playoffs
+            // Calculate win percentage (wins + 0.5*ties) / total games
+            let games_a = rec_a.wins() + rec_a.losses() + rec_a.ties();
+            let games_b = rec_b.wins() + rec_b.losses() + rec_b.ties();
+
+            // Avoid division by zero
+            let pct_a = if games_a > 0 {
+                (*rec_a.wins() as f64 + 0.5 * *rec_a.ties() as f64) / games_a as f64
+            } else {
+                0.0
+            };
+            let pct_b = if games_b > 0 {
+                (*rec_b.wins() as f64 + 0.5 * *rec_b.ties() as f64) / games_b as f64
+            } else {
+                0.0
+            };
+
+            // Sort by win percentage (descending)
+            match pct_b.partial_cmp(&pct_a) {
+                Some(std::cmp::Ordering::Equal) | None => {}
+                Some(ord) => return ord,
+            }
+
+            // Tiebreaker: wins (descending)
+            match rec_b.wins().cmp(rec_a.wins()) {
+                std::cmp::Ordering::Equal => {}
+                ord => return ord,
+            }
+
+            // Final tiebreaker: team ID (ascending for consistency)
+            id_a.cmp(id_b)
+        });
+
+        standings
     }
 
-    pub fn generate_next_playoff_week(&mut self, teams: usize, rng: &mut impl Rng) -> Result<(), String> {
+    /// Generate the playoffs with the specified number of teams
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::team::FootballTeam;
+    /// use fbsim_core::league::season::LeagueSeason;
+    /// use fbsim_core::league::season::LeagueSeasonScheduleOptions;
+    ///
+    /// // Create a new season
+    /// let mut my_league_season = LeagueSeason::new();
+    ///
+    /// // Add 4 teams to the season
+    /// my_league_season.add_team(0, FootballTeam::new());
+    /// my_league_season.add_team(1, FootballTeam::new());
+    /// my_league_season.add_team(2, FootballTeam::new());
+    /// my_league_season.add_team(3, FootballTeam::new());
+    ///
+    /// // Generate the season schedule
+    /// let mut rng = rand::thread_rng();
+    /// my_league_season.generate_schedule(LeagueSeasonScheduleOptions::new(), &mut rng);
+    ///
+    /// // Simulate the entire regular season
+    /// my_league_season.sim_regular_season(&mut rng);
+    ///
+    /// // Generate playoffs with 4 teams
+    /// my_league_season.generate_playoffs(4, &mut rng);
+    /// ```
+    pub fn generate_playoffs(&mut self, num_playoff_teams: usize, rng: &mut impl Rng) -> Result<(), String> {
         // Ensure the regular season is complete
+        if !self.regular_season_complete() {
+            return Err(String::from("Cannot generate playoffs: regular season is not complete"));
+        }
 
-        // Ensure the playoffs are not complete
+        // Ensure the playoffs have not already started
+        if self.playoffs.started() {
+            return Err(String::from("Cannot generate playoffs: playoffs have already started"));
+        }
 
-        // Generate the next playoff week
+        // Validate the number of playoff teams
+        if num_playoff_teams < 2 {
+            return Err(format!("Playoffs must have at least 2 teams, got {}", num_playoff_teams));
+        }
+        if num_playoff_teams > self.teams.len() {
+            return Err(format!(
+                "Cannot have more playoff teams ({}) than season teams ({})",
+                num_playoff_teams, self.teams.len()
+            ));
+        }
+
+        // Get the standings and select the top teams
+        let standings = self.standings();
+
+        // Reset the playoffs
+        self.playoffs = LeagueSeasonPlayoffs::new();
+
+        // Add the top teams to the playoffs in seed order
+        for (i, (team_id, _)) in standings.iter().enumerate() {
+            if i >= num_playoff_teams {
+                break;
+            }
+
+            // Get the team's short name for the playoff bracket
+            let team = match self.teams.get(team_id) {
+                Some(t) => t,
+                None => return Err(format!("Team {} not found in season", team_id))
+            };
+            let short_name = team.short_name();
+
+            // Add the team to the playoffs
+            self.playoffs.add_team(*team_id, short_name)?;
+        }
+
+        // Generate the first round (or wild card round if not a power of 2)
+        self.playoffs.gen_next_round(rng)?;
+
+        Ok(())
+    }
+
+    /// Generate the next playoff round
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::team::FootballTeam;
+    /// use fbsim_core::league::season::LeagueSeason;
+    /// use fbsim_core::league::season::LeagueSeasonScheduleOptions;
+    ///
+    /// // Create a new season
+    /// let mut my_league_season = LeagueSeason::new();
+    ///
+    /// // Add 4 teams to the season
+    /// my_league_season.add_team(0, FootballTeam::new());
+    /// my_league_season.add_team(1, FootballTeam::new());
+    /// my_league_season.add_team(2, FootballTeam::new());
+    /// my_league_season.add_team(3, FootballTeam::new());
+    ///
+    /// // Generate the season schedule
+    /// let mut rng = rand::thread_rng();
+    /// my_league_season.generate_schedule(LeagueSeasonScheduleOptions::new(), &mut rng);
+    ///
+    /// // Simulate the entire regular season
+    /// my_league_season.sim_regular_season(&mut rng);
+    ///
+    /// // Generate playoffs with 4 teams
+    /// my_league_season.generate_playoffs(4, &mut rng);
+    /// ```
+    pub fn generate_next_playoff_round(&mut self, rng: &mut impl Rng) -> Result<(), String> {
+        // Ensure the regular season is complete
+        if !self.regular_season_complete() {
+            return Err(String::from("Cannot generate playoff round: regular season is not complete"));
+        }
+
+        // Ensure the playoffs have started (teams have been added)
+        if self.playoffs.num_teams() < 2 {
+            return Err(String::from("Cannot generate playoff round: playoffs have not been initialized"));
+        }
+
+        // Ensure the playoffs are not already complete
+        if self.playoffs.complete() {
+            return Err(String::from("Cannot generate playoff round: playoffs are already complete"));
+        }
+
+        // Ensure the current round is complete before generating the next
+        if let Some(current_round) = self.playoffs.rounds().last() {
+            if !current_round.complete() {
+                return Err(String::from("Cannot generate playoff round: current round is not complete"));
+            }
+        }
+
+        // Generate the next round
+        self.playoffs.gen_next_round(rng)?;
+
+        Ok(())
+    }
+
+    /// Simulate a playoff matchup
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::team::FootballTeam;
+    /// use fbsim_core::league::season::LeagueSeason;
+    /// use fbsim_core::league::season::LeagueSeasonScheduleOptions;
+    ///
+    /// // Create a new season
+    /// let mut my_league_season = LeagueSeason::new();
+    ///
+    /// // Add 4 teams to the season
+    /// my_league_season.add_team(0, FootballTeam::new());
+    /// my_league_season.add_team(1, FootballTeam::new());
+    /// my_league_season.add_team(2, FootballTeam::new());
+    /// my_league_season.add_team(3, FootballTeam::new());
+    ///
+    /// // Generate the season schedule
+    /// let mut rng = rand::thread_rng();
+    /// my_league_season.generate_schedule(LeagueSeasonScheduleOptions::new(), &mut rng);
+    ///
+    /// // Simulate the entire regular season
+    /// my_league_season.sim_regular_season(&mut rng);
+    ///
+    /// // Generate playoffs with 4 teams
+    /// my_league_season.generate_playoffs(4, &mut rng);
+    ///
+    /// // Simulate the first playoff matchup
+    /// my_league_season.sim_playoff_matchup(0, 0, &mut rng);
+    /// ```
+    pub fn sim_playoff_matchup(&mut self, round: usize, matchup: usize, rng: &mut impl Rng) -> Result<Game, String> {
+        // Ensure the regular season is complete
+        if !self.regular_season_complete() {
+            return Err(String::from("Cannot simulate playoff matchup: regular season is not complete"));
+        }
+
+        // Ensure the playoffs have started
+        if self.playoffs.rounds().is_empty() {
+            return Err(String::from("Cannot simulate playoff matchup: playoffs have not been generated"));
+        }
+
+        // Check if the prior round is complete (if not the first round)
+        if round > 0 {
+            let prev_round = match self.playoffs.rounds().get(round - 1) {
+                Some(r) => r,
+                None => return Err(format!("Failed to get previous playoff round {}", round - 1))
+            };
+            if !prev_round.complete() {
+                return Err(format!(
+                    "Cannot simulate playoff round {}: previous round {} is not complete",
+                    round, round - 1
+                ));
+            }
+        }
+
+        // Get the playoff round
+        let playoff_round = match self.playoffs.rounds_mut().get_mut(round) {
+            Some(r) => r,
+            None => return Err(format!("No such playoff round: {}", round))
+        };
+
+        // Get the matchup
+        let playoff_matchup = match playoff_round.matchups_mut().get_mut(matchup) {
+            Some(m) => m,
+            None => return Err(format!("No such matchup {} in playoff round {}", matchup, round))
+        };
+
+        // Ensure the matchup is not already complete
+        if playoff_matchup.context().game_over() {
+            return Err(format!("Playoff round {} matchup {} is already complete", round, matchup));
+        }
+
+        // Get the home and away teams
+        let home_id = *playoff_matchup.home_team();
+        let away_id = *playoff_matchup.away_team();
+
+        let home_team = match self.teams.get(&home_id) {
+            Some(t) => t,
+            None => return Err(format!("Playoff matchup references nonexistent home team ID: {}", home_id))
+        };
+        let away_team = match self.teams.get(&away_id) {
+            Some(t) => t,
+            None => return Err(format!("Playoff matchup references nonexistent away team ID: {}", away_id))
+        };
+
+        // Simulate the matchup
+        let mut game = Game::new();
+        let simulator = GameSimulator::new();
+        let context = match simulator.sim_game(
+            home_team, away_team,
+            playoff_matchup.context().clone(),
+            &mut game, rng
+        ) {
+            Ok(c) => c,
+            Err(e) => return Err(format!("Error while simulating playoff matchup: {}", e))
+        };
+
+        // Update the matchup context and stats
+        *playoff_matchup.context_mut() = context;
+        *playoff_matchup.home_stats_mut() = Some(game.home_stats());
+        *playoff_matchup.away_stats_mut() = Some(game.away_stats());
+
+        Ok(game)
+    }
+
+    /// Simulate a full playoff round
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::team::FootballTeam;
+    /// use fbsim_core::league::season::LeagueSeason;
+    /// use fbsim_core::league::season::LeagueSeasonScheduleOptions;
+    ///
+    /// // Create a new season
+    /// let mut my_league_season = LeagueSeason::new();
+    ///
+    /// // Add 4 teams to the season
+    /// my_league_season.add_team(0, FootballTeam::new());
+    /// my_league_season.add_team(1, FootballTeam::new());
+    /// my_league_season.add_team(2, FootballTeam::new());
+    /// my_league_season.add_team(3, FootballTeam::new());
+    ///
+    /// // Generate the season schedule
+    /// let mut rng = rand::thread_rng();
+    /// my_league_season.generate_schedule(LeagueSeasonScheduleOptions::new(), &mut rng);
+    ///
+    /// // Simulate the entire regular season
+    /// my_league_season.sim_regular_season(&mut rng);
+    ///
+    /// // Generate playoffs with 4 teams
+    /// my_league_season.generate_playoffs(4, &mut rng);
+    ///
+    /// // Simulate the first playoff round
+    /// my_league_season.sim_playoff_round(0, &mut rng);
+    /// ```
+    pub fn sim_playoff_round(&mut self, round: usize, rng: &mut impl Rng) -> Result<(), String> {
+        // Ensure the regular season is complete
+        if !self.regular_season_complete() {
+            return Err(String::from("Cannot simulate playoff round: regular season is not complete"));
+        }
+
+        // Ensure the playoffs have started
+        if self.playoffs.rounds().is_empty() {
+            return Err(String::from("Cannot simulate playoff round: playoffs have not been generated"));
+        }
+
+        // Check if the prior round is complete (if not the first round)
+        if round > 0 {
+            let prev_round = match self.playoffs.rounds().get(round - 1) {
+                Some(r) => r,
+                None => return Err(format!("Failed to get previous playoff round {}", round - 1))
+            };
+            if !prev_round.complete() {
+                return Err(format!(
+                    "Cannot simulate playoff round {}: previous round {} is not complete",
+                    round, round - 1
+                ));
+            }
+        }
+
+        // Get the number of matchups in this round
+        let num_matchups = match self.playoffs.rounds().get(round) {
+            Some(r) => r.matchups().len(),
+            None => return Err(format!("No such playoff round: {}", round))
+        };
+
+        // Simulate each matchup in the round
+        for i in 0..num_matchups {
+            // Skip matchups that have already been completed
+            let is_complete = match self.playoffs.rounds().get(round) {
+                Some(r) => match r.matchups().get(i) {
+                    Some(m) => m.context().game_over(),
+                    None => continue
+                },
+                None => continue
+            };
+            if is_complete {
+                continue;
+            }
+
+            // Simulate the matchup
+            self.sim_playoff_matchup(round, i, rng)?;
+        }
+
+        Ok(())
+    }
+
+    /// Simulate all remaining playoffs
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::team::FootballTeam;
+    /// use fbsim_core::league::season::LeagueSeason;
+    /// use fbsim_core::league::season::LeagueSeasonScheduleOptions;
+    ///
+    /// // Create a new season
+    /// let mut my_league_season = LeagueSeason::new();
+    ///
+    /// // Add 4 teams to the season
+    /// my_league_season.add_team(0, FootballTeam::new());
+    /// my_league_season.add_team(1, FootballTeam::new());
+    /// my_league_season.add_team(2, FootballTeam::new());
+    /// my_league_season.add_team(3, FootballTeam::new());
+    ///
+    /// // Generate the season schedule
+    /// let mut rng = rand::thread_rng();
+    /// my_league_season.generate_schedule(LeagueSeasonScheduleOptions::new(), &mut rng);
+    ///
+    /// // Simulate the entire regular season
+    /// my_league_season.sim_regular_season(&mut rng);
+    ///
+    /// // Generate playoffs with 4 teams
+    /// my_league_season.generate_playoffs(4, &mut rng);
+    ///
+    /// // Simulate all playoffs
+    /// my_league_season.sim_playoffs(&mut rng);
+    /// ```
+    pub fn sim_playoffs(&mut self, rng: &mut impl Rng) -> Result<(), String> {
+        // Ensure the regular season is complete
+        if !self.regular_season_complete() {
+            return Err(String::from("Cannot simulate playoffs: regular season is not complete"));
+        }
+
+        // Ensure the playoffs have started
+        if self.playoffs.rounds().is_empty() {
+            return Err(String::from("Cannot simulate playoffs: playoffs have not been generated"));
+        }
+
+        // Simulate rounds until playoffs are complete
+        while !self.playoffs.complete() {
+            // Get the current round index
+            let current_round = self.playoffs.rounds().len() - 1;
+
+            // Simulate the current round if not complete
+            if !self.playoffs.rounds().get(current_round).is_none_or(|r| r.complete()) {
+                self.sim_playoff_round(current_round, rng)?;
+            }
+
+            // Generate the next round if the current round is complete and playoffs aren't done
+            if !self.playoffs.complete() {
+                self.generate_next_playoff_round(rng)?;
+            }
+        }
+
+        Ok(())
     }
 
     /// Simulate the next play of a season matchup
