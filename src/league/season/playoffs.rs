@@ -99,14 +99,46 @@ impl LeagueSeasonPlayoffs {
         self.teams.len()
     }
 
-    /// Find the seed for a given team ID
-    fn team_seed(&self, team_id: usize) -> Option<usize> {
-        for (seed, (id, _)) in &self.teams {
+    /// Check if a team is in the playoffs given its ID
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::league::season::playoffs::LeagueSeasonPlayoffs;
+    ///
+    /// let my_playoffs = LeagueSeasonPlayoffs::new();
+    /// assert!(!my_playoffs.team_in_playoffs(0));
+    /// ```
+    pub fn team_in_playoffs(&self, team_id: usize) -> bool {
+        for (id, _) in self.teams.values() {
             if *id == team_id {
-                return Some(*seed);
+                return true;
             }
         }
-        None
+        false
+    }
+
+    /// Find the seed for a given team ID
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::league::season::playoffs::LeagueSeasonPlayoffs;
+    ///
+    /// // Create playoffs and add a team
+    /// let mut my_playoffs = LeagueSeasonPlayoffs::new();
+    /// let _ = my_playoffs.add_team(0, "ME");
+    ///
+    /// // Get that team's seed
+    /// let seed = my_playoffs.team_seed(0);
+    /// assert!(seed.is_ok());
+    /// assert!(seed.unwrap() == 1);
+    /// ```
+    pub fn team_seed(&self, team_id: usize) -> Result<usize, String> {
+        for (seed, (id, _)) in &self.teams {
+            if *id == team_id {
+                return Ok(*seed);
+            }
+        }
+        Err(format!("Team {} not in playoffs", team_id))
     }
 
     /// Determine whether the playoffs are complete
@@ -238,7 +270,7 @@ impl LeagueSeasonPlayoffs {
     /// let _ = my_playoffs.add_team(1, "YOU");
     /// let _ = my_playoffs.add_team(2, "THEM");
     ///
-    /// // Get the number of wild card teams
+    /// // Get the number of byes
     /// let byes = my_playoffs.byes();
     /// assert!(byes.is_ok());
     /// assert!(byes.unwrap() == 1);
@@ -495,19 +527,35 @@ impl LeagueSeasonPlayoffs {
         }
     }
 
-    /// Check if a team made it to the championship game (final round)
+    /// Check if a team made it to the championship
     ///
     /// ### Example
     /// ```
     /// use fbsim_core::league::season::playoffs::LeagueSeasonPlayoffs;
     ///
-    /// let my_playoffs = LeagueSeasonPlayoffs::new();
-    /// assert!(!my_playoffs.in_championship(0));
+    /// // Create playoffs and add a team
+    /// let mut my_playoffs = LeagueSeasonPlayoffs::new();
+    /// let _ = my_playoffs.add_team(0, "ME");
+    ///
+    /// // Check if that team is in the championship
+    /// let in_championship = my_playoffs.in_championship(0);
+    /// assert!(in_championship.is_ok());
+    /// assert!(!in_championship.unwrap());
     /// ```
-    pub fn in_championship(&self, team_id: usize) -> bool {
+    pub fn in_championship(&self, team_id: usize) -> Result<bool, String> {
+        // Ensure the team ID exists in the playoffs
+        if !self.team_in_playoffs(team_id) {
+            return Err(format!("Team {} not in playoffs", team_id));
+        }
+
         // Need at least one round for a championship
         if self.rounds.is_empty() {
-            return false;
+            return Ok(false);
+        }
+
+        // Not championship if more than 2 teams but only 1 round
+        if self.rounds.len() == 1 && self.teams.len() > 2 {
+            return Ok(false);
         }
 
         // Get the final round
@@ -515,12 +563,13 @@ impl LeagueSeasonPlayoffs {
             // Championship is the round with exactly 1 matchup
             if final_round.matchups().len() == 1 {
                 if let Some(final_matchup) = final_round.matchups().first() {
-                    return *final_matchup.home_team() == team_id ||
+                    let team_in_championship = *final_matchup.home_team() == team_id ||
                            *final_matchup.away_team() == team_id;
+                    return Ok(team_in_championship);
                 }
             }
         }
-        false
+        Ok(false)
     }
 
     /// Get the champion team ID if the playoffs are complete
@@ -554,13 +603,23 @@ impl LeagueSeasonPlayoffs {
     /// use fbsim_core::league::season::playoffs::LeagueSeasonPlayoffs;
     /// use fbsim_core::league::matchup::LeagueTeamRecord;
     ///
-    /// let my_playoffs = LeagueSeasonPlayoffs::new();
+    /// // Create playoffs and add a team
+    /// let mut my_playoffs = LeagueSeasonPlayoffs::new();
+    /// let _ = my_playoffs.add_team(0, "ME");
+    ///
+    /// // Get that team's record
     /// let record = my_playoffs.record(0);
-    /// assert!(record == LeagueTeamRecord::new());
+    /// assert!(record.is_ok());
+    /// assert!(record.unwrap() == LeagueTeamRecord::new());
     /// ```
-    pub fn record(&self, team_id: usize) -> LeagueTeamRecord {
+    pub fn record(&self, team_id: usize) -> Result<LeagueTeamRecord, String> {
+        // Ensure the team ID exists in the playoffs
+        if !self.team_in_playoffs(team_id) {
+            return Err(format!("Team {} not in playoffs", team_id));
+        }
         let mut record = LeagueTeamRecord::new();
 
+        // Calculate the team's playoff record
         for round in self.rounds.iter() {
             for matchup in round.matchups().iter() {
                 // Check if this team participated in the matchup
@@ -578,8 +637,7 @@ impl LeagueSeasonPlayoffs {
                 }
             }
         }
-
-        record
+        Ok(record)
     }
 
     /// Generate the next round of the playoffs
@@ -594,7 +652,7 @@ impl LeagueSeasonPlayoffs {
     /// let _ = my_playoffs.add_team(1, "YOU");
     /// let _ = my_playoffs.add_team(2, "THEM");
     ///
-    /// // Get the number of wild card teams
+    /// // Generate the next round of the playoffs
     /// let mut rng = rand::thread_rng();
     /// let res = my_playoffs.gen_next_round(&mut rng);
     /// assert!(res.is_ok());

@@ -705,16 +705,25 @@ impl League {
     /// use fbsim_core::league::League;
     /// use fbsim_core::league::matchup::LeagueTeamRecord;
     ///
-    /// let my_league = League::new();
+    /// // Create a league and add a team
+    /// let mut my_league = League::new();
+    /// my_league.add_team();
+    ///
+    /// // Calculate that team's playoff record
     /// let record = my_league.team_playoff_record(0);
-    /// assert!(record == LeagueTeamRecord::new());
+    /// assert!(record.is_ok());
+    /// assert!(record.unwrap() == LeagueTeamRecord::new());
     /// ```
-    pub fn team_playoff_record(&self, id: usize) -> LeagueTeamRecord {
+    pub fn team_playoff_record(&self, id: usize) -> Result<LeagueTeamRecord, String> {
+        // Ensure the team ID exists in the league
+        if !self.teams.contains_key(&id) {
+            return Err(format!("No team with ID: {}", id));
+        }
         let mut record = LeagueTeamRecord::new();
 
         // Add playoff record from current season
         if let Some(season) = self.current_season() {
-            let season_record = season.playoff_record(id);
+            let season_record = season.playoff_record(id)?;
             record.increment_wins(*season_record.wins());
             record.increment_losses(*season_record.losses());
             record.increment_ties(*season_record.ties());
@@ -722,13 +731,12 @@ impl League {
 
         // Add playoff records from past seasons
         for season in self.seasons().iter() {
-            let season_record = season.playoff_record(id);
+            let season_record = season.playoff_record(id)?;
             record.increment_wins(*season_record.wins());
             record.increment_losses(*season_record.losses());
             record.increment_ties(*season_record.ties());
         }
-
-        record
+        Ok(record)
     }
 
     /// Get a team's total championship appearances across all seasons
@@ -737,28 +745,36 @@ impl League {
     /// ```
     /// use fbsim_core::league::League;
     ///
-    /// let my_league = League::new();
+    /// // Create a league and add a team
+    /// let mut my_league = League::new();
+    /// my_league.add_team();
+    ///
+    /// // Calculate that team's championship appearances
     /// let appearances = my_league.team_championship_appearances(0);
-    /// assert!(appearances == 0);
+    /// assert!(appearances.is_ok());
+    /// assert!(appearances.unwrap() == 0);
     /// ```
-    pub fn team_championship_appearances(&self, id: usize) -> usize {
+    pub fn team_championship_appearances(&self, id: usize) -> Result<usize, String> {
+        // Ensure the team ID exists in the league
+        if !self.teams.contains_key(&id) {
+            return Err(format!("No team with ID: {}", id));
+        }
         let mut appearances = 0;
 
         // Check current season
         if let Some(season) = self.current_season() {
-            if season.team_in_championship(id) {
+            if season.team_in_championship(id)? {
                 appearances += 1;
             }
         }
 
         // Check past seasons
         for season in self.seasons().iter() {
-            if season.team_in_championship(id) {
+            if season.team_in_championship(id)? {
                 appearances += 1;
             }
         }
-
-        appearances
+        Ok(appearances)
     }
 
     /// Get a team's total championship wins across all seasons
@@ -767,28 +783,36 @@ impl League {
     /// ```
     /// use fbsim_core::league::League;
     ///
-    /// let my_league = League::new();
+    /// // Create a league and add a team
+    /// let mut my_league = League::new();
+    /// my_league.add_team();
+    ///
+    /// // Calculate that team's championship wins
     /// let wins = my_league.team_championship_wins(0);
-    /// assert!(wins == 0);
+    /// assert!(wins.is_ok());
+    /// assert!(wins.unwrap() == 0);
     /// ```
-    pub fn team_championship_wins(&self, id: usize) -> usize {
+    pub fn team_championship_wins(&self, id: usize) -> Result<usize, String> {
+        // Ensure the team ID exists in the league
+        if !self.teams.contains_key(&id) {
+            return Err(format!("No team with ID: {}", id));
+        }
         let mut wins = 0;
 
         // Check current season
         if let Some(season) = self.current_season() {
-            if season.team_won_championship(id) {
+            if season.team_won_championship(id)? {
                 wins += 1;
             }
         }
 
         // Check past seasons
         for season in self.seasons().iter() {
-            if season.team_won_championship(id) {
+            if season.team_won_championship(id)? {
                 wins += 1;
             }
         }
-
-        wins
+        Ok(wins)
     }
 
     /// Get all matchups involving a team over all seasons
@@ -798,7 +822,6 @@ impl League {
     /// use std::collections::BTreeMap;
     /// use fbsim_core::team::FootballTeam;
     /// use fbsim_core::league::League;
-    /// use fbsim_core::league::matchup::LeagueMatchups;
     /// use fbsim_core::league::season::LeagueSeasonScheduleOptions;
     ///
     /// // Instantiate a new League
@@ -827,10 +850,14 @@ impl League {
     /// my_league.sim(&mut rng);
     ///
     /// // Get the season matchups for team 0
-    /// let matchups: LeagueMatchups = my_league.team_matchups(0);
+    /// let matchups = my_league.team_matchups(0);
+    /// assert!(matchups.is_ok());
     /// ```
-    pub fn team_matchups(&self, id: usize) -> LeagueMatchups {
-        // Initialize a map of all of the team's season matchups
+    pub fn team_matchups(&self, id: usize) -> Result<LeagueMatchups, String> {
+        // Ensure the team ID exists in the league
+        if !self.teams.contains_key(&id) {
+            return Err(format!("No team with ID: {}", id));
+        }
         let mut matchups: BTreeMap<usize, LeagueSeasonMatchups> = BTreeMap::new();
 
         // For the current season, get the team's season matchups
@@ -850,6 +877,6 @@ impl League {
         }
 
         // Return the matchups as a LeagueMatchups struct
-        LeagueMatchups::new(matchups)
+        Ok(LeagueMatchups::new(matchups))
     }
 }

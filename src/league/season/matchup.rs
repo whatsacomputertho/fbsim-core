@@ -303,7 +303,7 @@ impl LeagueSeasonMatchup {
             return None;
         }
 
-        // If the game is complete, get the result for each team
+        // If the game is complete, determine the winner based on the result
         let result = self.result(self.home_team);
         if let Some(r) = result {
             match r {

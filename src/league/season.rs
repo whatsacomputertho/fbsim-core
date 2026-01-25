@@ -123,7 +123,6 @@ impl LeagueSeasonRaw {
     /// let complete = raw_league_season.complete();
     /// ```
     pub fn complete(&self) -> bool {
-        // If no season weeks, then the season isn't complete
         if !self.regular_season_complete() {
             false
         } else {
@@ -474,6 +473,30 @@ impl LeagueSeason {
         Ok(())
     }
 
+    /// Check if a team exists in the season
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::team::FootballTeam;
+    /// use fbsim_core::league::season::LeagueSeason;
+    ///
+    /// // Create a new season
+    /// let mut my_league_season = LeagueSeason::new();
+    ///
+    /// // Team 0 should not exist at this point
+    /// assert!(!my_league_season.team_exists(0));
+    ///
+    /// // Add team 0 to the season
+    /// let my_season_team = FootballTeam::new();
+    /// my_league_season.add_team(0, my_season_team);
+    ///
+    /// // Team 0 should now exist
+    /// assert!(my_league_season.team_exists(0));
+    /// ```
+    pub fn team_exists(&self, id: usize) -> bool {
+        self.teams.contains_key(&id)
+    }
+
     /// Borrows an immutable `FootballTeam` from a `LeagueSeason` given
     /// the team ID
     ///
@@ -634,7 +657,6 @@ impl LeagueSeason {
     /// let complete = raw_league_season.complete();
     /// ```
     pub fn complete(&self) -> bool {
-        // If no season weeks, then the season isn't complete
         if !self.regular_season_complete() {
             false
         } else {
@@ -893,6 +915,29 @@ impl LeagueSeason {
         standings
     }
 
+    /// Determine of a team participated in the playoffs
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::team::FootballTeam;
+    /// use fbsim_core::league::season::LeagueSeason;
+    ///
+    /// // Create a season and add a team
+    /// let mut my_league_season = LeagueSeason::new();
+    /// my_league_season.add_team(0, FootballTeam::new());
+    ///
+    /// // Check if that team is in the playoffs
+    /// let in_playoffs = my_league_season.team_in_playoffs(0);
+    /// assert!(in_playoffs.is_ok());
+    /// assert!(!in_playoffs.unwrap());
+    /// ```
+    pub fn team_in_playoffs(&self, team_id: usize) -> Result<bool, String> {
+        if !self.team_exists(team_id) {
+            return Err(format!("No season team with ID: {}", team_id));
+        }
+        Ok(self.playoffs.team_in_playoffs(team_id))
+    }
+
     /// Compute a team's playoff record
     ///
     /// ### Example
@@ -926,9 +971,15 @@ impl LeagueSeason {
     ///
     /// // Compute a team's playoff record
     /// let record = my_league_season.playoff_record(0);
+    /// assert!(record.is_ok());
     /// ```
-    pub fn playoff_record(&self, team_id: usize) -> LeagueTeamRecord {
-        self.playoffs.record(team_id)
+    pub fn playoff_record(&self, team_id: usize) -> Result<LeagueTeamRecord, String> {
+        if self.team_in_playoffs(team_id)? {
+            self.playoffs.record(team_id)
+        } else {
+            // Technically should be unreachable
+            Ok(LeagueTeamRecord::new())
+        }
     }
 
     /// Check if a team made it to the championship game this season
@@ -938,11 +989,21 @@ impl LeagueSeason {
     /// use fbsim_core::team::FootballTeam;
     /// use fbsim_core::league::season::LeagueSeason;
     ///
-    /// let my_league_season = LeagueSeason::new();
-    /// assert!(!my_league_season.team_in_championship(0));
+    /// // Create a season and add a team
+    /// let mut my_league_season = LeagueSeason::new();
+    /// my_league_season.add_team(0, FootballTeam::new());
+    ///
+    /// // Determine if that team is in the shampionship
+    /// let in_championship = my_league_season.team_in_championship(0);
+    /// assert!(in_championship.is_ok());
+    /// assert!(!in_championship.unwrap());
     /// ```
-    pub fn team_in_championship(&self, team_id: usize) -> bool {
-        self.playoffs.in_championship(team_id)
+    pub fn team_in_championship(&self, team_id: usize) -> Result<bool, String> {
+        if self.team_in_playoffs(team_id)? {
+            self.playoffs.in_championship(team_id)
+        } else {
+            Ok(false)
+        }
     }
 
     /// Check if a team won the championship this season
@@ -952,14 +1013,22 @@ impl LeagueSeason {
     /// use fbsim_core::team::FootballTeam;
     /// use fbsim_core::league::season::LeagueSeason;
     ///
-    /// let my_league_season = LeagueSeason::new();
-    /// assert!(!my_league_season.team_won_championship(0));
+    /// // Create a season and add a team
+    /// let mut my_league_season = LeagueSeason::new();
+    /// my_league_season.add_team(0, FootballTeam::new());
+    ///
+    /// // Determine if that team won the shampionship
+    /// let won_championship = my_league_season.team_won_championship(0);
+    /// assert!(won_championship.is_ok());
+    /// assert!(!won_championship.unwrap());
     /// ```
-    pub fn team_won_championship(&self, team_id: usize) -> bool {
-        if let Some(champion_id) = self.playoffs.champion() {
-            return champion_id == team_id;
+    pub fn team_won_championship(&self, team_id: usize) -> Result<bool, String> {
+        if self.team_in_playoffs(team_id)? {
+            if let Some(champion_id) = self.playoffs.champion() {
+                return Ok(champion_id == team_id);
+            }
         }
-        false
+        Ok(false)
     }
 
     /// Generate the playoffs with the specified number of teams
@@ -987,17 +1056,18 @@ impl LeagueSeason {
     /// my_league_season.sim_regular_season(&mut rng);
     ///
     /// // Generate playoffs with 4 teams
-    /// my_league_season.generate_playoffs(4, &mut rng);
+    /// let res = my_league_season.generate_playoffs(4, &mut rng);
+    /// assert!(res.is_ok());
     /// ```
     pub fn generate_playoffs(&mut self, num_playoff_teams: usize, rng: &mut impl Rng) -> Result<(), String> {
         // Ensure the regular season is complete
         if !self.regular_season_complete() {
-            return Err(String::from("Cannot generate playoffs: regular season is not complete"));
+            return Err(String::from("Cannot generate playoffs: Regular season is not complete"));
         }
 
         // Ensure the playoffs have not already started
         if self.playoffs.started() {
-            return Err(String::from("Cannot generate playoffs: playoffs have already started"));
+            return Err(String::from("Cannot generate playoffs: Playoffs have already started"));
         }
 
         // Validate the number of playoff teams
@@ -1036,7 +1106,6 @@ impl LeagueSeason {
 
         // Generate the first round (or wild card round if not a power of 2)
         self.playoffs.gen_next_round(rng)?;
-
         Ok(())
     }
 
@@ -1065,34 +1134,34 @@ impl LeagueSeason {
     /// my_league_season.sim_regular_season(&mut rng);
     ///
     /// // Generate playoffs with 4 teams
-    /// my_league_season.generate_playoffs(4, &mut rng);
+    /// let res = my_league_season.generate_playoffs(4, &mut rng);
+    /// assert!(res.is_ok());
     /// ```
     pub fn generate_next_playoff_round(&mut self, rng: &mut impl Rng) -> Result<(), String> {
         // Ensure the regular season is complete
         if !self.regular_season_complete() {
-            return Err(String::from("Cannot generate playoff round: regular season is not complete"));
+            return Err(String::from("Cannot generate playoff round: Regular season is not complete"));
         }
 
         // Ensure the playoffs have started (teams have been added)
         if self.playoffs.num_teams() < 2 {
-            return Err(String::from("Cannot generate playoff round: playoffs have not been initialized"));
+            return Err(String::from("Cannot generate playoff round: Playoffs have not been initialized"));
         }
 
         // Ensure the playoffs are not already complete
         if self.playoffs.complete() {
-            return Err(String::from("Cannot generate playoff round: playoffs are already complete"));
+            return Err(String::from("Cannot generate playoff round: Playoffs are already complete"));
         }
 
         // Ensure the current round is complete before generating the next
         if let Some(current_round) = self.playoffs.rounds().last() {
             if !current_round.complete() {
-                return Err(String::from("Cannot generate playoff round: current round is not complete"));
+                return Err(String::from("Cannot generate playoff round: Current round is not complete"));
             }
         }
 
         // Generate the next round
         self.playoffs.gen_next_round(rng)?;
-
         Ok(())
     }
 
@@ -1124,17 +1193,18 @@ impl LeagueSeason {
     /// my_league_season.generate_playoffs(4, &mut rng);
     ///
     /// // Simulate the first playoff matchup
-    /// my_league_season.sim_playoff_matchup(0, 0, &mut rng);
+    /// let res = my_league_season.sim_playoff_matchup(0, 0, &mut rng);
+    /// assert!(res.is_ok());
     /// ```
     pub fn sim_playoff_matchup(&mut self, round: usize, matchup: usize, rng: &mut impl Rng) -> Result<Game, String> {
         // Ensure the regular season is complete
         if !self.regular_season_complete() {
-            return Err(String::from("Cannot simulate playoff matchup: regular season is not complete"));
+            return Err(String::from("Cannot simulate playoff matchup: Regular season is not complete"));
         }
 
         // Ensure the playoffs have started
         if self.playoffs.rounds().is_empty() {
-            return Err(String::from("Cannot simulate playoff matchup: playoffs have not been generated"));
+            return Err(String::from("Cannot simulate playoff matchup: Playoffs have not been generated"));
         }
 
         // Check if the prior round is complete (if not the first round)
@@ -1145,7 +1215,7 @@ impl LeagueSeason {
             };
             if !prev_round.complete() {
                 return Err(format!(
-                    "Cannot simulate playoff round {}: previous round {} is not complete",
+                    "Cannot simulate playoff round {}: Previous round {} is not complete",
                     round, round - 1
                 ));
             }
@@ -1197,13 +1267,10 @@ impl LeagueSeason {
         *playoff_matchup.context_mut() = context;
         *playoff_matchup.home_stats_mut() = Some(game.home_stats());
         *playoff_matchup.away_stats_mut() = Some(game.away_stats());
-
         Ok(game)
     }
 
     /// Simulate a single play of a playoff matchup
-    ///
-    /// Returns `Some(Game)` when the game completes, `None` if still in progress.
     ///
     /// ### Example
     /// ```
@@ -1231,17 +1298,18 @@ impl LeagueSeason {
     /// my_league_season.generate_playoffs(4, &mut rng);
     ///
     /// // Simulate a single play of the first playoff matchup
-    /// my_league_season.sim_playoff_play(0, 0, &mut rng);
+    /// let res = my_league_season.sim_playoff_play(0, 0, &mut rng);
+    /// assert!(res.is_ok());
     /// ```
     pub fn sim_playoff_play(&mut self, round: usize, matchup: usize, rng: &mut impl Rng) -> Result<Option<Game>, String> {
         // Ensure the regular season is complete
         if !self.regular_season_complete() {
-            return Err(String::from("Cannot simulate playoff play: regular season is not complete"));
+            return Err(String::from("Cannot simulate playoff play: Regular season is not complete"));
         }
 
         // Ensure the playoffs have started
         if self.playoffs.rounds().is_empty() {
-            return Err(String::from("Cannot simulate playoff play: playoffs have not been generated"));
+            return Err(String::from("Cannot simulate playoff play: Playoffs have not been generated"));
         }
 
         // Check if the prior round is complete (if not the first round)
@@ -1252,7 +1320,7 @@ impl LeagueSeason {
             };
             if !prev_round.complete() {
                 return Err(format!(
-                    "Cannot simulate playoff round {}: previous round {} is not complete",
+                    "Cannot simulate playoff round {}: Previous round {} is not complete",
                     round, round - 1
                 ));
             }
@@ -1352,17 +1420,18 @@ impl LeagueSeason {
     /// my_league_season.generate_playoffs(4, &mut rng);
     ///
     /// // Simulate the first playoff round
-    /// my_league_season.sim_playoff_round(0, &mut rng);
+    /// let res = my_league_season.sim_playoff_round(0, &mut rng);
+    /// assert!(res.is_ok());
     /// ```
     pub fn sim_playoff_round(&mut self, round: usize, rng: &mut impl Rng) -> Result<(), String> {
         // Ensure the regular season is complete
         if !self.regular_season_complete() {
-            return Err(String::from("Cannot simulate playoff round: regular season is not complete"));
+            return Err(String::from("Cannot simulate playoff round: Regular season is not complete"));
         }
 
         // Ensure the playoffs have started
         if self.playoffs.rounds().is_empty() {
-            return Err(String::from("Cannot simulate playoff round: playoffs have not been generated"));
+            return Err(String::from("Cannot simulate playoff round: Playoffs have not been generated"));
         }
 
         // Check if the prior round is complete (if not the first round)
@@ -1373,7 +1442,7 @@ impl LeagueSeason {
             };
             if !prev_round.complete() {
                 return Err(format!(
-                    "Cannot simulate playoff round {}: previous round {} is not complete",
+                    "Cannot simulate playoff round {}: Previous round {} is not complete",
                     round, round - 1
                 ));
             }
@@ -1402,7 +1471,6 @@ impl LeagueSeason {
             // Simulate the matchup
             self.sim_playoff_matchup(round, i, rng)?;
         }
-
         Ok(())
     }
 
@@ -1434,7 +1502,8 @@ impl LeagueSeason {
     /// my_league_season.generate_playoffs(4, &mut rng);
     ///
     /// // Simulate all playoffs
-    /// my_league_season.sim_playoffs(&mut rng);
+    /// let res = my_league_season.sim_playoffs(&mut rng);
+    /// assert!(res.is_ok());
     /// ```
     pub fn sim_playoffs(&mut self, rng: &mut impl Rng) -> Result<(), String> {
         // Ensure the regular season is complete
@@ -1462,7 +1531,6 @@ impl LeagueSeason {
                 self.generate_next_playoff_round(rng)?;
             }
         }
-
         Ok(())
     }
 
@@ -1488,7 +1556,8 @@ impl LeagueSeason {
     /// my_league_season.generate_schedule(LeagueSeasonScheduleOptions::new(), &mut rng);
     ///
     /// // Simulate the first game of the first week
-    /// my_league_season.sim_play(0, 0, &mut rng);
+    /// let res = my_league_season.sim_play(0, 0, &mut rng);
+    /// assert!(res.is_ok());
     /// ```
     pub fn sim_play(&mut self, week: usize, matchup: usize, rng: &mut impl Rng) -> Result<Option<Game>, String> {
         // Check if the prior week is not complete
@@ -1819,8 +1888,8 @@ impl LeagueSeason {
                 Some(w) => w,
                 None => return Err(
                     format!(
-                        "Failed to simulate season {} week {}: {}",
-                        self.year, i, "No such week"
+                        "Failed to simulate season {} week {}: No such week",
+                        self.year, i
                     )
                 ),
             };
