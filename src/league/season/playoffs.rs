@@ -6,6 +6,8 @@ use rand::Rng;
 use serde::{Serialize, Deserialize};
 use std::collections::BTreeMap;
 
+use crate::game::matchup::FootballMatchupResult;
+use crate::league::matchup::LeagueTeamRecord;
 use crate::league::season::week::LeagueSeasonWeek;
 use crate::league::season::matchup::LeagueSeasonMatchup;
 
@@ -97,6 +99,16 @@ impl LeagueSeasonPlayoffs {
         self.teams.len()
     }
 
+    /// Find the seed for a given team ID
+    fn team_seed(&self, team_id: usize) -> Option<usize> {
+        for (seed, (id, _)) in &self.teams {
+            if *id == team_id {
+                return Some(*seed);
+            }
+        }
+        None
+    }
+
     /// Determine whether the playoffs are complete
     ///
     /// ### Example
@@ -119,13 +131,14 @@ impl LeagueSeasonPlayoffs {
             }
         }
 
-        // If the last round contains one matchup, the playoffs are complete
-        if let Some(last_round) = self.rounds.last() {
-            if last_round.matchups().len() == 1 {
-                return true;
-            }
+        // Count how many teams have been eliminated
+        let mut eliminated = 0;
+        for round in self.rounds.iter() {
+            eliminated += round.matchups().len();
         }
-        false
+
+        // Playoffs are complete when only 1 team remains
+        self.teams.len() == eliminated + 1
     }
 
     /// Add a team to the playoffs
@@ -276,7 +289,7 @@ impl LeagueSeasonPlayoffs {
         let mut week = LeagueSeasonWeek::new();
         for i in 0..wild_card_matchups {
             // Get the home and away IDs
-            let home_seed = byes + i;
+            let home_seed = byes + i + 1;
             let away_seed = num_teams - i;
             let (home_id, home_name) = match self.teams.get(&home_seed) {
                 Some(t) => t,
@@ -357,11 +370,11 @@ impl LeagueSeasonPlayoffs {
                 None => return Err(String::from("Wild card round not found"))
             };
 
-            // Get the winner of each wild card matchup and number of byes
-            let winners: Vec<usize> = round.matchups().iter().map(
-                |x| x.winner().unwrap()
+            // Get the seed of each wild card matchup winner and number of byes
+            let winner_seeds: Vec<usize> = round.matchups().iter().map(
+                |x| self.team_seed(x.winner().unwrap()).unwrap()
             ).collect();
-            let num_winners = winners.len();
+            let num_winners = winner_seeds.len();
             let byes = self.byes()?;
 
             // Populate the week with matchups
@@ -371,15 +384,15 @@ impl LeagueSeasonPlayoffs {
                 for i in 0..byes {
                     let bye_seed = i + 1;
                     let winner_index = num_winners - bye_seed;
-                    let winner_seed = match winners.get(winner_index) {
-                        Some(s) => s,
+                    let winner_seed = match winner_seeds.get(winner_index) {
+                        Some(s) => *s,
                         None => return Err(format!("No winner found at index {}", winner_index))
                     };
                     let (home_id, home_name) = match self.teams.get(&bye_seed) {
                         Some(t) => t,
                         None => return Err(format!("No team found with seed {}", bye_seed))
                     };
-                    let (away_id, away_name) = match self.teams.get(winner_seed) {
+                    let (away_id, away_name) = match self.teams.get(&winner_seed) {
                         Some(t) => t,
                         None => return Err(format!("No team found with seed {}", winner_seed))
                     };
@@ -395,33 +408,34 @@ impl LeagueSeasonPlayoffs {
                     String::from("Failed to calculate first round matchups")
                 )?;
                 for i in 0..diff_winner_matchups {
-                    let t1_seed = match winners.get(i) {
-                        Some(s) => s,
+                    let t1_seed = match winner_seeds.get(i) {
+                        Some(s) => *s,
                         None => return Err(format!("No winner found at index {}", i))
                     };
                     let t2_index = diff_winners - i + 1;
-                    let t2_seed = match winners.get(diff_winners - i + 1) {
-                        Some(s) => s,
+                    let t2_seed = match winner_seeds.get(diff_winners - i + 1) {
+                        Some(s) => *s,
                         None => return Err(format!("No winner found at index {}", t2_index))
                     };
-                    let (home_id, home_name) = if t1_seed > t2_seed {
-                        match self.teams.get(t1_seed) {
+                    // Lower seed gets home field advantage
+                    let (home_id, home_name) = if t1_seed < t2_seed {
+                        match self.teams.get(&t1_seed) {
                             Some(t) => t,
                             None => return Err(format!("No team found with seed {}", t1_seed))
                         }
                     } else {
-                        match self.teams.get(t2_seed) {
+                        match self.teams.get(&t2_seed) {
                             Some(t) => t,
                             None => return Err(format!("No team found with seed {}", t2_seed))
                         }
                     };
-                    let (away_id, away_name) = if t1_seed > t2_seed {
-                        match self.teams.get(t2_seed) {
+                    let (away_id, away_name) = if t1_seed < t2_seed {
+                        match self.teams.get(&t2_seed) {
                             Some(t) => t,
                             None => return Err(format!("No team found with seed {}", t2_seed))
                         }
                     } else {
-                        match self.teams.get(t1_seed) {
+                        match self.teams.get(&t1_seed) {
                             Some(t) => t,
                             None => return Err(format!("No team found with seed {}", t1_seed))
                         }
@@ -436,15 +450,15 @@ impl LeagueSeasonPlayoffs {
                 for i in 0..num_winners {
                     let bye_seed = i + 1;
                     let winner_index = num_winners - bye_seed;
-                    let winner_seed = match winners.get(winner_index) {
-                        Some(s) => s,
+                    let winner_seed = match winner_seeds.get(winner_index) {
+                        Some(s) => *s,
                         None => return Err(format!("No winner found at index {}", winner_index))
                     };
                     let (home_id, home_name) = match self.teams.get(&bye_seed) {
                         Some(t) => t,
                         None => return Err(format!("No team found with seed {}", bye_seed))
                     };
-                    let (away_id, away_name) = match self.teams.get(winner_seed) {
+                    let (away_id, away_name) = match self.teams.get(&winner_seed) {
                         Some(t) => t,
                         None => return Err(format!("No team found with seed {}", winner_seed))
                     };
@@ -481,6 +495,34 @@ impl LeagueSeasonPlayoffs {
         }
     }
 
+    /// Check if a team made it to the championship game (final round)
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::league::season::playoffs::LeagueSeasonPlayoffs;
+    ///
+    /// let my_playoffs = LeagueSeasonPlayoffs::new();
+    /// assert!(!my_playoffs.in_championship(0));
+    /// ```
+    pub fn in_championship(&self, team_id: usize) -> bool {
+        // Need at least one round for a championship
+        if self.rounds.is_empty() {
+            return false;
+        }
+
+        // Get the final round
+        if let Some(final_round) = self.rounds.last() {
+            // Championship is the round with exactly 1 matchup
+            if final_round.matchups().len() == 1 {
+                if let Some(final_matchup) = final_round.matchups().first() {
+                    return *final_matchup.home_team() == team_id ||
+                           *final_matchup.away_team() == team_id;
+                }
+            }
+        }
+        false
+    }
+
     /// Get the champion team ID if the playoffs are complete
     ///
     /// ### Example
@@ -503,6 +545,41 @@ impl LeagueSeasonPlayoffs {
             }
         }
         None
+    }
+
+    /// Compute a team's playoff record
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::league::season::playoffs::LeagueSeasonPlayoffs;
+    /// use fbsim_core::league::matchup::LeagueTeamRecord;
+    ///
+    /// let my_playoffs = LeagueSeasonPlayoffs::new();
+    /// let record = my_playoffs.record(0);
+    /// assert!(record == LeagueTeamRecord::new());
+    /// ```
+    pub fn record(&self, team_id: usize) -> LeagueTeamRecord {
+        let mut record = LeagueTeamRecord::new();
+
+        for round in self.rounds.iter() {
+            for matchup in round.matchups().iter() {
+                // Check if this team participated in the matchup
+                if *matchup.home_team() != team_id && *matchup.away_team() != team_id {
+                    continue;
+                }
+
+                // Get the result for this team
+                if let Some(result) = matchup.result(team_id) {
+                    match result {
+                        FootballMatchupResult::Win => record.increment_wins(1),
+                        FootballMatchupResult::Loss => record.increment_losses(1),
+                        FootballMatchupResult::Tie => record.increment_ties(1),
+                    }
+                }
+            }
+        }
+
+        record
     }
 
     /// Generate the next round of the playoffs
@@ -542,15 +619,15 @@ impl LeagueSeasonPlayoffs {
             if self.rounds.len() == 1 && first_round_teams != num_teams {
                 self.gen_first_round(rng)
             } else {
-                // Get winners of previous round and ensure more than one
+                // Get seeds of winners from previous round and ensure more than one
                 let round = match self.rounds.last() {
                     Some(r) => r,
-                    None => return Err(String::from("Wild card round not found"))
+                    None => return Err(String::from("Previous round not found"))
                 };
-                let winners: Vec<usize> = round.matchups().iter().map(
-                    |x| x.winner().unwrap()
+                let winner_seeds: Vec<usize> = round.matchups().iter().map(
+                    |x| self.team_seed(x.winner().unwrap()).unwrap()
                 ).collect();
-                let num_winners = winners.len();
+                let num_winners = winner_seeds.len();
                 if num_winners <= 1 {
                     return Err(format!("Cannot generate next round, only {} teams remain", num_winners));
                 }
@@ -562,34 +639,34 @@ impl LeagueSeasonPlayoffs {
                 let mut week = LeagueSeasonWeek::new();
                 for i in 0..next_round_matchups {
                     let t1_index = i * 2;
-                    let t1_seed = match winners.get(t1_index) {
-                        Some(s) => s,
+                    let t1_seed = match winner_seeds.get(t1_index) {
+                        Some(s) => *s,
                         None => return Err(format!("No winner found at index {}", t1_index))
                     };
-                    let t2_seed = match winners.get(t1_index + 1) {
-                        Some(s) => s,
+                    let t2_seed = match winner_seeds.get(t1_index + 1) {
+                        Some(s) => *s,
                         None => return Err(format!("No winner found at index {}", t1_index + 1))
                     };
 
-                    // Get the home and away teams
-                    let (home_id, home_name) = if t1_seed > t2_seed {
-                        match self.teams.get(t1_seed) {
+                    // Get the home and away teams (lower seed gets home field)
+                    let (home_id, home_name) = if t1_seed < t2_seed {
+                        match self.teams.get(&t1_seed) {
                             Some(t) => t,
                             None => return Err(format!("No team found with seed {}", t1_seed))
                         }
                     } else {
-                        match self.teams.get(t2_seed) {
+                        match self.teams.get(&t2_seed) {
                             Some(t) => t,
                             None => return Err(format!("No team found with seed {}", t2_seed))
                         }
                     };
-                    let (away_id, away_name) = if t1_seed > t2_seed {
-                        match self.teams.get(t2_seed) {
+                    let (away_id, away_name) = if t1_seed < t2_seed {
+                        match self.teams.get(&t2_seed) {
                             Some(t) => t,
                             None => return Err(format!("No team found with seed {}", t2_seed))
                         }
                     } else {
-                        match self.teams.get(t1_seed) {
+                        match self.teams.get(&t1_seed) {
                             Some(t) => t,
                             None => return Err(format!("No team found with seed {}", t1_seed))
                         }

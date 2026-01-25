@@ -5,7 +5,7 @@ pub mod team;
 
 use crate::team::FootballTeam;
 use crate::game::play::Game;
-use crate::league::matchup::LeagueMatchups;
+use crate::league::matchup::{LeagueMatchups, LeagueTeamRecord};
 use crate::league::team::LeagueTeam;
 use crate::league::season::{LeagueSeason, LeagueSeasonScheduleOptions};
 use crate::league::season::matchup::{LeagueSeasonMatchup, LeagueSeasonMatchups};
@@ -696,6 +696,99 @@ impl League {
 
         // Get the matchups involving the given team for that season
         season.team_matchups(id)
+    }
+
+    /// Get a team's all-time playoff record across all seasons
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::league::League;
+    /// use fbsim_core::league::matchup::LeagueTeamRecord;
+    ///
+    /// let my_league = League::new();
+    /// let record = my_league.team_playoff_record(0);
+    /// assert!(record == LeagueTeamRecord::new());
+    /// ```
+    pub fn team_playoff_record(&self, id: usize) -> LeagueTeamRecord {
+        let mut record = LeagueTeamRecord::new();
+
+        // Add playoff record from current season
+        if let Some(season) = self.current_season() {
+            let season_record = season.playoff_record(id);
+            record.increment_wins(*season_record.wins());
+            record.increment_losses(*season_record.losses());
+            record.increment_ties(*season_record.ties());
+        }
+
+        // Add playoff records from past seasons
+        for season in self.seasons().iter() {
+            let season_record = season.playoff_record(id);
+            record.increment_wins(*season_record.wins());
+            record.increment_losses(*season_record.losses());
+            record.increment_ties(*season_record.ties());
+        }
+
+        record
+    }
+
+    /// Get a team's total championship appearances across all seasons
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::league::League;
+    ///
+    /// let my_league = League::new();
+    /// let appearances = my_league.team_championship_appearances(0);
+    /// assert!(appearances == 0);
+    /// ```
+    pub fn team_championship_appearances(&self, id: usize) -> usize {
+        let mut appearances = 0;
+
+        // Check current season
+        if let Some(season) = self.current_season() {
+            if season.team_in_championship(id) {
+                appearances += 1;
+            }
+        }
+
+        // Check past seasons
+        for season in self.seasons().iter() {
+            if season.team_in_championship(id) {
+                appearances += 1;
+            }
+        }
+
+        appearances
+    }
+
+    /// Get a team's total championship wins across all seasons
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::league::League;
+    ///
+    /// let my_league = League::new();
+    /// let wins = my_league.team_championship_wins(0);
+    /// assert!(wins == 0);
+    /// ```
+    pub fn team_championship_wins(&self, id: usize) -> usize {
+        let mut wins = 0;
+
+        // Check current season
+        if let Some(season) = self.current_season() {
+            if season.team_won_championship(id) {
+                wins += 1;
+            }
+        }
+
+        // Check past seasons
+        for season in self.seasons().iter() {
+            if season.team_won_championship(id) {
+                wins += 1;
+            }
+        }
+
+        wins
     }
 
     /// Get all matchups involving a team over all seasons
