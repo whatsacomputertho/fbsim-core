@@ -151,11 +151,11 @@ impl PuntResultRaw {
             )
         }
 
-        // Ensure the punt return yards are in range [-100, 100]
-        if self.punt_return_yards.abs() > 100 {
+        // Ensure the punt return yards are in range [-110, 110]
+        if self.punt_return_yards.abs() > 110 {
             return Err(
                 format!(
-                    "Punt return yards is not in range [-100, 100]: {}",
+                    "Punt return yards is not in range [-110, 110]: {}",
                     self.punt_return_yards
                 )
             )

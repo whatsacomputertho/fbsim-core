@@ -721,13 +721,30 @@ impl GameContext {
     /// ### Example
     /// ```
     /// use fbsim_core::game::context::GameContext;
-    /// 
+    ///
     /// let my_context = GameContext::new();
     /// let game_over = my_context.game_over();
     /// assert!(!game_over);
     /// ```
     pub fn game_over(&self) -> bool {
         self.game_over
+    }
+
+    /// Determine whether the game has started
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::game::context::GameContext;
+    ///
+    /// let my_context = GameContext::new();
+    /// assert!(!my_context.started());
+    /// ```
+    pub fn started(&self) -> bool {
+        self.down > 0
+            || self.home_score > 0
+            || self.away_score > 0
+            || self.quarter > 1
+            || self.half_seconds < 1800
     }
 
     /// Get the number of timeouts the defense has left
