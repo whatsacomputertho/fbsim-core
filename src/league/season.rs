@@ -10,6 +10,7 @@ use crate::league::matchup::LeagueTeamRecord;
 use crate::league::season::week::LeagueSeasonWeek;
 use crate::league::season::matchup::{LeagueSeasonMatchup, LeagueSeasonMatchups};
 use crate::league::season::playoffs::LeagueSeasonPlayoffs;
+use crate::league::season::playoffs::picture::PlayoffPicture;
 use crate::game::play::{Game, GameSimulator};
 
 #[cfg(feature = "rocket_okapi")]
@@ -917,14 +918,6 @@ impl LeagueSeason {
 
     /// Generate the current playoff picture for the season
     ///
-    /// This analyzes the current standings and remaining games to determine
-    /// each team's playoff qualification status, including:
-    /// - Teams that have clinched a playoff spot
-    /// - Teams that have clinched the #1 seed
-    /// - Teams currently in playoff position but not yet clinched
-    /// - Teams still in the hunt (not in playoffs but not eliminated)
-    /// - Teams that have been mathematically eliminated
-    ///
     /// ### Arguments
     /// * `num_playoff_teams` - Number of teams that will make the playoffs
     ///
@@ -954,7 +947,7 @@ impl LeagueSeason {
     /// assert!(picture.is_ok());
     /// ```
     pub fn playoff_picture(&self, num_playoff_teams: usize) -> Result<playoffs::picture::PlayoffPicture, String> {
-        playoffs::picture::PlayoffPicture::from_season(self, num_playoff_teams)
+        PlayoffPicture::from_season(self, num_playoff_teams)
     }
 
     /// Determine of a team participated in the playoffs

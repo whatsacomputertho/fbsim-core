@@ -1,3 +1,5 @@
+use std::collections::BTreeMap;
+
 #[cfg(feature = "rocket_okapi")]
 use rocket_okapi::okapi::schemars;
 #[cfg(feature = "rocket_okapi")]
@@ -11,7 +13,7 @@ use crate::league::season::LeagueSeason;
 ///
 /// Represents a team's playoff qualification status during an ongoing season
 #[cfg_attr(feature = "rocket_okapi", derive(JsonSchema))]
-#[derive(Clone, Eq, PartialEq, Ord, PartialOrd, Debug, Serialize, Deserialize)]
+#[derive(Clone, Eq, PartialEq, Ord, PartialOrd, Debug, Default, Serialize, Deserialize)]
 pub enum PlayoffStatus {
     /// Team has clinched the #1 seed
     ClinchedTopSeed,
@@ -20,7 +22,7 @@ pub enum PlayoffStatus {
     /// Team is currently in playoff position but hasn't clinched
     InPlayoffPosition { current_seed: usize },
     /// Team is not in playoff position but still mathematically alive
-    InTheHunt,
+    #[default] InTheHunt,
     /// Team cannot make playoffs regardless of remaining outcomes
     Eliminated,
 }
@@ -29,7 +31,7 @@ pub enum PlayoffStatus {
 ///
 /// Represents a single team's entry in the playoff picture
 #[cfg_attr(feature = "rocket_okapi", derive(JsonSchema))]
-#[derive(Clone, PartialEq, Debug, Serialize, Deserialize)]
+#[derive(Clone, PartialEq, Debug, Default, Serialize, Deserialize)]
 pub struct PlayoffPictureEntry {
     team_id: usize,
     team_name: String,
@@ -41,42 +43,120 @@ pub struct PlayoffPictureEntry {
 }
 
 impl PlayoffPictureEntry {
-    /// Get the team ID
+    /// Initialize a new PlayoffPictureEntry
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::league::season::playoffs::picture::PlayoffPictureEntry;
+    ///
+    /// let my_playoff_picture_entry = PlayoffPictureEntry::new();
+    /// ```
+    pub fn new() -> PlayoffPictureEntry {
+        PlayoffPictureEntry::default()
+    }
+
+    /// Get the entry's team ID
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::league::season::playoffs::picture::PlayoffPictureEntry;
+    ///
+    /// let my_playoff_picture_entry = PlayoffPictureEntry::new();
+    /// assert!(my_playoff_picture_entry.team_id() == 0);
+    /// ```
     pub fn team_id(&self) -> usize {
         self.team_id
     }
 
-    /// Get the team name
+    /// Get the entry's team name
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::league::season::playoffs::picture::PlayoffPictureEntry;
+    ///
+    /// let my_playoff_picture_entry = PlayoffPictureEntry::new();
+    /// assert!(my_playoff_picture_entry.team_name() == "".to_string());
+    /// ```
     pub fn team_name(&self) -> &str {
         &self.team_name
     }
 
-    /// Get the current record
+    /// Get the current record of the team in the entry
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::league::matchup::LeagueTeamRecord;
+    /// use fbsim_core::league::season::playoffs::picture::PlayoffPictureEntry;
+    ///
+    /// let my_playoff_picture_entry = PlayoffPictureEntry::new();
+    /// assert!(*my_playoff_picture_entry.current_record() == LeagueTeamRecord::new());
+    /// ```
     pub fn current_record(&self) -> &LeagueTeamRecord {
         &self.current_record
     }
 
-    /// Get the playoff status
+    /// Get the playoff status of the team in the entry
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::league::season::playoffs::picture::{PlayoffPictureEntry, PlayoffStatus};
+    ///
+    /// let my_playoff_picture_entry = PlayoffPictureEntry::new();
+    /// assert!(*my_playoff_picture_entry.status() == PlayoffStatus::InTheHunt);
+    /// ```
     pub fn status(&self) -> &PlayoffStatus {
         &self.status
     }
 
-    /// Get games back from the playoff cutoff (0.0 if in playoff position)
+    /// Get games back from the playoff cutoff for the team in the entry
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::league::season::playoffs::picture::PlayoffPictureEntry;
+    /// 
+    /// let my_playoff_picture_entry = PlayoffPictureEntry::new();
+    /// assert!(my_playoff_picture_entry.games_back() == 0.0);
+    /// ```
     pub fn games_back(&self) -> f64 {
         self.games_back
     }
 
-    /// Get remaining games in the season
+    /// Get remaining games in the season for the team in the entry
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::league::season::playoffs::picture::PlayoffPictureEntry;
+    /// 
+    /// let my_playoff_picture_entry = PlayoffPictureEntry::new();
+    /// assert!(my_playoff_picture_entry.remaining_games() == 0);
+    /// ```
     pub fn remaining_games(&self) -> usize {
         self.remaining_games
     }
 
     /// Get the magic number (wins needed to clinch), if applicable
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::league::season::playoffs::picture::PlayoffPictureEntry;
+    /// 
+    /// let my_playoff_picture_entry = PlayoffPictureEntry::new();
+    /// let magic_number = my_playoff_picture_entry.magic_number();
+    /// assert!(magic_number.is_none());
+    /// ```
     pub fn magic_number(&self) -> Option<usize> {
         self.magic_number
     }
 
     /// Check if the team has clinched a playoff spot
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::league::season::playoffs::picture::PlayoffPictureEntry;
+    /// 
+    /// let my_playoff_picture_entry = PlayoffPictureEntry::new();
+    /// assert!(!my_playoff_picture_entry.is_clinched());
+    /// ```
     pub fn is_clinched(&self) -> bool {
         matches!(
             self.status,
@@ -85,21 +165,17 @@ impl PlayoffPictureEntry {
     }
 
     /// Check if the team has been eliminated
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::league::season::playoffs::picture::PlayoffPictureEntry;
+    /// 
+    /// let my_playoff_picture_entry = PlayoffPictureEntry::new();
+    /// assert!(!my_playoff_picture_entry.is_eliminated());
+    /// ```
     pub fn is_eliminated(&self) -> bool {
         matches!(self.status, PlayoffStatus::Eliminated)
     }
-}
-
-/// # `PlayoffPicture` struct
-///
-/// Represents the complete playoff picture for a season, showing the
-/// qualification status of all teams
-#[cfg_attr(feature = "rocket_okapi", derive(JsonSchema))]
-#[derive(Clone, PartialEq, Debug, Serialize, Deserialize)]
-pub struct PlayoffPicture {
-    num_playoff_teams: usize,
-    entries: Vec<PlayoffPictureEntry>,
-    games_remaining_in_season: usize,
 }
 
 /// Internal helper struct for tracking potential record ranges
@@ -156,6 +232,18 @@ impl RecordBounds {
     }
 }
 
+/// # `PlayoffPicture` struct
+///
+/// Represents the complete playoff picture for a season, showing the
+/// qualification status of all teams
+#[cfg_attr(feature = "rocket_okapi", derive(JsonSchema))]
+#[derive(Clone, PartialEq, Debug, Serialize, Deserialize)]
+pub struct PlayoffPicture {
+    num_playoff_teams: usize,
+    entries: Vec<PlayoffPictureEntry>,
+    games_remaining_in_season: usize,
+}
+
 impl PlayoffPicture {
     /// Create a playoff picture from a season
     ///
@@ -166,6 +254,29 @@ impl PlayoffPicture {
     /// ### Returns
     /// * `Ok(PlayoffPicture)` - The current playoff picture
     /// * `Err(String)` - If the season hasn't started or parameters are invalid
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::team::FootballTeam;
+    /// use fbsim_core::league::season::LeagueSeason;
+    /// use fbsim_core::league::season::LeagueSeasonScheduleOptions;
+    /// use fbsim_core::league::season::playoffs::picture::PlayoffPicture;
+    ///
+    /// // Create a new season with 4 teams
+    /// let mut my_league_season = LeagueSeason::new();
+    /// my_league_season.add_team(0, FootballTeam::new());
+    /// my_league_season.add_team(1, FootballTeam::new());
+    /// my_league_season.add_team(2, FootballTeam::new());
+    /// my_league_season.add_team(3, FootballTeam::new());
+    ///
+    /// // Generate the season schedule
+    /// let mut rng = rand::thread_rng();
+    /// my_league_season.generate_schedule(LeagueSeasonScheduleOptions::new(), &mut rng);
+    ///
+    /// // Get the playoff picture for a 2-team playoff
+    /// let picture = PlayoffPicture::from_season(&my_league_season, 2);
+    /// assert!(picture.is_ok());
+    /// ```
     pub fn from_season(season: &LeagueSeason, num_playoff_teams: usize) -> Result<Self, String> {
         let total_teams = season.teams().len();
 
@@ -190,7 +301,7 @@ impl PlayoffPicture {
         let total_games = season.weeks().len();
 
         // Compute remaining games for each team
-        let mut team_remaining_games: std::collections::BTreeMap<usize, usize> = std::collections::BTreeMap::new();
+        let mut team_remaining_games: BTreeMap<usize, usize> = BTreeMap::new();
         let mut games_remaining_in_season = 0;
 
         for week in season.weeks().iter() {
@@ -429,12 +540,7 @@ impl PlayoffPicture {
         teams_definitely_ahead >= num_playoff_teams
     }
 
-    /// Determine if team1 would finish ahead of team2 given their records
-    ///
-    /// Uses the same tiebreaker rules as standings():
-    /// 1. Win percentage (higher is better)
-    /// 2. Total wins (higher is better)
-    /// 3. Team ID (lower is better)
+    /// Determine if a team would finish ahead of another team given their records
     fn would_finish_ahead(
         team1_wins: usize,
         team1_pct: f64,
@@ -444,8 +550,7 @@ impl PlayoffPicture {
         team2_id: usize,
     ) -> bool {
         // Primary: win percentage (higher is better)
-        const EPSILON: f64 = 1e-9;
-        if (team1_pct - team2_pct).abs() > EPSILON {
+        if (team1_pct - team2_pct).abs() > 1e-9 {
             return team1_pct > team2_pct;
         }
 
@@ -458,10 +563,7 @@ impl PlayoffPicture {
         team1_id < team2_id
     }
 
-    /// Calculate magic number for clinching playoffs
-    ///
-    /// Magic number = (wins needed to guarantee clinch)
-    /// Returns None if already clinched or eliminated
+    /// Calculate magic number for clinching playoffs, if applicable
     fn compute_magic_number(
         team_id: usize,
         bounds: &[RecordBounds],
@@ -536,21 +638,113 @@ impl PlayoffPicture {
     }
 
     /// Get the number of playoff spots
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::team::FootballTeam;
+    /// use fbsim_core::league::season::LeagueSeason;
+    /// use fbsim_core::league::season::LeagueSeasonScheduleOptions;
+    /// use fbsim_core::league::season::playoffs::picture::PlayoffPicture;
+    ///
+    /// // Create a new season with 4 teams
+    /// let mut my_league_season = LeagueSeason::new();
+    /// my_league_season.add_team(0, FootballTeam::new());
+    /// my_league_season.add_team(1, FootballTeam::new());
+    /// my_league_season.add_team(2, FootballTeam::new());
+    /// my_league_season.add_team(3, FootballTeam::new());
+    ///
+    /// // Generate the season schedule
+    /// let mut rng = rand::thread_rng();
+    /// my_league_season.generate_schedule(LeagueSeasonScheduleOptions::new(), &mut rng);
+    ///
+    /// // Get the playoff picture for a 2-team playoff
+    /// let picture = PlayoffPicture::from_season(&my_league_season, 2).unwrap();
+    /// assert!(picture.num_playoff_teams() == 2);
+    /// ```
     pub fn num_playoff_teams(&self) -> usize {
         self.num_playoff_teams
     }
 
     /// Get all entries sorted by standings
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::team::FootballTeam;
+    /// use fbsim_core::league::season::LeagueSeason;
+    /// use fbsim_core::league::season::LeagueSeasonScheduleOptions;
+    /// use fbsim_core::league::season::playoffs::picture::PlayoffPicture;
+    ///
+    /// // Create a new season with 4 teams
+    /// let mut my_league_season = LeagueSeason::new();
+    /// my_league_season.add_team(0, FootballTeam::new());
+    /// my_league_season.add_team(1, FootballTeam::new());
+    /// my_league_season.add_team(2, FootballTeam::new());
+    /// my_league_season.add_team(3, FootballTeam::new());
+    ///
+    /// // Generate the season schedule
+    /// let mut rng = rand::thread_rng();
+    /// my_league_season.generate_schedule(LeagueSeasonScheduleOptions::new(), &mut rng);
+    ///
+    /// // Get the playoff picture for a 2-team playoff
+    /// let picture = PlayoffPicture::from_season(&my_league_season, 2).unwrap();
+    /// let entries = picture.entries();
+    /// ```
     pub fn entries(&self) -> &Vec<PlayoffPictureEntry> {
         &self.entries
     }
 
     /// Get total games remaining in the season
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::team::FootballTeam;
+    /// use fbsim_core::league::season::LeagueSeason;
+    /// use fbsim_core::league::season::LeagueSeasonScheduleOptions;
+    /// use fbsim_core::league::season::playoffs::picture::PlayoffPicture;
+    ///
+    /// // Create a new season with 4 teams
+    /// let mut my_league_season = LeagueSeason::new();
+    /// my_league_season.add_team(0, FootballTeam::new());
+    /// my_league_season.add_team(1, FootballTeam::new());
+    /// my_league_season.add_team(2, FootballTeam::new());
+    /// my_league_season.add_team(3, FootballTeam::new());
+    ///
+    /// // Generate the season schedule
+    /// let mut rng = rand::thread_rng();
+    /// my_league_season.generate_schedule(LeagueSeasonScheduleOptions::new(), &mut rng);
+    ///
+    /// // Get the playoff picture for a 2-team playoff
+    /// let picture = PlayoffPicture::from_season(&my_league_season, 2).unwrap();
+    /// let entries = picture.entries();
+    /// ```
     pub fn games_remaining_in_season(&self) -> usize {
         self.games_remaining_in_season
     }
 
     /// Get all teams currently in playoff position
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::team::FootballTeam;
+    /// use fbsim_core::league::season::LeagueSeason;
+    /// use fbsim_core::league::season::LeagueSeasonScheduleOptions;
+    /// use fbsim_core::league::season::playoffs::picture::PlayoffPicture;
+    ///
+    /// // Create a new season with 4 teams
+    /// let mut my_league_season = LeagueSeason::new();
+    /// my_league_season.add_team(0, FootballTeam::new());
+    /// my_league_season.add_team(1, FootballTeam::new());
+    /// my_league_season.add_team(2, FootballTeam::new());
+    /// my_league_season.add_team(3, FootballTeam::new());
+    ///
+    /// // Generate the season schedule
+    /// let mut rng = rand::thread_rng();
+    /// my_league_season.generate_schedule(LeagueSeasonScheduleOptions::new(), &mut rng);
+    ///
+    /// // Get the playoff picture for a 2-team playoff
+    /// let picture = PlayoffPicture::from_season(&my_league_season, 2).unwrap();
+    /// let playoff_teams = picture.playoff_teams();
+    /// ```
     pub fn playoff_teams(&self) -> Vec<&PlayoffPictureEntry> {
         self.entries
             .iter()
@@ -564,6 +758,29 @@ impl PlayoffPicture {
     }
 
     /// Get all teams that have clinched a playoff spot
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::team::FootballTeam;
+    /// use fbsim_core::league::season::LeagueSeason;
+    /// use fbsim_core::league::season::LeagueSeasonScheduleOptions;
+    /// use fbsim_core::league::season::playoffs::picture::PlayoffPicture;
+    ///
+    /// // Create a new season with 4 teams
+    /// let mut my_league_season = LeagueSeason::new();
+    /// my_league_season.add_team(0, FootballTeam::new());
+    /// my_league_season.add_team(1, FootballTeam::new());
+    /// my_league_season.add_team(2, FootballTeam::new());
+    /// my_league_season.add_team(3, FootballTeam::new());
+    ///
+    /// // Generate the season schedule
+    /// let mut rng = rand::thread_rng();
+    /// my_league_season.generate_schedule(LeagueSeasonScheduleOptions::new(), &mut rng);
+    ///
+    /// // Get the playoff picture for a 2-team playoff
+    /// let picture = PlayoffPicture::from_season(&my_league_season, 2).unwrap();
+    /// let clinched_teams = picture.clinched_teams();
+    /// ```
     pub fn clinched_teams(&self) -> Vec<&PlayoffPictureEntry> {
         self.entries
             .iter()
@@ -575,6 +792,29 @@ impl PlayoffPicture {
     }
 
     /// Get all teams still in the hunt (not in playoffs but not eliminated)
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::team::FootballTeam;
+    /// use fbsim_core::league::season::LeagueSeason;
+    /// use fbsim_core::league::season::LeagueSeasonScheduleOptions;
+    /// use fbsim_core::league::season::playoffs::picture::PlayoffPicture;
+    ///
+    /// // Create a new season with 4 teams
+    /// let mut my_league_season = LeagueSeason::new();
+    /// my_league_season.add_team(0, FootballTeam::new());
+    /// my_league_season.add_team(1, FootballTeam::new());
+    /// my_league_season.add_team(2, FootballTeam::new());
+    /// my_league_season.add_team(3, FootballTeam::new());
+    ///
+    /// // Generate the season schedule
+    /// let mut rng = rand::thread_rng();
+    /// my_league_season.generate_schedule(LeagueSeasonScheduleOptions::new(), &mut rng);
+    ///
+    /// // Get the playoff picture for a 2-team playoff
+    /// let picture = PlayoffPicture::from_season(&my_league_season, 2).unwrap();
+    /// let in_the_hunt = picture.in_the_hunt();
+    /// ```
     pub fn in_the_hunt(&self) -> Vec<&PlayoffPictureEntry> {
         self.entries
             .iter()
@@ -583,6 +823,29 @@ impl PlayoffPicture {
     }
 
     /// Get all eliminated teams
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::team::FootballTeam;
+    /// use fbsim_core::league::season::LeagueSeason;
+    /// use fbsim_core::league::season::LeagueSeasonScheduleOptions;
+    /// use fbsim_core::league::season::playoffs::picture::PlayoffPicture;
+    ///
+    /// // Create a new season with 4 teams
+    /// let mut my_league_season = LeagueSeason::new();
+    /// my_league_season.add_team(0, FootballTeam::new());
+    /// my_league_season.add_team(1, FootballTeam::new());
+    /// my_league_season.add_team(2, FootballTeam::new());
+    /// my_league_season.add_team(3, FootballTeam::new());
+    ///
+    /// // Generate the season schedule
+    /// let mut rng = rand::thread_rng();
+    /// my_league_season.generate_schedule(LeagueSeasonScheduleOptions::new(), &mut rng);
+    ///
+    /// // Get the playoff picture for a 2-team playoff
+    /// let picture = PlayoffPicture::from_season(&my_league_season, 2).unwrap();
+    /// let eliminated_teams = picture.eliminated_teams();
+    /// ```
     pub fn eliminated_teams(&self) -> Vec<&PlayoffPictureEntry> {
         self.entries
             .iter()
@@ -591,6 +854,30 @@ impl PlayoffPicture {
     }
 
     /// Get a specific team's entry
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::team::FootballTeam;
+    /// use fbsim_core::league::season::LeagueSeason;
+    /// use fbsim_core::league::season::LeagueSeasonScheduleOptions;
+    /// use fbsim_core::league::season::playoffs::picture::PlayoffPicture;
+    ///
+    /// // Create a new season with 4 teams
+    /// let mut my_league_season = LeagueSeason::new();
+    /// my_league_season.add_team(0, FootballTeam::new());
+    /// my_league_season.add_team(1, FootballTeam::new());
+    /// my_league_season.add_team(2, FootballTeam::new());
+    /// my_league_season.add_team(3, FootballTeam::new());
+    ///
+    /// // Generate the season schedule
+    /// let mut rng = rand::thread_rng();
+    /// my_league_season.generate_schedule(LeagueSeasonScheduleOptions::new(), &mut rng);
+    ///
+    /// // Get the playoff picture for a 2-team playoff
+    /// let picture = PlayoffPicture::from_season(&my_league_season, 2).unwrap();
+    /// let team_status = picture.team_status(3);
+    /// assert!(team_status.is_some());
+    /// ```
     pub fn team_status(&self, team_id: usize) -> Option<&PlayoffPictureEntry> {
         self.entries.iter().find(|e| e.team_id == team_id)
     }
