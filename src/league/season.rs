@@ -764,7 +764,11 @@ impl LeagueSeason {
         let mut team_ids: Vec<usize> = self.teams.keys().cloned().collect();
         team_ids.shuffle(rng); // Generate a random permutation of the season team IDs
 
-        // Generate the round-robin schedule using the season team IDs
+        // Generate the round-robin schedule using the circle method:
+        // - Keep the team at index 0 fixed
+        // - Rotate the teams at indices 1 to n-1
+        // - Pair: index 0 with index n-1, index 1 with index n-2, etc.
+        // This guarantees each pair plays exactly once per cycle of (n-1) rounds
         for week_index in 0..num_weeks {
             // Create a new league season week
             let mut week = LeagueSeasonWeek::new();
@@ -772,54 +776,50 @@ impl LeagueSeason {
             // TODO: Implement the ability to have bye weeks
             let num_matchups = num_teams / 2;
 
+            // Determine which round within the cycle and which cycle we're in
+            // Each cycle is (n-1) rounds; in a double round-robin we have 2 cycles
+            let round_in_cycle = week_index % (num_teams - 1);
+            let cycle = week_index / (num_teams - 1);
+
+            // Build the arrangement for this round using the circle method
+            // Team at index 0 stays fixed, others rotate
+            let mut arrangement: Vec<usize> = Vec::with_capacity(num_teams);
+            arrangement.push(team_ids[0]); // Fixed team
+            for i in 0..(num_teams - 1) {
+                // Rotate the other teams: for round r, shift by r positions
+                let rotated_index = (i + (num_teams - 1) - round_in_cycle) % (num_teams - 1);
+                arrangement.push(team_ids[1 + rotated_index]);
+            }
+
             // Create matchups for each pair of teams
+            // Pair first with last, second with second-to-last, etc.
             for matchup_index in 0..num_matchups {
-                // Match up 0 : (n/2), 1 : (n/2)+1, ...
-                let home_id = match team_ids.get(matchup_index) {
-                    Some(id) => id,
-                    None => return Err(
-                        format!(
-                            "While generating week {} matchup {}, no such home team ID: {}",
-                            week_index,
-                            matchup_index,
-                            matchup_index
-                        )
-                    ),
+                let team1_index = matchup_index;
+                let team2_index = num_teams - 1 - matchup_index;
+
+                let team1_id = arrangement[team1_index];
+                let team2_id = arrangement[team2_index];
+
+                // Determine home/away based on cycle to balance home games
+                // In cycle 0, team1 (lower index) is home; in cycle 1, team2 is home
+                // This ensures each pair plays once with each team as home
+                let (home_id, away_id) = if cycle.is_multiple_of(2) {
+                    (team1_id, team2_id)
+                } else {
+                    (team2_id, team1_id)
                 };
-                let away_id = match team_ids.get(num_matchups + matchup_index) {
-                    Some(id) => id,
-                    None => return Err(
-                        format!(
-                            "While generating week {} matchup {}, no such away team ID: {}",
-                            week_index,
-                            matchup_index,
-                            num_matchups + matchup_index
-                        )
-                    ),
-                };
-                
+
                 // Get the home & away short names
-                let home_short_name = self.teams.get(home_id).unwrap().short_name();
-                let away_short_name = self.teams.get(away_id).unwrap().short_name();
+                let home_short_name = self.teams.get(&home_id).unwrap().short_name();
+                let away_short_name = self.teams.get(&away_id).unwrap().short_name();
 
                 // Create the matchup and add to the week
-                let matchup = LeagueSeasonMatchup::new(*home_id, *away_id, home_short_name, away_short_name, rng);
+                let matchup = LeagueSeasonMatchup::new(home_id, away_id, home_short_name, away_short_name, rng);
                 week.matchups_mut().push(matchup);
             }
 
             // Add the week to the season
             self.weeks.push(week);
-
-            // Round robin the team IDs vec for the next week of matchups
-            // Alternate home & away each week, "adjusted round robin"
-            // Guarantees each team plays equal number of home and away games
-            team_ids.rotate_right(1); // Round robin, rotate all
-            if week_index % 2 == 0 {
-                team_ids.swap(0, 1); // Round robin, fix 
-            } else {
-                team_ids.swap(num_matchups, num_matchups + 1);
-            }
-            team_ids.rotate_right(num_matchups);
         }
 
         // If desired, shift the weeks of the season
@@ -833,7 +833,6 @@ impl LeagueSeason {
                 self.weeks.shuffle(rng);
             }
         }
-
         Ok(())
     }
 
