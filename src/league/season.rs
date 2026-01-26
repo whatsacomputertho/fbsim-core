@@ -10,6 +10,7 @@ use crate::league::matchup::LeagueTeamRecord;
 use crate::league::season::week::LeagueSeasonWeek;
 use crate::league::season::matchup::{LeagueSeasonMatchup, LeagueSeasonMatchups};
 use crate::league::season::playoffs::LeagueSeasonPlayoffs;
+use crate::league::season::playoffs::picture::PlayoffPicture;
 use crate::game::play::{Game, GameSimulator};
 
 #[cfg(feature = "rocket_okapi")]
@@ -913,6 +914,40 @@ impl LeagueSeason {
         });
 
         standings
+    }
+
+    /// Generate the current playoff picture for the season
+    ///
+    /// ### Arguments
+    /// * `num_playoff_teams` - Number of teams that will make the playoffs
+    ///
+    /// ### Returns
+    /// * `Ok(PlayoffPicture)` - The current playoff picture
+    /// * `Err(String)` - If the season hasn't started or parameters are invalid
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::team::FootballTeam;
+    /// use fbsim_core::league::season::LeagueSeason;
+    /// use fbsim_core::league::season::LeagueSeasonScheduleOptions;
+    ///
+    /// // Create a new season with 4 teams
+    /// let mut my_league_season = LeagueSeason::new();
+    /// my_league_season.add_team(0, FootballTeam::new());
+    /// my_league_season.add_team(1, FootballTeam::new());
+    /// my_league_season.add_team(2, FootballTeam::new());
+    /// my_league_season.add_team(3, FootballTeam::new());
+    ///
+    /// // Generate the season schedule
+    /// let mut rng = rand::thread_rng();
+    /// my_league_season.generate_schedule(LeagueSeasonScheduleOptions::new(), &mut rng);
+    ///
+    /// // Get the playoff picture for a 2-team playoff
+    /// let picture = my_league_season.playoff_picture(2);
+    /// assert!(picture.is_ok());
+    /// ```
+    pub fn playoff_picture(&self, num_playoff_teams: usize) -> Result<playoffs::picture::PlayoffPicture, String> {
+        PlayoffPicture::from_season(self, num_playoff_teams)
     }
 
     /// Determine of a team participated in the playoffs

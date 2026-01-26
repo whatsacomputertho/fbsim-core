@@ -1,3 +1,5 @@
+pub mod picture;
+
 #[cfg(feature = "rocket_okapi")]
 use rocket_okapi::okapi::schemars;
 #[cfg(feature = "rocket_okapi")]
@@ -188,7 +190,7 @@ impl LeagueSeasonPlayoffs {
         if self.started() {
             return Err(String::from("Playoffs have already started, cannot add new team"));
         }
-        
+
         // Calculate the next seed and add the team
         let seed = self.teams.len() + 1;
         self.teams.insert(seed, (team, String::from(name)));

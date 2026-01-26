@@ -2,6 +2,12 @@
 use std::collections::BTreeMap;
 use std::fmt;
 
+#[cfg(feature = "rocket_okapi")]
+use rocket_okapi::okapi::schemars;
+#[cfg(feature = "rocket_okapi")]
+use rocket_okapi::okapi::schemars::JsonSchema;
+use serde::{Serialize, Deserialize};
+
 use crate::game::stat::OffensiveStats;
 use crate::league::season::matchup::LeagueSeasonMatchups;
 
@@ -9,7 +15,8 @@ use crate::league::season::matchup::LeagueSeasonMatchups;
 ///
 /// A 3-tuple of usizes representing the number of wins, losses, and ties
 /// for a given team.  May be for a season or for many seasons.
-#[derive(Clone, Eq, PartialEq, Ord, PartialOrd, Debug)]
+#[cfg_attr(feature = "rocket_okapi", derive(JsonSchema))]
+#[derive(Clone, Eq, PartialEq, Ord, PartialOrd, Debug, Serialize, Deserialize)]
 pub struct LeagueTeamRecord {
     wins: usize,
     losses: usize,
