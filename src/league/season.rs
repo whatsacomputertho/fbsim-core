@@ -1871,7 +1871,7 @@ impl LeagueSeason {
             let short_name = team.short_name();
 
             // Add the team to the playoffs
-            self.playoffs.add_team(*team_id, short_name)?;
+            self.playoffs.add_team(*team_id, short_name, None)?;
         }
 
         // Generate the first round (or wild card round if not a power of 2)
@@ -2023,7 +2023,7 @@ impl LeagueSeason {
                 let team = self.teams.get(&team_id)
                     .ok_or_else(|| format!("Team {} not found", team_id))?;
                 let short_name = team.short_name();
-                self.playoffs.add_team_to_conference(conf_index, team_id, short_name)?;
+                self.playoffs.add_team(team_id, short_name, Some(conf_index))?;
             }
         }
 

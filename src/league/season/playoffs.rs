@@ -13,20 +13,160 @@ use crate::league::matchup::LeagueTeamRecord;
 use crate::league::season::week::LeagueSeasonWeek;
 use crate::league::season::matchup::LeagueSeasonMatchup;
 
+/// # `PlayoffTeam` struct
+///
+/// Represents a team participating in the playoffs
+#[cfg_attr(feature = "rocket_okapi", derive(JsonSchema))]
+#[derive(Clone, Eq, PartialEq, Ord, PartialOrd, Default, Debug, Serialize, Deserialize)]
+pub struct PlayoffTeam {
+    id: usize,
+    name: String,
+    seed: usize,
+    conference: Option<usize>,
+}
+
+impl PlayoffTeam {
+    /// Create a new PlayoffTeam
+    pub fn new(id: usize, name: String, seed: usize, conference: Option<usize>) -> Self {
+        Self { id, name, seed, conference }
+    }
+
+    /// Get the team ID
+    pub fn id(&self) -> usize {
+        self.id
+    }
+
+    /// Get the team name
+    pub fn name(&self) -> &str {
+        &self.name
+    }
+
+    /// Get the team's playoff seed
+    pub fn seed(&self) -> usize {
+        self.seed
+    }
+
+    /// Get the team's conference (if conference-based playoffs)
+    pub fn conference(&self) -> Option<usize> {
+        self.conference
+    }
+}
+
+/// # `PlayoffTeams` struct
+///
+/// A collection of teams participating in the playoffs, organized by conference.
+/// Conference ID 0 is used for non-conference playoffs.
+#[cfg_attr(feature = "rocket_okapi", derive(JsonSchema))]
+#[derive(Clone, Eq, PartialEq, Ord, PartialOrd, Default, Debug, Serialize, Deserialize)]
+pub struct PlayoffTeams {
+    /// conference_id -> team_id -> PlayoffTeam
+    inner: BTreeMap<usize, BTreeMap<usize, PlayoffTeam>>,
+}
+
+impl PlayoffTeams {
+    /// Create a new empty PlayoffTeams collection
+    pub fn new() -> Self {
+        Self { inner: BTreeMap::new() }
+    }
+
+    /// Add a team to the playoffs
+    ///
+    /// Teams are expected to be added in seed order within each conference.
+    /// The seed is automatically calculated based on the number of teams already in that conference.
+    pub fn add(&mut self, team_id: usize, name: &str, conference: usize) -> Result<(), String> {
+        let conference_teams = self.inner.entry(conference).or_default();
+
+        if conference_teams.contains_key(&team_id) {
+            return Err(format!("Team {} is already in conference {}", team_id, conference));
+        }
+
+        let seed = conference_teams.len() + 1;
+        let playoff_team = PlayoffTeam::new(team_id, String::from(name), seed, Some(conference));
+        conference_teams.insert(team_id, playoff_team);
+        Ok(())
+    }
+
+    /// Get a team by ID (searches all conferences)
+    pub fn get(&self, team_id: usize) -> Option<&PlayoffTeam> {
+        for conference_teams in self.inner.values() {
+            if let Some(team) = conference_teams.get(&team_id) {
+                return Some(team);
+            }
+        }
+        None
+    }
+
+    /// Get all teams in a specific conference
+    pub fn get_conference(&self, conference: usize) -> Option<&BTreeMap<usize, PlayoffTeam>> {
+        self.inner.get(&conference)
+    }
+
+    /// Check if a team is in the playoffs
+    pub fn contains(&self, team_id: usize) -> bool {
+        self.get(team_id).is_some()
+    }
+
+    /// Get the total number of teams across all conferences
+    pub fn len(&self) -> usize {
+        self.inner.values().map(|c| c.len()).sum()
+    }
+
+    /// Check if there are no teams
+    pub fn is_empty(&self) -> bool {
+        self.inner.is_empty() || self.inner.values().all(|c| c.is_empty())
+    }
+
+    /// Get the number of conferences
+    pub fn num_conferences(&self) -> usize {
+        self.inner.len()
+    }
+
+    /// Iterate over conference IDs
+    pub fn conferences(&self) -> impl Iterator<Item = &usize> {
+        self.inner.keys()
+    }
+
+    /// Iterate over all teams across all conferences
+    pub fn iter(&self) -> impl Iterator<Item = &PlayoffTeam> {
+        self.inner.values().flat_map(|c| c.values())
+    }
+
+    /// Get teams in a conference sorted by seed
+    pub fn conference_teams_by_seed(&self, conference: usize) -> Vec<&PlayoffTeam> {
+        if let Some(conference_teams) = self.inner.get(&conference) {
+            let mut teams: Vec<&PlayoffTeam> = conference_teams.values().collect();
+            teams.sort_by_key(|t| t.seed());
+            teams
+        } else {
+            Vec::new()
+        }
+    }
+
+    /// Get a team by seed within a specific conference
+    pub fn get_by_seed(&self, conference: usize, seed: usize) -> Option<&PlayoffTeam> {
+        self.inner
+            .get(&conference)
+            .and_then(|conf_teams| conf_teams.values().find(|t| t.seed() == seed))
+    }
+}
+
 /// # `LeagueSeasonPlayoffs` struct
 ///
 /// A `LeagueSeasonPlayoffs` represents football season playoffs
 #[cfg_attr(feature = "rocket_okapi", derive(JsonSchema))]
 #[derive(Clone, Eq, PartialEq, Ord, PartialOrd, Default, Debug, Serialize, Deserialize)]
 pub struct LeagueSeasonPlayoffs {
-    teams: BTreeMap<usize, (usize, String)>,
+    /// Teams participating in the playoffs
+    teams: PlayoffTeams,
+    /// Playoff rounds (used for non-conference playoffs)
     rounds: Vec<LeagueSeasonWeek>,
-    /// Optional conference bracket tracking: conference_index -> Vec<(seed, team_id, name)>
+    /// Conference playoff rounds: conference_index -> playoff rounds for that conference
     #[serde(default)]
-    conference_brackets: BTreeMap<usize, Vec<(usize, usize, String)>>,
-    /// Whether this is a conference-based playoff
+    conference_rounds: BTreeMap<usize, Vec<LeagueSeasonWeek>>,
+    /// Winners bracket for championship game(s) between conference champions
+    /// Contains the championship game for 2-conference setup, or a tournament for >2 conferences
     #[serde(default)]
-    is_conference_playoff: bool,
+    winners_bracket: Vec<LeagueSeasonWeek>,
 }
 
 impl LeagueSeasonPlayoffs {
@@ -117,12 +257,7 @@ impl LeagueSeasonPlayoffs {
     /// assert!(!my_playoffs.team_in_playoffs(0));
     /// ```
     pub fn team_in_playoffs(&self, team_id: usize) -> bool {
-        for (id, _) in self.teams.values() {
-            if *id == team_id {
-                return true;
-            }
-        }
-        false
+        self.teams.contains(team_id)
     }
 
     /// Find the seed for a given team ID
@@ -133,7 +268,7 @@ impl LeagueSeasonPlayoffs {
     ///
     /// // Create playoffs and add a team
     /// let mut my_playoffs = LeagueSeasonPlayoffs::new();
-    /// let _ = my_playoffs.add_team(0, "ME");
+    /// let _ = my_playoffs.add_team(0, "ME", None);
     ///
     /// // Get that team's seed
     /// let seed = my_playoffs.team_seed(0);
@@ -141,12 +276,10 @@ impl LeagueSeasonPlayoffs {
     /// assert!(seed.unwrap() == 1);
     /// ```
     pub fn team_seed(&self, team_id: usize) -> Result<usize, String> {
-        for (seed, (id, _)) in &self.teams {
-            if *id == team_id {
-                return Ok(*seed);
-            }
-        }
-        Err(format!("Team {} not in playoffs", team_id))
+        self.teams
+            .get(team_id)
+            .map(|team| team.seed())
+            .ok_or_else(|| format!("Team {} not in playoffs", team_id))
     }
 
     /// Determine whether the playoffs are complete
@@ -183,24 +316,31 @@ impl LeagueSeasonPlayoffs {
 
     /// Add a team to the playoffs
     ///
+    /// If `conference` is `None`, the team is added to the default conference (0).
+    /// Teams should be added in seed order within each conference.
+    ///
     /// ### Example
     /// ```
     /// use fbsim_core::league::season::playoffs::LeagueSeasonPlayoffs;
     ///
     /// let mut my_playoffs = LeagueSeasonPlayoffs::new();
-    /// let res = my_playoffs.add_team(0, "ME");
+    /// // Non-conference playoff
+    /// let res = my_playoffs.add_team(0, "ME", None);
     /// assert!(res.is_ok());
+    ///
+    /// // Conference playoff
+    /// let mut conf_playoffs = LeagueSeasonPlayoffs::new();
+    /// let _ = conf_playoffs.add_team(0, "YOU", Some(0));
+    /// let _ = conf_playoffs.add_team(1, "THEM", Some(1));
     /// ```
-    pub fn add_team(&mut self, team: usize, name: &str) -> Result<(), String> {
+    pub fn add_team(&mut self, team_id: usize, name: &str, conference: Option<usize>) -> Result<(), String> {
         // Ensure the playoffs have not already started
         if self.started() {
             return Err(String::from("Playoffs have already started, cannot add new team"));
         }
 
-        // Calculate the next seed and add the team
-        let seed = self.teams.len() + 1;
-        self.teams.insert(seed, (team, String::from(name)));
-        Ok(())
+        let conf = conference.unwrap_or(0);
+        self.teams.add(team_id, name, conf)
     }
 
     /// Get the number of teams that will appear in the first round
@@ -211,9 +351,9 @@ impl LeagueSeasonPlayoffs {
     ///
     /// // Instantiate playoffs and add teams
     /// let mut my_playoffs = LeagueSeasonPlayoffs::new();
-    /// let _ = my_playoffs.add_team(0, "ME");
-    /// let _ = my_playoffs.add_team(1, "YOU");
-    /// let _ = my_playoffs.add_team(2, "THEM");
+    /// let _ = my_playoffs.add_team(0, "ME", None);
+    /// let _ = my_playoffs.add_team(1, "YOU", None);
+    /// let _ = my_playoffs.add_team(2, "THEM", None);
     ///
     /// // Get the number of first round teams
     /// let first_round_teams = my_playoffs.first_round_teams();
@@ -248,9 +388,9 @@ impl LeagueSeasonPlayoffs {
     ///
     /// // Instantiate playoffs and add teams
     /// let mut my_playoffs = LeagueSeasonPlayoffs::new();
-    /// let _ = my_playoffs.add_team(0, "ME");
-    /// let _ = my_playoffs.add_team(1, "YOU");
-    /// let _ = my_playoffs.add_team(2, "THEM");
+    /// let _ = my_playoffs.add_team(0, "ME", None);
+    /// let _ = my_playoffs.add_team(1, "YOU", None);
+    /// let _ = my_playoffs.add_team(2, "THEM", None);
     ///
     /// // Get the number of wild card teams
     /// let wild_cards = my_playoffs.wild_cards();
@@ -274,9 +414,9 @@ impl LeagueSeasonPlayoffs {
     ///
     /// // Instantiate playoffs and add teams
     /// let mut my_playoffs = LeagueSeasonPlayoffs::new();
-    /// let _ = my_playoffs.add_team(0, "ME");
-    /// let _ = my_playoffs.add_team(1, "YOU");
-    /// let _ = my_playoffs.add_team(2, "THEM");
+    /// let _ = my_playoffs.add_team(0, "ME", None);
+    /// let _ = my_playoffs.add_team(1, "YOU", None);
+    /// let _ = my_playoffs.add_team(2, "THEM", None);
     ///
     /// // Get the number of byes
     /// let byes = my_playoffs.byes();
@@ -325,23 +465,25 @@ impl LeagueSeasonPlayoffs {
             String::from("Failed to calculate wild card matchups")
         )?;
 
-        // Match up the wild card teams against one another
+        // Match up the wild card teams against one another (using default conference 0)
         let mut week = LeagueSeasonWeek::new();
         for i in 0..wild_card_matchups {
-            // Get the home and away IDs
+            // Get the home and away teams by seed
             let home_seed = byes + i + 1;
             let away_seed = num_teams - i;
-            let (home_id, home_name) = match self.teams.get(&home_seed) {
-                Some(t) => t,
-                None => return Err(format!("No team found with seed {}", home_seed))
-            };
-            let (away_id, away_name) = match self.teams.get(&away_seed) {
-                Some(t) => t,
-                None => return Err(format!("No team found with seed {}", away_seed))
-            };
+            let home_team = self.teams.get_by_seed(0, home_seed)
+                .ok_or_else(|| format!("No team found with seed {}", home_seed))?;
+            let away_team = self.teams.get_by_seed(0, away_seed)
+                .ok_or_else(|| format!("No team found with seed {}", away_seed))?;
 
             // Create the matchup and add to the week
-            let matchup = LeagueSeasonMatchup::new(*home_id, *away_id, home_name, away_name, rng);
+            let matchup = LeagueSeasonMatchup::new(
+                home_team.id(),
+                away_team.id(),
+                home_team.name(),
+                away_team.name(),
+                rng
+            );
             week.matchups_mut().push(matchup);
         }
 
@@ -370,26 +512,28 @@ impl LeagueSeasonPlayoffs {
                 self.rounds = Vec::new();
             }
 
-            // Match up the first round teams against one another
+            // Match up the first round teams against one another (using default conference 0)
             let first_round_matchups = num_teams.checked_div(2).ok_or(
                 String::from("Failed to calculate first round matchups")
             )?;
             let mut week = LeagueSeasonWeek::new();
             for i in 0..first_round_matchups {
-                // Get the home and away IDs
+                // Get the home and away teams by seed
                 let home_seed = i + 1;
                 let away_seed = num_teams - i;
-                let (home_id, home_name) = match self.teams.get(&home_seed) {
-                    Some(t) => t,
-                    None => return Err(format!("No team found with seed {}", home_seed))
-                };
-                let (away_id, away_name) = match self.teams.get(&away_seed) {
-                    Some(t) => t,
-                    None => return Err(format!("No team found with seed {}", away_seed))
-                };
+                let home_team = self.teams.get_by_seed(0, home_seed)
+                    .ok_or_else(|| format!("No team found with seed {}", home_seed))?;
+                let away_team = self.teams.get_by_seed(0, away_seed)
+                    .ok_or_else(|| format!("No team found with seed {}", away_seed))?;
 
                 // Create the matchup and add to the week
-                let matchup = LeagueSeasonMatchup::new(*home_id, *away_id, home_name, away_name, rng);
+                let matchup = LeagueSeasonMatchup::new(
+                    home_team.id(),
+                    away_team.id(),
+                    home_team.name(),
+                    away_team.name(),
+                    rng
+                );
                 week.matchups_mut().push(matchup);
             }
 
@@ -417,7 +561,7 @@ impl LeagueSeasonPlayoffs {
             let num_winners = winner_seeds.len();
             let byes = self.byes()?;
 
-            // Populate the week with matchups
+            // Populate the week with matchups (using default conference 0)
             let mut week = LeagueSeasonWeek::new();
             if num_winners >= byes {
                 // Match up winners of middle-ranked matchups with byes
@@ -428,17 +572,19 @@ impl LeagueSeasonPlayoffs {
                         Some(s) => *s,
                         None => return Err(format!("No winner found at index {}", winner_index))
                     };
-                    let (home_id, home_name) = match self.teams.get(&bye_seed) {
-                        Some(t) => t,
-                        None => return Err(format!("No team found with seed {}", bye_seed))
-                    };
-                    let (away_id, away_name) = match self.teams.get(&winner_seed) {
-                        Some(t) => t,
-                        None => return Err(format!("No team found with seed {}", winner_seed))
-                    };
+                    let home_team = self.teams.get_by_seed(0, bye_seed)
+                        .ok_or_else(|| format!("No team found with seed {}", bye_seed))?;
+                    let away_team = self.teams.get_by_seed(0, winner_seed)
+                        .ok_or_else(|| format!("No team found with seed {}", winner_seed))?;
 
                     // Create the matchup and add to the week
-                    let matchup = LeagueSeasonMatchup::new(*home_id, *away_id, home_name, away_name, rng);
+                    let matchup = LeagueSeasonMatchup::new(
+                        home_team.id(),
+                        away_team.id(),
+                        home_team.name(),
+                        away_team.name(),
+                        rng
+                    );
                     week.matchups_mut().push(matchup);
                 }
 
@@ -458,31 +604,24 @@ impl LeagueSeasonPlayoffs {
                         None => return Err(format!("No winner found at index {}", t2_index))
                     };
                     // Lower seed gets home field advantage
-                    let (home_id, home_name) = if t1_seed < t2_seed {
-                        match self.teams.get(&t1_seed) {
-                            Some(t) => t,
-                            None => return Err(format!("No team found with seed {}", t1_seed))
-                        }
+                    let (home_seed, away_seed) = if t1_seed < t2_seed {
+                        (t1_seed, t2_seed)
                     } else {
-                        match self.teams.get(&t2_seed) {
-                            Some(t) => t,
-                            None => return Err(format!("No team found with seed {}", t2_seed))
-                        }
+                        (t2_seed, t1_seed)
                     };
-                    let (away_id, away_name) = if t1_seed < t2_seed {
-                        match self.teams.get(&t2_seed) {
-                            Some(t) => t,
-                            None => return Err(format!("No team found with seed {}", t2_seed))
-                        }
-                    } else {
-                        match self.teams.get(&t1_seed) {
-                            Some(t) => t,
-                            None => return Err(format!("No team found with seed {}", t1_seed))
-                        }
-                    };
+                    let home_team = self.teams.get_by_seed(0, home_seed)
+                        .ok_or_else(|| format!("No team found with seed {}", home_seed))?;
+                    let away_team = self.teams.get_by_seed(0, away_seed)
+                        .ok_or_else(|| format!("No team found with seed {}", away_seed))?;
 
                     // Create the matchup and add to the week
-                    let matchup = LeagueSeasonMatchup::new(*home_id, *away_id, home_name, away_name, rng);
+                    let matchup = LeagueSeasonMatchup::new(
+                        home_team.id(),
+                        away_team.id(),
+                        home_team.name(),
+                        away_team.name(),
+                        rng
+                    );
                     week.matchups_mut().push(matchup);
                 }
             } else {
@@ -494,17 +633,19 @@ impl LeagueSeasonPlayoffs {
                         Some(s) => *s,
                         None => return Err(format!("No winner found at index {}", winner_index))
                     };
-                    let (home_id, home_name) = match self.teams.get(&bye_seed) {
-                        Some(t) => t,
-                        None => return Err(format!("No team found with seed {}", bye_seed))
-                    };
-                    let (away_id, away_name) = match self.teams.get(&winner_seed) {
-                        Some(t) => t,
-                        None => return Err(format!("No team found with seed {}", winner_seed))
-                    };
+                    let home_team = self.teams.get_by_seed(0, bye_seed)
+                        .ok_or_else(|| format!("No team found with seed {}", bye_seed))?;
+                    let away_team = self.teams.get_by_seed(0, winner_seed)
+                        .ok_or_else(|| format!("No team found with seed {}", winner_seed))?;
 
                     // Create the matchup and add to the week
-                    let matchup = LeagueSeasonMatchup::new(*home_id, *away_id, home_name, away_name, rng);
+                    let matchup = LeagueSeasonMatchup::new(
+                        home_team.id(),
+                        away_team.id(),
+                        home_team.name(),
+                        away_team.name(),
+                        rng
+                    );
                     week.matchups_mut().push(matchup);
                 }
 
@@ -516,17 +657,19 @@ impl LeagueSeasonPlayoffs {
                 for i in 0..diff_winner_matchups {
                     let t1_seed = num_winners + i + 1;
                     let t2_seed = byes - i;
-                    let (home_id, home_name) = match self.teams.get(&t1_seed) {
-                            Some(t) => t,
-                            None => return Err(format!("No team found with seed {}", t1_seed))
-                        };
-                    let (away_id, away_name) = match self.teams.get(&t2_seed) {
-                        Some(t) => t,
-                        None => return Err(format!("No team found with seed {}", t2_seed))
-                    };
+                    let home_team = self.teams.get_by_seed(0, t1_seed)
+                        .ok_or_else(|| format!("No team found with seed {}", t1_seed))?;
+                    let away_team = self.teams.get_by_seed(0, t2_seed)
+                        .ok_or_else(|| format!("No team found with seed {}", t2_seed))?;
 
                     // Create the matchup and add to the week
-                    let matchup = LeagueSeasonMatchup::new(*home_id, *away_id, home_name, away_name, rng);
+                    let matchup = LeagueSeasonMatchup::new(
+                        home_team.id(),
+                        away_team.id(),
+                        home_team.name(),
+                        away_team.name(),
+                        rng
+                    );
                     week.matchups_mut().push(matchup);
                 }
             }
@@ -543,7 +686,7 @@ impl LeagueSeasonPlayoffs {
     ///
     /// // Create playoffs and add a team
     /// let mut my_playoffs = LeagueSeasonPlayoffs::new();
-    /// let _ = my_playoffs.add_team(0, "ME");
+    /// let _ = my_playoffs.add_team(0, "ME", None);
     ///
     /// // Check if that team is in the championship
     /// let in_championship = my_playoffs.in_championship(0);
@@ -613,7 +756,7 @@ impl LeagueSeasonPlayoffs {
     ///
     /// // Create playoffs and add a team
     /// let mut my_playoffs = LeagueSeasonPlayoffs::new();
-    /// let _ = my_playoffs.add_team(0, "ME");
+    /// let _ = my_playoffs.add_team(0, "ME", None);
     ///
     /// // Get that team's record
     /// let record = my_playoffs.record(0);
@@ -656,9 +799,9 @@ impl LeagueSeasonPlayoffs {
     ///
     /// // Instantiate playoffs and add teams
     /// let mut my_playoffs = LeagueSeasonPlayoffs::new();
-    /// let _ = my_playoffs.add_team(0, "ME");
-    /// let _ = my_playoffs.add_team(1, "YOU");
-    /// let _ = my_playoffs.add_team(2, "THEM");
+    /// let _ = my_playoffs.add_team(0, "ME", None);
+    /// let _ = my_playoffs.add_team(1, "YOU", None);
+    /// let _ = my_playoffs.add_team(2, "THEM", None);
     ///
     /// // Generate the next round of the playoffs
     /// let mut rng = rand::thread_rng();
@@ -701,7 +844,7 @@ impl LeagueSeasonPlayoffs {
                     String::from("Failed to calculate next round matchups")
                 )?;
 
-                // Match up winners of previous round against each other
+                // Match up winners of previous round against each other (using default conference 0)
                 let mut week = LeagueSeasonWeek::new();
                 for i in 0..next_round_matchups {
                     let t1_index = i * 2;
@@ -715,31 +858,24 @@ impl LeagueSeasonPlayoffs {
                     };
 
                     // Get the home and away teams (lower seed gets home field)
-                    let (home_id, home_name) = if t1_seed < t2_seed {
-                        match self.teams.get(&t1_seed) {
-                            Some(t) => t,
-                            None => return Err(format!("No team found with seed {}", t1_seed))
-                        }
+                    let (home_seed, away_seed) = if t1_seed < t2_seed {
+                        (t1_seed, t2_seed)
                     } else {
-                        match self.teams.get(&t2_seed) {
-                            Some(t) => t,
-                            None => return Err(format!("No team found with seed {}", t2_seed))
-                        }
+                        (t2_seed, t1_seed)
                     };
-                    let (away_id, away_name) = if t1_seed < t2_seed {
-                        match self.teams.get(&t2_seed) {
-                            Some(t) => t,
-                            None => return Err(format!("No team found with seed {}", t2_seed))
-                        }
-                    } else {
-                        match self.teams.get(&t1_seed) {
-                            Some(t) => t,
-                            None => return Err(format!("No team found with seed {}", t1_seed))
-                        }
-                    };
+                    let home_team = self.teams.get_by_seed(0, home_seed)
+                        .ok_or_else(|| format!("No team found with seed {}", home_seed))?;
+                    let away_team = self.teams.get_by_seed(0, away_seed)
+                        .ok_or_else(|| format!("No team found with seed {}", away_seed))?;
 
                     // Create the matchup and add to the week
-                    let matchup = LeagueSeasonMatchup::new(*home_id, *away_id, home_name, away_name, rng);
+                    let matchup = LeagueSeasonMatchup::new(
+                        home_team.id(),
+                        away_team.id(),
+                        home_team.name(),
+                        away_team.name(),
+                        rng
+                    );
                     week.matchups_mut().push(matchup);
                 }
                 self.rounds.push(week);
@@ -750,6 +886,8 @@ impl LeagueSeasonPlayoffs {
 
     /// Check if this is a conference-based playoff
     ///
+    /// Returns true if teams are spread across multiple conferences.
+    ///
     /// ### Example
     /// ```
     /// use fbsim_core::league::season::playoffs::LeagueSeasonPlayoffs;
@@ -758,61 +896,7 @@ impl LeagueSeasonPlayoffs {
     /// assert!(!my_playoffs.is_conference_playoff());
     /// ```
     pub fn is_conference_playoff(&self) -> bool {
-        self.is_conference_playoff
-    }
-
-    /// Get the conference brackets
-    ///
-    /// ### Example
-    /// ```
-    /// use fbsim_core::league::season::playoffs::LeagueSeasonPlayoffs;
-    ///
-    /// let my_playoffs = LeagueSeasonPlayoffs::new();
-    /// let brackets = my_playoffs.conference_brackets();
-    /// assert!(brackets.is_empty());
-    /// ```
-    pub fn conference_brackets(&self) -> &BTreeMap<usize, Vec<(usize, usize, String)>> {
-        &self.conference_brackets
-    }
-
-    /// Add a team to a specific conference bracket
-    ///
-    /// ### Arguments
-    /// * `conf_index` - The conference index
-    /// * `team_id` - The team ID
-    /// * `name` - The team name
-    ///
-    /// ### Example
-    /// ```
-    /// use fbsim_core::league::season::playoffs::LeagueSeasonPlayoffs;
-    ///
-    /// let mut my_playoffs = LeagueSeasonPlayoffs::new();
-    /// let res = my_playoffs.add_team_to_conference(0, 1, "Team 1");
-    /// assert!(res.is_ok());
-    /// ```
-    pub fn add_team_to_conference(&mut self, conf_index: usize, team_id: usize, name: &str) -> Result<(), String> {
-        // Ensure playoffs haven't started
-        if self.started() {
-            return Err(String::from("Playoffs have already started, cannot add new team"));
-        }
-
-        // Mark as conference playoff
-        self.is_conference_playoff = true;
-
-        // Get or create the conference bracket
-        let bracket = self.conference_brackets.entry(conf_index).or_default();
-
-        // Calculate the seed within this conference
-        let seed = bracket.len() + 1;
-
-        // Add to conference bracket
-        bracket.push((seed, team_id, name.to_string()));
-
-        // Also add to main teams map with a composite seed (for compatibility)
-        // Composite seed: conf_index * 100 + seed (allows up to 99 teams per conference)
-        let composite_seed = conf_index * 100 + seed;
-        self.teams.insert(composite_seed, (team_id, name.to_string()));
-        Ok(())
+        self.teams.num_conferences() > 1
     }
 
     /// Get the number of conferences in the playoffs
@@ -825,23 +909,22 @@ impl LeagueSeasonPlayoffs {
     /// assert_eq!(my_playoffs.num_conferences(), 0);
     /// ```
     pub fn num_conferences(&self) -> usize {
-        self.conference_brackets.len()
+        self.teams.num_conferences()
     }
 
-    /// Get teams in a specific conference bracket
+    /// Get teams in a specific conference, sorted by seed
     ///
     /// ### Example
     /// ```
     /// use fbsim_core::league::season::playoffs::LeagueSeasonPlayoffs;
     ///
     /// let mut my_playoffs = LeagueSeasonPlayoffs::new();
-    /// let _ = my_playoffs.add_team_to_conference(0, 1, "Team 1");
+    /// let _ = my_playoffs.add_team(1, "ME", Some(0));
     /// let teams = my_playoffs.conference_teams(0);
-    /// assert!(teams.is_some());
-    /// assert_eq!(teams.unwrap().len(), 1);
+    /// assert_eq!(teams.len(), 1);
     /// ```
-    pub fn conference_teams(&self, conf_index: usize) -> Option<&Vec<(usize, usize, String)>> {
-        self.conference_brackets.get(&conf_index)
+    pub fn conference_teams(&self, conf_index: usize) -> Vec<&PlayoffTeam> {
+        self.teams.conference_teams_by_seed(conf_index)
     }
 
     /// Generate the next round for conference-based playoffs
@@ -854,39 +937,42 @@ impl LeagueSeasonPlayoffs {
     /// use fbsim_core::league::season::playoffs::LeagueSeasonPlayoffs;
     ///
     /// let mut my_playoffs = LeagueSeasonPlayoffs::new();
-    /// let _ = my_playoffs.add_team_to_conference(0, 0, "KC");
-    /// let _ = my_playoffs.add_team_to_conference(0, 1, "BUF");
-    /// let _ = my_playoffs.add_team_to_conference(1, 2, "PHI");
-    /// let _ = my_playoffs.add_team_to_conference(1, 3, "DAL");
+    /// let _ = my_playoffs.add_team(0, "ME", Some(0));
+    /// let _ = my_playoffs.add_team(1, "YOU", Some(0));
+    /// let _ = my_playoffs.add_team(2, "THEM", Some(1));
+    /// let _ = my_playoffs.add_team(3, "US", Some(1));
     ///
     /// let mut rng = rand::thread_rng();
     /// let res = my_playoffs.gen_next_conference_round(&mut rng);
     /// assert!(res.is_ok());
     /// ```
     pub fn gen_next_conference_round(&mut self, rng: &mut impl Rng) -> Result<(), String> {
-        if !self.is_conference_playoff {
+        if !self.is_conference_playoff() {
             return Err("Not a conference-based playoff. Use gen_next_round instead.".to_string());
         }
 
         // Ensure we have at least 2 conferences
-        if self.conference_brackets.len() < 2 {
+        if self.teams.num_conferences() < 2 {
             return Err("Conference playoffs require at least 2 conferences".to_string());
         }
 
         // Check if this is the championship round (one team remaining per conference)
         let conference_winners = self.get_conference_winners();
-        if conference_winners.len() == self.conference_brackets.len()
+        if conference_winners.len() == self.teams.num_conferences()
             && conference_winners.iter().all(|(_, winner)| winner.is_some())
         {
             return self.gen_championship_round(rng);
         }
 
+        // Collect conference indices first to avoid borrow issues
+        let conf_indices: Vec<usize> = self.teams.conferences().copied().collect();
+
         // Generate next round for each conference separately
         let mut week = LeagueSeasonWeek::new();
 
-        for conf_index in self.conference_brackets.keys() {
+        for conf_index in conf_indices {
             // Determine which teams are still active in this conference
-            let active_teams = self.get_active_conference_teams(*conf_index)?;
+            let active_teams = self.get_active_conference_teams(conf_index)?;
 
             if active_teams.len() <= 1 {
                 // Conference bracket is complete
@@ -894,7 +980,7 @@ impl LeagueSeasonPlayoffs {
             }
 
             // Generate matchups for this conference
-            let matchups = self.generate_conference_matchups(*conf_index, &active_teams, rng)?;
+            let matchups = self.generate_conference_matchups(&active_teams, rng)?;
             for matchup in matchups {
                 week.matchups_mut().push(matchup);
             }
@@ -904,23 +990,33 @@ impl LeagueSeasonPlayoffs {
             return Err("No matchups to generate".to_string());
         }
 
-        self.rounds.push(week);
+        self.conference_rounds
+            .entry(0) // TODO: Track rounds per conference properly
+            .or_default()
+            .push(week);
         Ok(())
     }
 
     /// Get teams still active in a conference bracket
-    fn get_active_conference_teams(&self, conf_index: usize) -> Result<Vec<(usize, usize, String)>, String> {
-        let bracket = self.conference_brackets.get(&conf_index)
-            .ok_or_else(|| format!("Conference {} not found", conf_index))?;
+    fn get_active_conference_teams(&self, conf_index: usize) -> Result<Vec<&PlayoffTeam>, String> {
+        let conference_teams = self.teams.conference_teams_by_seed(conf_index);
+        if conference_teams.is_empty() {
+            return Err(format!("Conference {} not found", conf_index));
+        }
 
-        if self.rounds.is_empty() {
+        // Check all rounds (both regular and conference rounds) for eliminated teams
+        let all_rounds: Vec<&LeagueSeasonWeek> = self.rounds.iter()
+            .chain(self.conference_rounds.values().flatten())
+            .collect();
+
+        if all_rounds.is_empty() {
             // No rounds played yet, all teams active
-            return Ok(bracket.clone());
+            return Ok(conference_teams);
         }
 
         // Find teams that have lost in previous rounds
         let mut eliminated: std::collections::HashSet<usize> = std::collections::HashSet::new();
-        for round in &self.rounds {
+        for round in all_rounds {
             for matchup in round.matchups() {
                 if matchup.context().game_over() {
                     if let Some(winner_id) = matchup.winner() {
@@ -937,10 +1033,9 @@ impl LeagueSeasonPlayoffs {
         }
 
         // Return active teams (not eliminated)
-        let active: Vec<(usize, usize, String)> = bracket
-            .iter()
-            .filter(|(_, team_id, _)| !eliminated.contains(team_id))
-            .cloned()
+        let active: Vec<&PlayoffTeam> = conference_teams
+            .into_iter()
+            .filter(|team| !eliminated.contains(&team.id()))
             .collect();
         Ok(active)
     }
@@ -948,8 +1043,7 @@ impl LeagueSeasonPlayoffs {
     /// Generate matchups for a conference round
     fn generate_conference_matchups(
         &self,
-        _conf_index: usize,
-        active_teams: &[(usize, usize, String)],
+        active_teams: &[&PlayoffTeam],
         rng: &mut impl Rng,
     ) -> Result<Vec<LeagueSeasonMatchup>, String> {
         let num_teams = active_teams.len();
@@ -960,28 +1054,27 @@ impl LeagueSeasonPlayoffs {
         let num_matchups = num_teams / 2;
         let mut matchups = Vec::new();
 
-        // Sort by seed (first element of tuple)
-        let mut sorted_teams = active_teams.to_vec();
-        sorted_teams.sort_by_key(|(seed, _, _)| *seed);
+        // Sort by seed
+        let mut sorted_teams: Vec<&PlayoffTeam> = active_teams.to_vec();
+        sorted_teams.sort_by_key(|t| t.seed());
 
         // Pair highest seed with lowest seed
         for i in 0..num_matchups {
-            let (home_seed, home_id, home_name) = &sorted_teams[i];
-            let (away_seed, away_id, away_name) = &sorted_teams[num_teams - 1 - i];
+            let home_team = sorted_teams[i];
+            let away_team = sorted_teams[num_teams - 1 - i];
 
             // Lower seed gets home field
-            let (final_home_id, final_home_name, final_away_id, final_away_name) =
-                if home_seed < away_seed {
-                    (*home_id, home_name.as_str(), *away_id, away_name.as_str())
-                } else {
-                    (*away_id, away_name.as_str(), *home_id, home_name.as_str())
-                };
+            let (final_home, final_away) = if home_team.seed() < away_team.seed() {
+                (home_team, away_team)
+            } else {
+                (away_team, home_team)
+            };
 
             let matchup = LeagueSeasonMatchup::new(
-                final_home_id,
-                final_away_id,
-                final_home_name,
-                final_away_name,
+                final_home.id(),
+                final_away.id(),
+                final_home.name(),
+                final_away.name(),
                 rng,
             );
             matchups.push(matchup);
@@ -990,13 +1083,12 @@ impl LeagueSeasonPlayoffs {
     }
 
     /// Get the conference winners (if determined)
-    fn get_conference_winners(&self) -> Vec<(usize, Option<(usize, String)>)> {
+    fn get_conference_winners(&self) -> Vec<(usize, Option<&PlayoffTeam>)> {
         let mut winners = Vec::new();
-        for conf_index in self.conference_brackets.keys() {
+        for conf_index in self.teams.conferences() {
             match self.get_active_conference_teams(*conf_index) {
                 Ok(active) if active.len() == 1 => {
-                    let (_, team_id, name) = &active[0];
-                    winners.push((*conf_index, Some((*team_id, name.clone()))));
+                    winners.push((*conf_index, Some(active[0])));
                 }
                 _ => {
                     winners.push((*conf_index, None));
@@ -1013,36 +1105,56 @@ impl LeagueSeasonPlayoffs {
         // Collect actual winners
         let mut final_teams: Vec<(usize, usize, String)> = Vec::new();
         for (conf_index, winner) in winners {
-            if let Some((team_id, name)) = winner {
-                final_teams.push((conf_index, team_id, name));
+            if let Some(team) = winner {
+                final_teams.push((conf_index, team.id(), team.name().to_string()));
             }
         }
 
-        if final_teams.len() != 2 {
+        if final_teams.len() < 2 {
             return Err(format!(
-                "Championship requires exactly 2 conference winners, got {}",
+                "Championship requires at least 2 conference winners, got {}",
                 final_teams.len()
             ));
         }
 
-        // Create championship matchup
-        // Conference with lower index gets home field (or could be neutral)
+        // For 2 conferences, create a single championship game
+        // For >2 conferences, create a winners bracket tournament
         let mut week = LeagueSeasonWeek::new();
 
-        final_teams.sort_by_key(|(conf_index, _, _)| *conf_index);
-        let (_, home_id, home_name) = &final_teams[0];
-        let (_, away_id, away_name) = &final_teams[1];
+        if final_teams.len() == 2 {
+            // Standard 2-conference championship
+            final_teams.sort_by_key(|(conf_index, _, _)| *conf_index);
+            let (_, home_id, home_name) = &final_teams[0];
+            let (_, away_id, away_name) = &final_teams[1];
 
-        let matchup = LeagueSeasonMatchup::new(
-            *home_id,
-            *away_id,
-            home_name,
-            away_name,
-            rng,
-        );
-        week.matchups_mut().push(matchup);
+            let matchup = LeagueSeasonMatchup::new(
+                *home_id,
+                *away_id,
+                home_name,
+                away_name,
+                rng,
+            );
+            week.matchups_mut().push(matchup);
+            self.winners_bracket.push(week);
+        } else {
+            // Multi-conference tournament: pair up winners
+            final_teams.sort_by_key(|(conf_index, _, _)| *conf_index);
+            let num_matchups = final_teams.len() / 2;
+            for i in 0..num_matchups {
+                let (_, home_id, home_name) = &final_teams[i];
+                let (_, away_id, away_name) = &final_teams[final_teams.len() - 1 - i];
 
-        self.rounds.push(week);
+                let matchup = LeagueSeasonMatchup::new(
+                    *home_id,
+                    *away_id,
+                    home_name,
+                    away_name,
+                    rng,
+                );
+                week.matchups_mut().push(matchup);
+            }
+            self.winners_bracket.push(week);
+        }
         Ok(())
     }
 
@@ -1058,9 +1170,19 @@ impl LeagueSeasonPlayoffs {
     pub fn conference_champion(&self, conf_index: usize) -> Option<usize> {
         let active = self.get_active_conference_teams(conf_index).ok()?;
         if active.len() == 1 {
-            Some(active[0].1)
+            Some(active[0].id())
         } else {
             None
         }
+    }
+
+    /// Borrow the conference rounds
+    pub fn conference_rounds(&self) -> &BTreeMap<usize, Vec<LeagueSeasonWeek>> {
+        &self.conference_rounds
+    }
+
+    /// Borrow the winners bracket
+    pub fn winners_bracket(&self) -> &Vec<LeagueSeasonWeek> {
+        &self.winners_bracket
     }
 }
