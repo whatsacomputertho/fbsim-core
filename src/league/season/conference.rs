@@ -1,7 +1,3 @@
-//! League conference and division structures for organizing teams
-
-use std::collections::BTreeMap;
-
 #[cfg(feature = "rocket_okapi")]
 use rocket_okapi::okapi::schemars;
 #[cfg(feature = "rocket_okapi")]
@@ -172,7 +168,7 @@ impl LeagueDivision {
 #[derive(Clone, Eq, PartialEq, Ord, PartialOrd, Debug, Serialize, Deserialize)]
 pub struct LeagueConference {
     name: String,
-    divisions: BTreeMap<usize, LeagueDivision>,
+    divisions: Vec<LeagueDivision>,
 }
 
 impl Default for LeagueConference {
@@ -187,7 +183,7 @@ impl Default for LeagueConference {
     fn default() -> Self {
         LeagueConference {
             name: String::new(),
-            divisions: BTreeMap::new(),
+            divisions: Vec::new(),
         }
     }
 }
@@ -216,7 +212,7 @@ impl LeagueConference {
     pub fn with_name(name: &str) -> LeagueConference {
         LeagueConference {
             name: name.to_string(),
-            divisions: BTreeMap::new(),
+            divisions: Vec::new(),
         }
     }
 
@@ -255,7 +251,7 @@ impl LeagueConference {
     /// let conference = LeagueConference::new();
     /// let divisions = conference.divisions();
     /// ```
-    pub fn divisions(&self) -> &BTreeMap<usize, LeagueDivision> {
+    pub fn divisions(&self) -> &Vec<LeagueDivision> {
         &self.divisions
     }
 
@@ -268,7 +264,7 @@ impl LeagueConference {
     /// let mut conference = LeagueConference::new();
     /// let divisions = conference.divisions_mut();
     /// ```
-    pub fn divisions_mut(&mut self) -> &mut BTreeMap<usize, LeagueDivision> {
+    pub fn divisions_mut(&mut self) -> &mut Vec<LeagueDivision> {
         &mut self.divisions
     }
 
@@ -280,10 +276,10 @@ impl LeagueConference {
     ///
     /// let mut conference = LeagueConference::new();
     /// let division = LeagueDivision::with_name("East");
-    /// conference.add_division(0, division);
+    /// conference.add_division(division);
     /// ```
-    pub fn add_division(&mut self, id: usize, division: LeagueDivision) {
-        self.divisions.insert(id, division);
+    pub fn add_division(&mut self, division: LeagueDivision) {
+        self.divisions.push(division);
     }
 
     /// Get a division by ID
@@ -293,12 +289,12 @@ impl LeagueConference {
     /// use fbsim_core::league::season::conference::{LeagueConference, LeagueDivision};
     ///
     /// let mut conference = LeagueConference::new();
-    /// conference.add_division(0, LeagueDivision::with_name("East"));
+    /// conference.add_division(LeagueDivision::with_name("East"));
     /// let division = conference.division(0);
     /// assert!(division.is_some());
     /// ```
     pub fn division(&self, id: usize) -> Option<&LeagueDivision> {
-        self.divisions.get(&id)
+        self.divisions.get(id)
     }
 
     /// Get a mutable division by ID
@@ -308,12 +304,12 @@ impl LeagueConference {
     /// use fbsim_core::league::season::conference::{LeagueConference, LeagueDivision};
     ///
     /// let mut conference = LeagueConference::new();
-    /// conference.add_division(0, LeagueDivision::with_name("East"));
+    /// conference.add_division(LeagueDivision::with_name("East"));
     /// let division = conference.division_mut(0);
     /// assert!(division.is_some());
     /// ```
     pub fn division_mut(&mut self, id: usize) -> Option<&mut LeagueDivision> {
-        self.divisions.get_mut(&id)
+        self.divisions.get_mut(id)
     }
 
     /// Get all team IDs in this conference (across all divisions)
@@ -329,15 +325,15 @@ impl LeagueConference {
     /// let mut west = LeagueDivision::with_name("West");
     /// west.add_team(2);
     /// west.add_team(3);
-    /// conference.add_division(0, east);
-    /// conference.add_division(1, west);
+    /// conference.add_division(east);
+    /// conference.add_division(west);
     ///
     /// let teams = conference.all_teams();
     /// assert_eq!(teams.len(), 4);
     /// ```
     pub fn all_teams(&self) -> Vec<usize> {
         self.divisions
-            .values()
+            .iter()
             .flat_map(|d| d.teams().iter().cloned())
             .collect()
     }
@@ -351,13 +347,13 @@ impl LeagueConference {
     /// let mut conference = LeagueConference::new();
     /// let mut division = LeagueDivision::new();
     /// division.add_team(0);
-    /// conference.add_division(0, division);
+    /// conference.add_division(division);
     ///
     /// assert!(conference.contains_team(0));
     /// assert!(!conference.contains_team(1));
     /// ```
     pub fn contains_team(&self, team_id: usize) -> bool {
-        self.divisions.values().any(|d| d.contains_team(team_id))
+        self.divisions.iter().any(|d| d.contains_team(team_id))
     }
 
     /// Find which division a team is in (returns division ID)
@@ -369,15 +365,15 @@ impl LeagueConference {
     /// let mut conference = LeagueConference::new();
     /// let mut division = LeagueDivision::new();
     /// division.add_team(0);
-    /// conference.add_division(5, division);
+    /// conference.add_division(division);
     ///
-    /// assert_eq!(conference.team_division(0), Some(5));
+    /// assert_eq!(conference.team_division(0), Some(0));
     /// assert_eq!(conference.team_division(1), None);
     /// ```
     pub fn team_division(&self, team_id: usize) -> Option<usize> {
-        for (div_id, division) in &self.divisions {
+        for (div_id, division) in self.divisions.iter().enumerate() {
             if division.contains_team(team_id) {
-                return Some(*div_id);
+                return Some(div_id);
             }
         }
         None
@@ -390,8 +386,8 @@ impl LeagueConference {
     /// use fbsim_core::league::season::conference::{LeagueConference, LeagueDivision};
     ///
     /// let mut conference = LeagueConference::new();
-    /// conference.add_division(0, LeagueDivision::new());
-    /// conference.add_division(1, LeagueDivision::new());
+    /// conference.add_division(LeagueDivision::new());
+    /// conference.add_division(LeagueDivision::new());
     /// assert_eq!(conference.num_divisions(), 2);
     /// ```
     pub fn num_divisions(&self) -> usize {
@@ -408,11 +404,11 @@ impl LeagueConference {
     /// let mut division = LeagueDivision::new();
     /// division.add_team(0);
     /// division.add_team(1);
-    /// conference.add_division(0, division);
+    /// conference.add_division(division);
     /// assert_eq!(conference.num_teams(), 2);
     /// ```
     pub fn num_teams(&self) -> usize {
-        self.divisions.values().map(|d| d.num_teams()).sum()
+        self.divisions.iter().map(|d| d.num_teams()).sum()
     }
 }
 
@@ -447,8 +443,8 @@ mod tests {
         west.add_team(2);
         west.add_team(3);
 
-        conference.add_division(0, east);
-        conference.add_division(1, west);
+        conference.add_division(east);
+        conference.add_division(west);
 
         assert_eq!(conference.name(), "AFC");
         assert_eq!(conference.num_divisions(), 2);
@@ -470,13 +466,13 @@ mod tests {
         west.add_team(2);
         west.add_team(3);
 
-        conference.add_division(10, east);
-        conference.add_division(20, west);
+        conference.add_division(east);
+        conference.add_division(west);
 
-        assert_eq!(conference.team_division(0), Some(10));
-        assert_eq!(conference.team_division(1), Some(10));
-        assert_eq!(conference.team_division(2), Some(20));
-        assert_eq!(conference.team_division(3), Some(20));
+        assert_eq!(conference.team_division(0), Some(0));
+        assert_eq!(conference.team_division(1), Some(0));
+        assert_eq!(conference.team_division(2), Some(1));
+        assert_eq!(conference.team_division(3), Some(1));
         assert_eq!(conference.team_division(4), None);
     }
 
@@ -492,8 +488,8 @@ mod tests {
         div2.add_team(2);
         div2.add_team(3);
 
-        conference.add_division(0, div1);
-        conference.add_division(1, div2);
+        conference.add_division(div1);
+        conference.add_division(div2);
 
         let teams = conference.all_teams();
         assert_eq!(teams.len(), 4);

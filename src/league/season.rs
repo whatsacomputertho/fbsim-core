@@ -649,7 +649,7 @@ impl LeagueSeason {
     /// let mut conf = LeagueConference::with_name("AFC");
     /// let mut div = LeagueDivision::with_name("East");
     /// div.add_team(0);
-    /// conf.add_division(0, div);
+    /// conf.add_division(div);
     /// season.add_conference(conf);
     ///
     /// assert_eq!(season.team_conference(0), Some(0));
@@ -675,10 +675,10 @@ impl LeagueSeason {
     /// let mut conf = LeagueConference::with_name("AFC");
     /// let mut div = LeagueDivision::with_name("East");
     /// div.add_team(0);
-    /// conf.add_division(5, div);
+    /// conf.add_division(div);
     /// season.add_conference(conf);
     ///
-    /// assert_eq!(season.team_division(0), Some((0, 5)));
+    /// assert_eq!(season.team_division(0), Some((0, 0)));
     /// assert_eq!(season.team_division(99), None);
     /// ```
     pub fn team_division(&self, team_id: usize) -> Option<(usize, usize)> {
@@ -705,8 +705,8 @@ impl LeagueSeason {
     /// let mut div2 = LeagueDivision::new();
     /// div2.add_team(2);
     /// div2.add_team(3);
-    /// conf.add_division(0, div1);
-    /// conf.add_division(1, div2);
+    /// conf.add_division(div1);
+    /// conf.add_division(div2);
     /// season.add_conference(conf);
     ///
     /// assert!(season.same_division(0, 1));
@@ -736,15 +736,15 @@ impl LeagueSeason {
     /// let mut afc_west = LeagueDivision::with_name("West");
     /// afc_west.add_team(2);
     /// afc_west.add_team(3);
-    /// afc.add_division(0, afc_east);
-    /// afc.add_division(1, afc_west);
+    /// afc.add_division(afc_east);
+    /// afc.add_division(afc_west);
     ///
     /// // NFC with one division
     /// let mut nfc = LeagueConference::with_name("NFC");
     /// let mut nfc_east = LeagueDivision::with_name("East");
     /// nfc_east.add_team(4);
     /// nfc_east.add_team(5);
-    /// nfc.add_division(0, nfc_east);
+    /// nfc.add_division(nfc_east);
     ///
     /// season.add_conference(afc);
     /// season.add_conference(nfc);
@@ -890,7 +890,7 @@ impl LeagueSeason {
         }
 
         let mut conference = LeagueConference::with_name("Default");
-        conference.add_division(0, division);
+        conference.add_division(division);
 
         self.conferences.clear();
         self.conferences.push(conference);
@@ -1155,7 +1155,7 @@ impl LeagueSeason {
         let mut matchups = Vec::new();
 
         for conference in &self.conferences {
-            for division in conference.divisions().values() {
+            for division in conference.divisions().iter() {
                 let teams: Vec<usize> = division.teams().clone();
                 let n = teams.len();
 
@@ -1682,7 +1682,7 @@ impl LeagueSeason {
     /// assert!(picture.is_ok());
     /// ```
     pub fn playoff_picture(&self, num_playoff_teams: usize) -> Result<playoffs::picture::PlayoffPicture, String> {
-        PlayoffPicture::from_season(self, num_playoff_teams)
+        PlayoffPicture::from_season(self, num_playoff_teams, None)
     }
 
     /// Determine of a team participated in the playoffs
@@ -1911,14 +1911,14 @@ impl LeagueSeason {
     /// let mut afc_div = LeagueDivision::with_name("East");
     /// afc_div.add_team(0);
     /// afc_div.add_team(1);
-    /// afc.add_division(0, afc_div);
+    /// afc.add_division(afc_div);
     /// my_league_season.add_conference(afc);
     ///
     /// let mut nfc = LeagueConference::with_name("NFC");
     /// let mut nfc_div = LeagueDivision::with_name("East");
     /// nfc_div.add_team(2);
     /// nfc_div.add_team(3);
-    /// nfc.add_division(0, nfc_div);
+    /// nfc.add_division(nfc_div);
     /// my_league_season.add_conference(nfc);
     ///
     /// // Generate schedule and simulate
@@ -1978,8 +1978,8 @@ impl LeagueSeason {
             // Determine division winners if guaranteed spots
             let mut division_winners: Vec<usize> = Vec::new();
             if division_winners_guaranteed {
-                for (div_id, _division) in conference.divisions().iter() {
-                    let div_standings = self.division_standings(conf_index, *div_id)?;
+                for (div_id, _) in conference.divisions().iter().enumerate() {
+                    let div_standings = self.division_standings(conf_index, div_id)?;
                     if let Some((winner_id, _)) = div_standings.first() {
                         division_winners.push(*winner_id);
                     }
@@ -2050,10 +2050,17 @@ impl LeagueSeason {
             return Err("Cannot generate playoff round: Playoffs are already complete".to_string());
         }
 
-        // Ensure the current round is complete
-        if let Some(current_round) = self.playoffs.rounds().last() {
-            if !current_round.complete() {
-                return Err("Cannot generate next round: Current round is not complete".to_string());
+        // Ensure all current rounds across all brackets are complete
+        for conference_rounds in self.playoffs.rounds().values() {
+            if let Some(current_round) = conference_rounds.last() {
+                if !current_round.complete() {
+                    return Err("Cannot generate next round: Current round is not complete".to_string());
+                }
+            }
+        }
+        for round in self.playoffs.winners_bracket() {
+            if !round.complete() {
+                return Err("Cannot generate next round: Winners bracket round is not complete".to_string());
             }
         }
 
@@ -2105,9 +2112,14 @@ impl LeagueSeason {
         }
 
         // Ensure the current round is complete before generating the next
-        if let Some(current_round) = self.playoffs.rounds().last() {
-            if !current_round.complete() {
-                return Err(String::from("Cannot generate playoff round: Current round is not complete"));
+        if let Some(bracket) = self.playoffs.conference_rounds(0) {
+            if let Some(current_round) = bracket.last() {
+                for m in current_round.matchups() {
+                    println!("{}", m);
+                }
+                if !current_round.complete() {
+                    return Err(String::from("Cannot generate playoff round: Current round is not complete"));
+                }
             }
         }
 
@@ -2154,13 +2166,15 @@ impl LeagueSeason {
         }
 
         // Ensure the playoffs have started
-        if self.playoffs.rounds().is_empty() {
+        let bracket = self.playoffs.conference_rounds(0)
+            .ok_or("Cannot simulate playoff matchup: Playoffs have not been generated")?;
+        if bracket.is_empty() {
             return Err(String::from("Cannot simulate playoff matchup: Playoffs have not been generated"));
         }
 
         // Check if the prior round is complete (if not the first round)
         if round > 0 {
-            let prev_round = match self.playoffs.rounds().get(round - 1) {
+            let prev_round = match bracket.get(round - 1) {
                 Some(r) => r,
                 None => return Err(format!("Failed to get previous playoff round {}", round - 1))
             };
@@ -2173,7 +2187,8 @@ impl LeagueSeason {
         }
 
         // Get the playoff round
-        let playoff_round = match self.playoffs.rounds_mut().get_mut(round) {
+        let playoff_round = match self.playoffs.conference_rounds_mut(0)
+            .and_then(|b| b.get_mut(round)) {
             Some(r) => r,
             None => return Err(format!("No such playoff round: {}", round))
         };
@@ -2259,13 +2274,15 @@ impl LeagueSeason {
         }
 
         // Ensure the playoffs have started
-        if self.playoffs.rounds().is_empty() {
+        let bracket = self.playoffs.conference_rounds(0)
+            .ok_or("Cannot simulate playoff play: Playoffs have not been generated")?;
+        if bracket.is_empty() {
             return Err(String::from("Cannot simulate playoff play: Playoffs have not been generated"));
         }
 
         // Check if the prior round is complete (if not the first round)
         if round > 0 {
-            let prev_round = match self.playoffs.rounds().get(round - 1) {
+            let prev_round = match bracket.get(round - 1) {
                 Some(r) => r,
                 None => return Err(format!("Failed to get previous playoff round {}", round - 1))
             };
@@ -2278,7 +2295,8 @@ impl LeagueSeason {
         }
 
         // Get the playoff round
-        let playoff_round = match self.playoffs.rounds_mut().get_mut(round) {
+        let playoff_round = match self.playoffs.conference_rounds_mut(0)
+            .and_then(|b| b.get_mut(round)) {
             Some(r) => r,
             None => return Err(format!("No such playoff round: {}", round))
         };
@@ -2381,13 +2399,15 @@ impl LeagueSeason {
         }
 
         // Ensure the playoffs have started
-        if self.playoffs.rounds().is_empty() {
+        let bracket = self.playoffs.conference_rounds(0)
+            .ok_or("Cannot simulate playoff round: Playoffs have not been generated")?;
+        if bracket.is_empty() {
             return Err(String::from("Cannot simulate playoff round: Playoffs have not been generated"));
         }
 
         // Check if the prior round is complete (if not the first round)
         if round > 0 {
-            let prev_round = match self.playoffs.rounds().get(round - 1) {
+            let prev_round = match bracket.get(round - 1) {
                 Some(r) => r,
                 None => return Err(format!("Failed to get previous playoff round {}", round - 1))
             };
@@ -2400,7 +2420,7 @@ impl LeagueSeason {
         }
 
         // Get the number of matchups in this round
-        let num_matchups = match self.playoffs.rounds().get(round) {
+        let num_matchups = match bracket.get(round) {
             Some(r) => r.matchups().len(),
             None => return Err(format!("No such playoff round: {}", round))
         };
@@ -2408,7 +2428,8 @@ impl LeagueSeason {
         // Simulate each matchup in the round
         for i in 0..num_matchups {
             // Skip matchups that have already been completed
-            let is_complete = match self.playoffs.rounds().get(round) {
+            let is_complete = match self.playoffs.conference_rounds(0)
+                .and_then(|b| b.get(round)) {
                 Some(r) => match r.matchups().get(i) {
                     Some(m) => m.context().game_over(),
                     None => continue
@@ -2470,10 +2491,23 @@ impl LeagueSeason {
         // Simulate rounds until playoffs are complete
         while !self.playoffs.complete() {
             // Get the current round index
-            let current_round = self.playoffs.rounds().len() - 1;
+            let current_round = self.playoffs
+                .rounds()
+                .iter()
+                .map(|(_, b)| b.len() - 1)
+                .min()
+                .unwrap_or_default();
 
             // Simulate the current round if not complete
-            if !self.playoffs.rounds().get(current_round).is_none_or(|r| r.complete()) {
+            if !self.playoffs
+                .rounds()
+                .iter()
+                .map(|(_, b)| b
+                    .get(current_round)
+                    .is_none_or(|r: &LeagueSeasonWeek| r.complete()))
+                .all(
+                    |tf| tf
+            ) {
                 self.sim_playoff_round(current_round, rng)?;
             }
 
