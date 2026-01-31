@@ -4,15 +4,16 @@ pub mod matchup;
 pub mod playoffs;
 pub mod week;
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashMap, HashSet};
 
 use crate::team::FootballTeam;
 use crate::league::matchup::LeagueTeamRecord;
-use crate::league::season::conference::LeagueConference;
+use crate::league::season::conference::{LeagueConference, LeagueDivision};
 use crate::league::season::week::LeagueSeasonWeek;
 use crate::league::season::matchup::{LeagueSeasonMatchup, LeagueSeasonMatchups};
 use crate::league::season::playoffs::LeagueSeasonPlayoffs;
 use crate::league::season::playoffs::picture::PlayoffPicture;
+use crate::game::matchup::FootballMatchupResult;
 use crate::game::play::{Game, GameSimulator};
 
 #[cfg(feature = "rocket_okapi")]
@@ -882,8 +883,6 @@ impl LeagueSeason {
     /// containing all teams. Used when no conferences are defined but schedule
     /// generation is requested.
     fn create_default_conference(&mut self) {
-        use crate::league::season::conference::LeagueDivision;
-
         let mut division = LeagueDivision::with_name("Default");
         for team_id in self.teams.keys() {
             division.add_team(*team_id);
@@ -897,14 +896,12 @@ impl LeagueSeason {
     }
 
     /// Check if conference-aware (structured) scheduling is needed
-    fn needs_structured_scheduling(&self, options: &LeagueSeasonScheduleOptions) -> bool {
+    fn needs_structured_scheduling(&self) -> bool {
         // Need structured scheduling if:
         // 1. Multiple conferences exist
         // 2. Any conference has multiple divisions
-        // 3. Cross-conference games are explicitly requested
         self.conferences.len() > 1
             || self.conferences.iter().any(|c| c.divisions().len() > 1)
-            || options.cross_conference_games.is_some()
     }
 
     /// Generate a schedule for the season.  The generated schedule is a round
@@ -937,7 +934,7 @@ impl LeagueSeason {
         }
 
         // Route to appropriate schedule generation method
-        if self.needs_structured_scheduling(&options) {
+        if self.needs_structured_scheduling() {
             self.generate_structured_schedule(options, rng)
         } else {
             self.generate_round_robin_schedule(options, rng)
@@ -1222,7 +1219,7 @@ impl LeagueSeason {
         }
 
         // Track how many cross-conference games each team has scheduled
-        let mut team_cross_conf_games: std::collections::HashMap<usize, usize> = std::collections::HashMap::new();
+        let mut team_cross_conf_games: HashMap<usize, usize> = HashMap::new();
         for team_id in self.teams.keys() {
             team_cross_conf_games.insert(*team_id, 0);
         }
@@ -1312,8 +1309,6 @@ impl LeagueSeason {
 
     /// Interleave matchups into weeks, avoiding long road trips
     fn interleave_matchups(&mut self, matchups: Vec<(usize, usize)>, rng: &mut impl Rng) -> Result<(), String> {
-        use std::collections::{HashMap, HashSet};
-
         if matchups.is_empty() {
             return Ok(());
         }
@@ -1338,7 +1333,7 @@ impl LeagueSeason {
             let mut matchups_this_week: Vec<usize> = Vec::new(); // indices into remaining_matchups
 
             // Greedily select matchups for this week
-            for (idx, (home_id, away_id)) in remaining_matchups.iter().enumerate() {
+            for (index, (home_id, away_id)) in remaining_matchups.iter().enumerate() {
                 // Skip if either team already scheduled this week
                 if teams_scheduled_this_week.contains(home_id) || teams_scheduled_this_week.contains(away_id) {
                     continue;
@@ -1355,7 +1350,7 @@ impl LeagueSeason {
                 // Schedule this matchup
                 teams_scheduled_this_week.insert(*home_id);
                 teams_scheduled_this_week.insert(*away_id);
-                matchups_this_week.push(idx);
+                matchups_this_week.push(index);
 
                 if teams_scheduled_this_week.len() >= num_teams {
                     break; // Week is full
@@ -1373,8 +1368,8 @@ impl LeagueSeason {
             // Create matchups and update streaks
             // Sort indices in reverse so we can remove from end first
             matchups_this_week.sort_by(|a, b| b.cmp(a));
-            for idx in matchups_this_week {
-                let (home_id, away_id) = remaining_matchups.remove(idx);
+            for index in matchups_this_week {
+                let (home_id, away_id) = remaining_matchups.remove(index);
 
                 // Get team short names
                 let home_short_name = self.teams.get(&home_id).unwrap().short_name();
@@ -1490,6 +1485,45 @@ impl LeagueSeason {
     /// ### Returns
     /// * `Ok(Vec<(usize, LeagueTeamRecord)>)` - Division standings sorted by record
     /// * `Err(String)` - If conference or division doesn't exist
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::team::FootballTeam;
+    /// use fbsim_core::league::season::LeagueSeason;
+    /// use fbsim_core::league::season::LeagueSeasonScheduleOptions;
+    /// use fbsim_core::league::season::conference::{LeagueConference, LeagueDivision};
+    ///
+    /// // Create a new season with 2 conferences
+    /// let mut my_league_season = LeagueSeason::new();
+    ///
+    /// // Add teams
+    /// my_league_season.add_team(0, FootballTeam::new());
+    /// my_league_season.add_team(1, FootballTeam::new());
+    /// my_league_season.add_team(2, FootballTeam::new());
+    /// my_league_season.add_team(3, FootballTeam::new());
+    ///
+    /// // Create conference structure
+    /// let mut afc = LeagueConference::with_name("AFC");
+    /// let mut afc_div = LeagueDivision::with_name("East");
+    /// afc_div.add_team(0);
+    /// afc_div.add_team(1);
+    /// afc.add_division(afc_div);
+    /// my_league_season.add_conference(afc);
+    ///
+    /// let mut nfc = LeagueConference::with_name("NFC");
+    /// let mut nfc_div = LeagueDivision::with_name("East");
+    /// nfc_div.add_team(2);
+    /// nfc_div.add_team(3);
+    /// nfc.add_division(nfc_div);
+    /// my_league_season.add_conference(nfc);
+    ///
+    /// // Compute the division standings
+    /// let afc_east_standings = my_league_season.division_standings(0, 0);
+    /// if let Err(ref e) = afc_east_standings {
+    ///     println!("{}", e);
+    /// }
+    /// assert!(afc_east_standings.is_ok());
+    /// ```
     pub fn division_standings(&self, conf_index: usize, div_id: usize) -> Result<Vec<(usize, LeagueTeamRecord)>, String> {
         // Get the conference
         let conference = self.conferences.get(conf_index)
@@ -1501,7 +1535,7 @@ impl LeagueSeason {
 
         // Get all standings and filter to this division's teams
         let all_standings = self.standings();
-        let division_teams: std::collections::HashSet<usize> = division.teams().iter().cloned().collect();
+        let division_teams: HashSet<usize> = division.teams().iter().cloned().collect();
 
         let standings: Vec<(usize, LeagueTeamRecord)> = all_standings
             .into_iter()
@@ -1519,13 +1553,49 @@ impl LeagueSeason {
     /// ### Returns
     /// * `Ok(Vec<(usize, LeagueTeamRecord)>)` - Conference standings sorted by record
     /// * `Err(String)` - If conference doesn't exist
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::team::FootballTeam;
+    /// use fbsim_core::league::season::LeagueSeason;
+    /// use fbsim_core::league::season::LeagueSeasonScheduleOptions;
+    /// use fbsim_core::league::season::conference::{LeagueConference, LeagueDivision};
+    ///
+    /// // Create a new season with 2 conferences
+    /// let mut my_league_season = LeagueSeason::new();
+    ///
+    /// // Add teams
+    /// my_league_season.add_team(0, FootballTeam::new());
+    /// my_league_season.add_team(1, FootballTeam::new());
+    /// my_league_season.add_team(2, FootballTeam::new());
+    /// my_league_season.add_team(3, FootballTeam::new());
+    ///
+    /// // Create conference structure
+    /// let mut afc = LeagueConference::with_name("AFC");
+    /// let mut afc_div = LeagueDivision::with_name("East");
+    /// afc_div.add_team(0);
+    /// afc_div.add_team(1);
+    /// afc.add_division(afc_div);
+    /// my_league_season.add_conference(afc);
+    ///
+    /// let mut nfc = LeagueConference::with_name("NFC");
+    /// let mut nfc_div = LeagueDivision::with_name("East");
+    /// nfc_div.add_team(2);
+    /// nfc_div.add_team(3);
+    /// nfc.add_division(nfc_div);
+    /// my_league_season.add_conference(nfc);
+    ///
+    /// // Compute the conference standings
+    /// let nfc_standings = my_league_season.conference_standings(1);
+    /// assert!(nfc_standings.is_ok());
+    /// ```
     pub fn conference_standings(&self, conf_index: usize) -> Result<Vec<(usize, LeagueTeamRecord)>, String> {
         // Get the conference
         let conference = self.conferences.get(conf_index)
             .ok_or_else(|| format!("Conference index {} does not exist", conf_index))?;
 
         // Get all teams in the conference
-        let conference_teams: std::collections::HashSet<usize> = conference.all_teams().into_iter().collect();
+        let conference_teams: HashSet<usize> = conference.all_teams().into_iter().collect();
 
         // Get all standings and filter to this conference's teams
         let all_standings = self.standings();
@@ -1546,6 +1616,47 @@ impl LeagueSeason {
     /// ### Returns
     /// * `Ok(LeagueTeamRecord)` - The team's record against division opponents
     /// * `Err(String)` - If team doesn't exist or has no division assignment
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::team::FootballTeam;
+    /// use fbsim_core::league::season::LeagueSeason;
+    /// use fbsim_core::league::season::LeagueSeasonScheduleOptions;
+    /// use fbsim_core::league::season::conference::{LeagueConference, LeagueDivision};
+    ///
+    /// // Create a new season with 2 conferences
+    /// let mut my_league_season = LeagueSeason::new();
+    ///
+    /// // Add teams
+    /// my_league_season.add_team(0, FootballTeam::new());
+    /// my_league_season.add_team(1, FootballTeam::new());
+    /// my_league_season.add_team(2, FootballTeam::new());
+    /// my_league_season.add_team(3, FootballTeam::new());
+    ///
+    /// // Create conference structure
+    /// let mut afc = LeagueConference::with_name("AFC");
+    /// let mut afc_div = LeagueDivision::with_name("East");
+    /// afc_div.add_team(0);
+    /// afc_div.add_team(1);
+    /// afc.add_division(afc_div);
+    /// my_league_season.add_conference(afc);
+    ///
+    /// let mut nfc = LeagueConference::with_name("NFC");
+    /// let mut nfc_div = LeagueDivision::with_name("East");
+    /// nfc_div.add_team(2);
+    /// nfc_div.add_team(3);
+    /// nfc.add_division(nfc_div);
+    /// my_league_season.add_conference(nfc);
+    ///
+    /// // Generate the season schedule and simulate the season
+    /// let mut rng = rand::thread_rng();
+    /// my_league_season.generate_schedule(LeagueSeasonScheduleOptions::new(), &mut rng);
+    /// my_league_season.sim_regular_season(&mut rng);
+    ///
+    /// // Calculate team 2's division record
+    /// let record = my_league_season.division_record(2);
+    /// assert!(record.is_ok());
+    /// ```
     pub fn division_record(&self, team_id: usize) -> Result<LeagueTeamRecord, String> {
         // Find team's division
         let (conf_index, div_id) = self.team_division(team_id)
@@ -1556,7 +1667,7 @@ impl LeagueSeason {
             .and_then(|c| c.division(div_id))
             .ok_or_else(|| format!("Division not found for team {}", team_id))?;
 
-        let division_teams: std::collections::HashSet<usize> = division.teams().iter().cloned().collect();
+        let division_teams: HashSet<usize> = division.teams().iter().cloned().collect();
 
         // Compute record against division opponents
         let mut record = LeagueTeamRecord::new();
@@ -1577,13 +1688,13 @@ impl LeagueSeason {
 
                 if is_our_game && is_division_game {
                     match matchup.result(team_id) {
-                        Some(crate::game::matchup::FootballMatchupResult::Win) => {
+                        Some(FootballMatchupResult::Win) => {
                             record.increment_wins(1);
                         }
-                        Some(crate::game::matchup::FootballMatchupResult::Loss) => {
+                        Some(FootballMatchupResult::Loss) => {
                             record.increment_losses(1);
                         }
-                        Some(crate::game::matchup::FootballMatchupResult::Tie) => {
+                        Some(FootballMatchupResult::Tie) => {
                             record.increment_ties(1);
                         }
                         None => {}
@@ -1603,6 +1714,47 @@ impl LeagueSeason {
     /// ### Returns
     /// * `Ok(LeagueTeamRecord)` - The team's record against conference opponents
     /// * `Err(String)` - If team doesn't exist or has no conference assignment
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::team::FootballTeam;
+    /// use fbsim_core::league::season::LeagueSeason;
+    /// use fbsim_core::league::season::LeagueSeasonScheduleOptions;
+    /// use fbsim_core::league::season::conference::{LeagueConference, LeagueDivision};
+    ///
+    /// // Create a new season with 2 conferences
+    /// let mut my_league_season = LeagueSeason::new();
+    ///
+    /// // Add teams
+    /// my_league_season.add_team(0, FootballTeam::new());
+    /// my_league_season.add_team(1, FootballTeam::new());
+    /// my_league_season.add_team(2, FootballTeam::new());
+    /// my_league_season.add_team(3, FootballTeam::new());
+    ///
+    /// // Create conference structure
+    /// let mut afc = LeagueConference::with_name("AFC");
+    /// let mut afc_div = LeagueDivision::with_name("East");
+    /// afc_div.add_team(0);
+    /// afc_div.add_team(1);
+    /// afc.add_division(afc_div);
+    /// my_league_season.add_conference(afc);
+    ///
+    /// let mut nfc = LeagueConference::with_name("NFC");
+    /// let mut nfc_div = LeagueDivision::with_name("East");
+    /// nfc_div.add_team(2);
+    /// nfc_div.add_team(3);
+    /// nfc.add_division(nfc_div);
+    /// my_league_season.add_conference(nfc);
+    ///
+    /// // Generate the season schedule and simulate the season
+    /// let mut rng = rand::thread_rng();
+    /// my_league_season.generate_schedule(LeagueSeasonScheduleOptions::new(), &mut rng);
+    /// my_league_season.sim_regular_season(&mut rng);
+    ///
+    /// // Calculate team 1's conference record
+    /// let record = my_league_season.conference_record(1);
+    /// assert!(record.is_ok());
+    /// ```
     pub fn conference_record(&self, team_id: usize) -> Result<LeagueTeamRecord, String> {
         // Find team's conference
         let conf_index = self.team_conference(team_id)
@@ -1612,7 +1764,7 @@ impl LeagueSeason {
         let conference = self.conferences.get(conf_index)
             .ok_or_else(|| format!("Conference not found for team {}", team_id))?;
 
-        let conference_teams: std::collections::HashSet<usize> = conference.all_teams().into_iter().collect();
+        let conference_teams: HashSet<usize> = conference.all_teams().into_iter().collect();
 
         // Compute record against conference opponents
         let mut record = LeagueTeamRecord::new();
@@ -1633,13 +1785,13 @@ impl LeagueSeason {
 
                 if is_our_game && is_conference_game {
                     match matchup.result(team_id) {
-                        Some(crate::game::matchup::FootballMatchupResult::Win) => {
+                        Some(FootballMatchupResult::Win) => {
                             record.increment_wins(1);
                         }
-                        Some(crate::game::matchup::FootballMatchupResult::Loss) => {
+                        Some(FootballMatchupResult::Loss) => {
                             record.increment_losses(1);
                         }
-                        Some(crate::game::matchup::FootballMatchupResult::Tie) => {
+                        Some(FootballMatchupResult::Tie) => {
                             record.increment_ties(1);
                         }
                         None => {}
@@ -1928,9 +2080,6 @@ impl LeagueSeason {
     ///
     /// // Generate conference playoffs (2 teams per conference)
     /// let res = my_league_season.generate_playoffs_with_conferences(2, true, &mut rng);
-    /// if let Err(ref e) = res {
-    ///     println!("{}", e);
-    /// }
     /// assert!(res.is_ok());
     /// ```
     pub fn generate_playoffs_with_conferences(
@@ -2039,9 +2188,47 @@ impl LeagueSeason {
     ///
     /// ### Example
     /// ```
-    /// use fbsim_core::league::season::playoffs::LeagueSeasonPlayoffs;
+    /// use fbsim_core::team::FootballTeam;
+    /// use fbsim_core::league::season::LeagueSeason;
+    /// use fbsim_core::league::season::LeagueSeasonScheduleOptions;
+    /// use fbsim_core::league::season::conference::{LeagueConference, LeagueDivision};
     ///
-    /// // See generate_playoffs_with_conferences for full example
+    /// // Create a new season with 2 conferences
+    /// let mut my_league_season = LeagueSeason::new();
+    ///
+    /// // Add teams
+    /// my_league_season.add_team(0, FootballTeam::new());
+    /// my_league_season.add_team(1, FootballTeam::new());
+    /// my_league_season.add_team(2, FootballTeam::new());
+    /// my_league_season.add_team(3, FootballTeam::new());
+    ///
+    /// // Create conference structure
+    /// let mut afc = LeagueConference::with_name("AFC");
+    /// let mut afc_div = LeagueDivision::with_name("East");
+    /// afc_div.add_team(0);
+    /// afc_div.add_team(1);
+    /// afc.add_division(afc_div);
+    /// my_league_season.add_conference(afc);
+    ///
+    /// let mut nfc = LeagueConference::with_name("NFC");
+    /// let mut nfc_div = LeagueDivision::with_name("East");
+    /// nfc_div.add_team(2);
+    /// nfc_div.add_team(3);
+    /// nfc.add_division(nfc_div);
+    /// my_league_season.add_conference(nfc);
+    ///
+    /// // Generate the season schedule and simulate the season
+    /// let mut rng = rand::thread_rng();
+    /// my_league_season.generate_schedule(LeagueSeasonScheduleOptions::new(), &mut rng);
+    /// my_league_season.sim_regular_season(&mut rng);
+    ///
+    /// // Generate and simulate the first round of the playoffs
+    /// let _ = my_league_season.generate_playoffs_with_conferences(2, true, &mut rng);
+    /// let _ = my_league_season.sim_playoff_round(0, &mut rng);
+    ///
+    /// // Generate the next round of the playoffs
+    /// let res = my_league_season.generate_next_conference_playoff_round(&mut rng);
+    /// assert!(res.is_ok());
     /// ```
     pub fn generate_next_conference_playoff_round(&mut self, rng: &mut impl Rng) -> Result<(), String> {
         if !self.playoffs.is_conference_playoff() {
@@ -2094,8 +2281,12 @@ impl LeagueSeason {
     /// // Simulate the entire regular season
     /// my_league_season.sim_regular_season(&mut rng);
     ///
-    /// // Generate playoffs with 4 teams
-    /// let res = my_league_season.generate_playoffs(4, &mut rng);
+    /// // Generate playoffs with 4 teams, simulate the first round
+    /// let _ = my_league_season.generate_playoffs(4, &mut rng);
+    /// let _ = my_league_season.sim_playoff_round(0, &mut rng);
+    ///
+    /// // Generate the next round of the playoffs
+    /// let res = my_league_season.generate_next_playoff_round(&mut rng);
     /// assert!(res.is_ok());
     /// ```
     pub fn generate_next_playoff_round(&mut self, rng: &mut impl Rng) -> Result<(), String> {

@@ -56,9 +56,7 @@ impl PlayoffTeams {
     /// let my_teams = PlayoffTeams::new();
     /// ```
     pub fn new() -> PlayoffTeams {
-        PlayoffTeams {
-            teams: BTreeMap::new()
-        }
+        PlayoffTeams::default()
     }
 
     /// Add a team to the playoffs
