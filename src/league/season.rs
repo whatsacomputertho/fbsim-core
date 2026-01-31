@@ -2577,6 +2577,156 @@ impl LeagueSeason {
         Ok(game)
     }
 
+    /// Simulate a single play of a winners bracket playoff matchup
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::team::FootballTeam;
+    /// use fbsim_core::league::season::LeagueSeason;
+    /// use fbsim_core::league::season::LeagueSeasonScheduleOptions;
+    /// use fbsim_core::league::season::LeagueSeasonPlayoffOptions;
+    /// use fbsim_core::league::season::conference::{LeagueConference, LeagueDivision};
+    ///
+    /// // Create a new season with 2 conferences
+    /// let mut my_league_season = LeagueSeason::new();
+    ///
+    /// // Add teams
+    /// my_league_season.add_team(0, FootballTeam::new());
+    /// my_league_season.add_team(1, FootballTeam::new());
+    /// my_league_season.add_team(2, FootballTeam::new());
+    /// my_league_season.add_team(3, FootballTeam::new());
+    ///
+    /// // Create conference structure
+    /// let mut afc = LeagueConference::with_name("AFC");
+    /// let mut afc_div = LeagueDivision::with_name("East");
+    /// afc_div.add_team(0);
+    /// afc_div.add_team(1);
+    /// afc.add_division(afc_div);
+    /// my_league_season.add_conference(afc);
+    ///
+    /// let mut nfc = LeagueConference::with_name("NFC");
+    /// let mut nfc_div = LeagueDivision::with_name("East");
+    /// nfc_div.add_team(2);
+    /// nfc_div.add_team(3);
+    /// nfc.add_division(nfc_div);
+    /// my_league_season.add_conference(nfc);
+    ///
+    /// // Generate schedule and simulate regular season
+    /// let mut rng = rand::thread_rng();
+    /// my_league_season.generate_schedule(LeagueSeasonScheduleOptions::new(), &mut rng);
+    /// my_league_season.sim_regular_season(&mut rng);
+    ///
+    /// // Generate conference playoffs and simulate all conference brackets
+    /// let mut options = LeagueSeasonPlayoffOptions::new();
+    /// options.use_conference_brackets = true;
+    /// options.playoff_teams_per_conference = 2;
+    /// options.division_winners_guaranteed = true;
+    /// let _ = my_league_season.generate_playoffs(options, &mut rng);
+    /// let _ = my_league_season.sim_playoff_round(0, &mut rng);
+    ///
+    /// // Generate the winners bracket
+    /// let _ = my_league_season.generate_next_playoff_round(&mut rng);
+    ///
+    /// // Simulate a single play of the first winners bracket matchup
+    /// let res = my_league_season.sim_winners_bracket_play(0, 0, &mut rng);
+    /// assert!(res.is_ok());
+    /// ```
+    pub fn sim_winners_bracket_play(&mut self, round: usize, matchup: usize, rng: &mut impl Rng) -> Result<Option<Game>, String> {
+        // Ensure the regular season is complete
+        if !self.regular_season_complete() {
+            return Err(String::from("Cannot simulate winners bracket play: Regular season is not complete"));
+        }
+
+        // Ensure this is a conference playoff with a winners bracket
+        if !self.playoffs.is_conference_playoff() {
+            return Err(String::from("Cannot simulate winners bracket: Not a conference playoff"));
+        }
+
+        // Ensure the winners bracket has started
+        if self.playoffs.winners_bracket().is_empty() {
+            return Err(String::from("Cannot simulate winners bracket play: Winners bracket has not been generated"));
+        }
+
+        // Check if the prior round is complete (if not the first round)
+        if round > 0 {
+            let prev_round = match self.playoffs.winners_bracket().get(round - 1) {
+                Some(r) => r,
+                None => return Err(format!("Failed to get previous winners bracket round {}", round - 1))
+            };
+            if !prev_round.complete() {
+                return Err(format!(
+                    "Cannot simulate winners bracket round {}: Previous round {} is not complete",
+                    round, round - 1
+                ));
+            }
+        }
+
+        // Get the round
+        let playoff_round = match self.playoffs.winners_bracket_mut().get_mut(round) {
+            Some(r) => r,
+            None => return Err(format!("No such winners bracket round: {}", round))
+        };
+
+        // Get the matchup
+        let playoff_matchup = match playoff_round.matchups_mut().get_mut(matchup) {
+            Some(m) => m,
+            None => return Err(format!("No such matchup {} in winners bracket round {}", matchup, round))
+        };
+
+        // Ensure the matchup is not already complete
+        if playoff_matchup.context().game_over() {
+            return Err(format!("Winners bracket round {} matchup {} is already complete", round, matchup));
+        }
+
+        // Get the home and away teams
+        let home_id = *playoff_matchup.home_team();
+        let away_id = *playoff_matchup.away_team();
+
+        let home_team = match self.teams.get(&home_id) {
+            Some(t) => t,
+            None => return Err(format!("Winners bracket matchup references nonexistent home team ID: {}", home_id))
+        };
+        let away_team = match self.teams.get(&away_id) {
+            Some(t) => t,
+            None => return Err(format!("Winners bracket matchup references nonexistent away team ID: {}", away_id))
+        };
+
+        // Create a new game if game has not started, or get existing game
+        if playoff_matchup.game().is_none() {
+            *playoff_matchup.game_mut() = Some(Game::new());
+        }
+
+        // Simulate the next play
+        let simulator = GameSimulator::new();
+        let context = match simulator.sim_play(
+            home_team, away_team,
+            playoff_matchup.context().clone(),
+            playoff_matchup.game_mut().as_mut().unwrap(),
+            rng
+        ) {
+            Ok(c) => c,
+            Err(e) => return Err(format!("Error while simulating winners bracket play: {}", e))
+        };
+
+        // If game is over, archive game stats, clear game, update context
+        if context.game_over() {
+            *playoff_matchup.home_stats_mut() = Some(
+                playoff_matchup.game().as_ref().ok_or(
+                    "Failed to archive home stats for winners bracket game"
+                )?.home_stats()
+            );
+            *playoff_matchup.away_stats_mut() = Some(
+                playoff_matchup.game().as_ref().ok_or(
+                    "Failed to archive away stats for winners bracket game"
+                )?.away_stats()
+            );
+            *playoff_matchup.context_mut() = context;
+            return Ok(playoff_matchup.take_game());
+        }
+        *playoff_matchup.context_mut() = context;
+        Ok(None)
+    }
+
     /// Simulate a single play of a playoff matchup in a specific conference bracket
     ///
     /// ### Example
