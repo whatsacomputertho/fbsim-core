@@ -317,6 +317,34 @@ impl LeagueSeasonMatchup {
     }
 }
 
+impl std::fmt::Display for LeagueSeasonMatchup {
+    /// Format a `LeagueSeasonMatchup` as a string.
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::league::season::matchup::LeagueSeasonMatchup;
+    ///
+    /// let mut rng = rand::thread_rng();
+    /// let my_matchup = LeagueSeasonMatchup::new(0, 1, "HOME", "AWAY", &mut rng);
+    /// println!("{}", my_matchup);
+    /// ```
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let desc = if self.context.game_over() {
+            "Game over"
+        } else if self.context.started() {
+            "In progress"
+        } else {
+            "Pending"
+        };
+        let matchup_str = format!(
+            "{} {}",
+            &self.context,
+            desc
+        );
+        f.write_str(matchup_str.trim())
+    }
+}
+
 /// # `LeagueSeasonMatchups` struct
 ///
 /// Represents a list of matchups for a given team during a given season
