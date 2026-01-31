@@ -977,6 +977,21 @@ impl LeagueSeason {
             self.create_default_conference();
         }
 
+        // Validate that divisions within each conference are of equal size
+        for conference in &self.conferences {
+            let div_sizes: Vec<usize> = conference.divisions().iter()
+                .map(|d| d.num_teams())
+                .collect();
+            if let Some(&first) = div_sizes.first() {
+                if div_sizes.iter().any(|&s| s != first) {
+                    return Err(format!(
+                        "Conference '{}' has divisions of unequal size: {:?}",
+                        conference.name(), div_sizes
+                    ));
+                }
+            }
+        }
+
         // Route to appropriate schedule generation method
         if self.needs_structured_scheduling() {
             self.generate_structured_schedule(options, rng)
@@ -2102,6 +2117,19 @@ impl LeagueSeason {
             // Validate teams per conference
             if playoff_teams_per_conference < 1 {
                 return Err("Playoffs must have at least 1 team per conference".to_string());
+            }
+
+            // Validate that each conference has an equal number of teams
+            let conf_sizes: Vec<usize> = self.conferences.iter()
+                .map(|c| c.num_teams())
+                .collect();
+            if let Some(&first) = conf_sizes.first() {
+                if conf_sizes.iter().any(|&s| s != first) {
+                    return Err(format!(
+                        "Conferences have unequal number of teams: {:?}",
+                        conf_sizes
+                    ));
+                }
             }
 
             // Process each conference
