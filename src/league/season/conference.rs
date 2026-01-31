@@ -2,7 +2,132 @@
 use rocket_okapi::okapi::schemars;
 #[cfg(feature = "rocket_okapi")]
 use rocket_okapi::okapi::schemars::JsonSchema;
-use serde::{Serialize, Deserialize};
+use serde::{Serialize, Deserialize, Deserializer};
+use std::collections::HashSet;
+
+/// Maximum allowed length for a division name
+const MAX_DIVISION_NAME_LEN: usize = 64;
+
+/// Maximum allowed length for a conference name
+const MAX_CONFERENCE_NAME_LEN: usize = 64;
+
+/// # `LeagueDivisionRaw` struct
+///
+/// A freshly deserialized `LeagueDivision` prior to validation.
+#[derive(Clone, Eq, PartialEq, Ord, PartialOrd, Debug, Serialize, Deserialize)]
+pub struct LeagueDivisionRaw {
+    pub name: String,
+    pub teams: Vec<usize>,
+}
+
+impl LeagueDivisionRaw {
+    /// Validate the raw division
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::league::season::conference::LeagueDivisionRaw;
+    ///
+    /// let raw = LeagueDivisionRaw { name: "East".to_string(), teams: vec![0, 1] };
+    /// assert!(raw.validate().is_ok());
+    /// ```
+    pub fn validate(&self) -> Result<(), String> {
+        // Validate name length
+        if self.name.len() > MAX_DIVISION_NAME_LEN {
+            return Err(format!(
+                "Division name '{}' exceeds maximum length of {} characters",
+                self.name, MAX_DIVISION_NAME_LEN
+            ));
+        }
+
+        // Check for duplicate team IDs
+        let mut seen = HashSet::new();
+        for &team_id in &self.teams {
+            if !seen.insert(team_id) {
+                return Err(format!(
+                    "Duplicate team ID {} in division '{}'",
+                    team_id, self.name
+                ));
+            }
+        }
+
+        Ok(())
+    }
+}
+
+impl TryFrom<LeagueDivisionRaw> for LeagueDivision {
+    type Error = String;
+
+    fn try_from(raw: LeagueDivisionRaw) -> Result<Self, Self::Error> {
+        raw.validate()?;
+        Ok(LeagueDivision {
+            name: raw.name,
+            teams: raw.teams,
+        })
+    }
+}
+
+/// # `LeagueConferenceRaw` struct
+///
+/// A freshly deserialized `LeagueConference` prior to validation.
+#[derive(Clone, Eq, PartialEq, Ord, PartialOrd, Debug, Serialize, Deserialize)]
+pub struct LeagueConferenceRaw {
+    pub name: String,
+    pub divisions: Vec<LeagueDivision>,
+}
+
+impl LeagueConferenceRaw {
+    /// Validate the raw conference
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::league::season::conference::{LeagueConferenceRaw, LeagueDivision};
+    ///
+    /// let mut div = LeagueDivision::with_name("East");
+    /// div.add_team(0);
+    /// div.add_team(1);
+    /// let raw = LeagueConferenceRaw {
+    ///     name: "AFC".to_string(),
+    ///     divisions: vec![div],
+    /// };
+    /// assert!(raw.validate().is_ok());
+    /// ```
+    pub fn validate(&self) -> Result<(), String> {
+        // Validate name length
+        if self.name.len() > MAX_CONFERENCE_NAME_LEN {
+            return Err(format!(
+                "Conference name '{}' exceeds maximum length of {} characters",
+                self.name, MAX_CONFERENCE_NAME_LEN
+            ));
+        }
+
+        // Check for duplicate team IDs across divisions
+        let mut seen = HashSet::new();
+        for division in &self.divisions {
+            for &team_id in division.teams() {
+                if !seen.insert(team_id) {
+                    return Err(format!(
+                        "Duplicate team ID {} across divisions in conference '{}'",
+                        team_id, self.name
+                    ));
+                }
+            }
+        }
+
+        Ok(())
+    }
+}
+
+impl TryFrom<LeagueConferenceRaw> for LeagueConference {
+    type Error = String;
+
+    fn try_from(raw: LeagueConferenceRaw) -> Result<Self, Self::Error> {
+        raw.validate()?;
+        Ok(LeagueConference {
+            name: raw.name,
+            divisions: raw.divisions,
+        })
+    }
+}
 
 /// # `LeagueDivision` struct
 ///
@@ -10,7 +135,7 @@ use serde::{Serialize, Deserialize};
 /// a collection of team IDs. The division ID is implicit as the key in the
 /// parent conference's `divisions` BTreeMap.
 #[cfg_attr(feature = "rocket_okapi", derive(JsonSchema))]
-#[derive(Clone, Eq, PartialEq, Ord, PartialOrd, Debug, Serialize, Deserialize)]
+#[derive(Clone, Eq, PartialEq, Ord, PartialOrd, Debug, Serialize)]
 pub struct LeagueDivision {
     name: String,
     teams: Vec<usize>,
@@ -159,13 +284,23 @@ impl LeagueDivision {
     }
 }
 
+impl<'de> Deserialize<'de> for LeagueDivision {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let raw = LeagueDivisionRaw::deserialize(deserializer)?;
+        LeagueDivision::try_from(raw).map_err(serde::de::Error::custom)
+    }
+}
+
 /// # `LeagueConference` struct
 ///
 /// A `LeagueConference` represents a conference containing multiple divisions.
 /// The conference ID is implicit as the index in the parent season's
 /// `conferences` Vec.
 #[cfg_attr(feature = "rocket_okapi", derive(JsonSchema))]
-#[derive(Clone, Eq, PartialEq, Ord, PartialOrd, Debug, Serialize, Deserialize)]
+#[derive(Clone, Eq, PartialEq, Ord, PartialOrd, Debug, Serialize)]
 pub struct LeagueConference {
     name: String,
     divisions: Vec<LeagueDivision>,
@@ -409,6 +544,16 @@ impl LeagueConference {
     /// ```
     pub fn num_teams(&self) -> usize {
         self.divisions.iter().map(|d| d.num_teams()).sum()
+    }
+}
+
+impl<'de> Deserialize<'de> for LeagueConference {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let raw = LeagueConferenceRaw::deserialize(deserializer)?;
+        LeagueConference::try_from(raw).map_err(serde::de::Error::custom)
     }
 }
 

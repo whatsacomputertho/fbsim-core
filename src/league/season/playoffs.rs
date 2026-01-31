@@ -5,22 +5,214 @@ use rocket_okapi::okapi::schemars;
 #[cfg(feature = "rocket_okapi")]
 use rocket_okapi::okapi::schemars::JsonSchema;
 use rand::Rng;
-use serde::{Serialize, Deserialize};
-use std::collections::BTreeMap;
+use serde::{Serialize, Deserialize, Deserializer};
+use std::collections::{BTreeMap, HashSet};
 
 use crate::game::matchup::FootballMatchupResult;
 use crate::league::matchup::LeagueTeamRecord;
 use crate::league::season::week::LeagueSeasonWeek;
 use crate::league::season::matchup::LeagueSeasonMatchup;
 
+/// Maximum allowed length for a playoff team short name
+const MAX_PLAYOFF_TEAM_SHORT_NAME_LEN: usize = 4;
+
+/// # `PlayoffTeamRaw` struct
+///
+/// A freshly deserialized `PlayoffTeam` prior to validation.
+#[derive(Clone, Eq, PartialEq, Ord, PartialOrd, Default, Debug, Serialize, Deserialize)]
+pub struct PlayoffTeamRaw {
+    pub seed: usize,
+    pub short_name: String,
+}
+
+impl PlayoffTeamRaw {
+    /// Validate the raw playoff team
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::league::season::playoffs::PlayoffTeamRaw;
+    ///
+    /// let raw = PlayoffTeamRaw { seed: 1, short_name: "TM".to_string() };
+    /// assert!(raw.validate().is_ok());
+    /// ```
+    pub fn validate(&self) -> Result<(), String> {
+        if self.short_name.len() > MAX_PLAYOFF_TEAM_SHORT_NAME_LEN {
+            return Err(format!(
+                "Playoff team short name '{}' exceeds maximum length of {} characters",
+                self.short_name, MAX_PLAYOFF_TEAM_SHORT_NAME_LEN
+            ));
+        }
+        Ok(())
+    }
+}
+
+impl TryFrom<PlayoffTeamRaw> for PlayoffTeam {
+    type Error = String;
+
+    fn try_from(raw: PlayoffTeamRaw) -> Result<Self, Self::Error> {
+        raw.validate()?;
+        Ok(PlayoffTeam {
+            seed: raw.seed,
+            short_name: raw.short_name,
+        })
+    }
+}
+
+/// # `PlayoffTeamsRaw` struct
+///
+/// A freshly deserialized `PlayoffTeams` prior to validation.
+#[derive(Clone, Eq, PartialEq, Ord, PartialOrd, Default, Debug, Serialize, Deserialize)]
+pub struct PlayoffTeamsRaw {
+    pub teams: BTreeMap<usize, BTreeMap<usize, PlayoffTeam>>,
+}
+
+impl PlayoffTeamsRaw {
+    /// Validate the raw playoff teams
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::league::season::playoffs::PlayoffTeamsRaw;
+    /// use std::collections::BTreeMap;
+    ///
+    /// let raw = PlayoffTeamsRaw { teams: BTreeMap::new() };
+    /// assert!(raw.validate().is_ok());
+    /// ```
+    pub fn validate(&self) -> Result<(), String> {
+        // Check for duplicate team IDs across conferences
+        let mut seen = HashSet::new();
+        for (conf_id, conference_teams) in &self.teams {
+            for &team_id in conference_teams.keys() {
+                if !seen.insert(team_id) {
+                    return Err(format!(
+                        "Duplicate team ID {} found across conferences in playoffs (detected in conference {})",
+                        team_id, conf_id
+                    ));
+                }
+            }
+        }
+        Ok(())
+    }
+}
+
+impl TryFrom<PlayoffTeamsRaw> for PlayoffTeams {
+    type Error = String;
+
+    fn try_from(raw: PlayoffTeamsRaw) -> Result<Self, Self::Error> {
+        raw.validate()?;
+        Ok(PlayoffTeams {
+            teams: raw.teams,
+        })
+    }
+}
+
+/// # `LeagueSeasonPlayoffsRaw` struct
+///
+/// A freshly deserialized `LeagueSeasonPlayoffs` prior to validation.
+#[derive(Clone, Eq, PartialEq, Ord, PartialOrd, Default, Debug, Serialize, Deserialize)]
+pub struct LeagueSeasonPlayoffsRaw {
+    pub teams: PlayoffTeams,
+    pub conference_brackets: BTreeMap<usize, Vec<LeagueSeasonWeek>>,
+    #[serde(default)]
+    pub winners_bracket: Vec<LeagueSeasonWeek>,
+}
+
+impl LeagueSeasonPlayoffsRaw {
+    /// Validate the raw playoffs
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::league::season::playoffs::LeagueSeasonPlayoffsRaw;
+    /// use fbsim_core::league::season::playoffs::PlayoffTeams;
+    /// use std::collections::BTreeMap;
+    ///
+    /// let raw = LeagueSeasonPlayoffsRaw {
+    ///     teams: PlayoffTeams::new(),
+    ///     conference_brackets: BTreeMap::new(),
+    ///     winners_bracket: Vec::new(),
+    /// };
+    /// assert!(raw.validate().is_ok());
+    /// ```
+    pub fn validate(&self) -> Result<(), String> {
+        // Collect all valid team IDs from the playoff teams
+        let valid_team_ids: HashSet<usize> = self.teams.iter().collect();
+
+        // Validate all matchups in conference brackets reference valid team IDs
+        for (conf_id, rounds) in &self.conference_brackets {
+            for (round_index, round) in rounds.iter().enumerate() {
+                for (matchup_index, matchup) in round.matchups().iter().enumerate() {
+                    let home_id = *matchup.home_team();
+                    let away_id = *matchup.away_team();
+                    if !valid_team_ids.contains(&home_id) {
+                        return Err(format!(
+                            "Conference {} bracket round {} matchup {} references nonexistent home team ID: {}",
+                            conf_id, round_index, matchup_index, home_id
+                        ));
+                    }
+                    if !valid_team_ids.contains(&away_id) {
+                        return Err(format!(
+                            "Conference {} bracket round {} matchup {} references nonexistent away team ID: {}",
+                            conf_id, round_index, matchup_index, away_id
+                        ));
+                    }
+                }
+            }
+        }
+
+        // Validate all matchups in the winners bracket reference valid team IDs
+        for (round_index, round) in self.winners_bracket.iter().enumerate() {
+            for (matchup_index, matchup) in round.matchups().iter().enumerate() {
+                let home_id = *matchup.home_team();
+                let away_id = *matchup.away_team();
+                if !valid_team_ids.contains(&home_id) {
+                    return Err(format!(
+                        "Winners bracket round {} matchup {} references nonexistent home team ID: {}",
+                        round_index, matchup_index, home_id
+                    ));
+                }
+                if !valid_team_ids.contains(&away_id) {
+                    return Err(format!(
+                        "Winners bracket round {} matchup {} references nonexistent away team ID: {}",
+                        round_index, matchup_index, away_id
+                    ));
+                }
+            }
+        }
+
+        Ok(())
+    }
+}
+
+impl TryFrom<LeagueSeasonPlayoffsRaw> for LeagueSeasonPlayoffs {
+    type Error = String;
+
+    fn try_from(raw: LeagueSeasonPlayoffsRaw) -> Result<Self, Self::Error> {
+        raw.validate()?;
+        Ok(LeagueSeasonPlayoffs {
+            teams: raw.teams,
+            conference_brackets: raw.conference_brackets,
+            winners_bracket: raw.winners_bracket,
+        })
+    }
+}
+
 /// # `PlayoffTeam` struct
 ///
 /// Represents a single team's playoff entry with its seed and short name.
 #[cfg_attr(feature = "rocket_okapi", derive(JsonSchema))]
-#[derive(Clone, Eq, PartialEq, Ord, PartialOrd, Default, Debug, Serialize, Deserialize)]
+#[derive(Clone, Eq, PartialEq, Ord, PartialOrd, Default, Debug, Serialize)]
 pub struct PlayoffTeam {
     seed: usize,
     short_name: String,
+}
+
+impl<'de> Deserialize<'de> for PlayoffTeam {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let raw = PlayoffTeamRaw::deserialize(deserializer)?;
+        PlayoffTeam::try_from(raw).map_err(serde::de::Error::custom)
+    }
 }
 
 impl PlayoffTeam {
@@ -40,7 +232,7 @@ impl PlayoffTeam {
 /// A collection of teams participating in the playoffs, organized by conference.
 /// Conference ID 0 is used for non-conference playoffs.
 #[cfg_attr(feature = "rocket_okapi", derive(JsonSchema))]
-#[derive(Clone, Eq, PartialEq, Ord, PartialOrd, Default, Debug, Serialize, Deserialize)]
+#[derive(Clone, Eq, PartialEq, Ord, PartialOrd, Default, Debug, Serialize)]
 pub struct PlayoffTeams {
     /// conference_id -> team_id -> PlayoffTeam
     teams: BTreeMap<usize, BTreeMap<usize, PlayoffTeam>>,
@@ -299,6 +491,16 @@ impl PlayoffTeams {
     }
 }
 
+impl<'de> Deserialize<'de> for PlayoffTeams {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let raw = PlayoffTeamsRaw::deserialize(deserializer)?;
+        PlayoffTeams::try_from(raw).map_err(serde::de::Error::custom)
+    }
+}
+
 /// # `LeagueSeasonPlayoffs` struct
 ///
 /// A `LeagueSeasonPlayoffs` represents football season playoffs.
@@ -307,7 +509,7 @@ impl PlayoffTeams {
 /// playoffs use bracket ID 0. Multi-conference playoffs have one bracket per
 /// conference, plus a `winners_bracket` for the championship between conference winners.
 #[cfg_attr(feature = "rocket_okapi", derive(JsonSchema))]
-#[derive(Clone, Eq, PartialEq, Ord, PartialOrd, Default, Debug, Serialize, Deserialize)]
+#[derive(Clone, Eq, PartialEq, Ord, PartialOrd, Default, Debug, Serialize)]
 pub struct LeagueSeasonPlayoffs {
     /// Teams participating in the playoffs
     teams: PlayoffTeams,
@@ -318,6 +520,16 @@ pub struct LeagueSeasonPlayoffs {
     /// Only used in multi-conference playoffs.
     #[serde(default)]
     winners_bracket: Vec<LeagueSeasonWeek>,
+}
+
+impl<'de> Deserialize<'de> for LeagueSeasonPlayoffs {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let raw = LeagueSeasonPlayoffsRaw::deserialize(deserializer)?;
+        LeagueSeasonPlayoffs::try_from(raw).map_err(serde::de::Error::custom)
+    }
 }
 
 impl LeagueSeasonPlayoffs {
