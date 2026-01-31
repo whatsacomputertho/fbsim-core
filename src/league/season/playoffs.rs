@@ -408,7 +408,7 @@ impl LeagueSeasonPlayoffs {
     /// use fbsim_core::league::season::playoffs::LeagueSeasonPlayoffs;
     ///
     /// let mut my_playoffs = LeagueSeasonPlayoffs::new();
-    /// let conference_bracket = my_playoffs.conference_rounds_mut(0);
+    /// let conference_bracket = my_playoffs.conference_bracket_mut(0);
     /// assert!(conference_bracket.is_none());
     /// ```
     pub fn conference_bracket_mut(&mut self, conference: usize) -> Option<&mut Vec<LeagueSeasonWeek>> {
@@ -463,6 +463,47 @@ impl LeagueSeasonPlayoffs {
             .ok_or_else(|| format!("Team {} not in playoffs", team_id))
     }
 
+    /// Find the conference for a given team ID
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::league::season::playoffs::LeagueSeasonPlayoffs;
+    ///
+    /// // Create playoffs and add a team
+    /// let mut my_playoffs = LeagueSeasonPlayoffs::new();
+    /// let _ = my_playoffs.add_team(0, "ME", Some(0));
+    ///
+    /// // Get that team's conference
+    /// let seed = my_playoffs.team_conference(0);
+    /// assert!(seed.is_ok());
+    /// assert!(seed.unwrap() == 0);
+    /// ```
+    pub fn team_conference(&self, team_id: usize) -> Result<usize, String> {
+        if !self.teams.contains(team_id) {
+            return Err(
+                format!(
+                    "Team {} does not exist in playoffs",
+                    team_id
+                )
+            )
+        }
+        for conference in self.teams.conferences() {
+            if let Some(c) = self.teams.get_conference(*conference) {
+                for id in c.keys() {
+                    if *id == team_id {
+                        return Ok(*conference);
+                    }
+                }
+            }
+        }
+        Err(
+            format!(
+                "Team {} exists but was not found in any conference",
+                team_id
+            )
+        )
+    }
+
     /// Check if this is a conference-based playoff
     ///
     /// Returns true if teams are spread across multiple conferences.
@@ -506,6 +547,27 @@ impl LeagueSeasonPlayoffs {
         self.teams.conference_teams_by_seed(conf_index)
     }
 
+    /// Determine whether a given conference bracket has started
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::league::season::playoffs::LeagueSeasonPlayoffs;
+    ///
+    /// let my_playoffs = LeagueSeasonPlayoffs::new();
+    /// assert!(!my_playoffs.conference_bracket_started(0));
+    /// ```
+    pub fn conference_bracket_started(&self, conference: usize) -> bool {
+        if let Some(bracket) = self.conference_brackets.get(&conference) {
+            // If any round has started, the playoffs have started
+            for round in bracket {
+                if round.started() {
+                    return true;
+                }
+            }
+        }
+        false
+    }
+
     /// Determine whether the conference brackets have sterted
     ///
     /// ### Example
@@ -516,7 +578,7 @@ impl LeagueSeasonPlayoffs {
     /// assert!(!my_playoffs.conference_brackets_started());
     /// ```
     pub fn conference_brackets_started(&self) -> bool {
-        for (i, bracket) in self.conference_brackets.iter() {
+        for (_, bracket) in self.conference_brackets.iter() {
             // If any round has started, the playoffs have started
             for round in bracket {
                 if round.started() {
@@ -524,6 +586,47 @@ impl LeagueSeasonPlayoffs {
                 }
             }
         }
+        false
+    }
+
+    /// Determine whether a given conference bracket is complete
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::league::season::playoffs::LeagueSeasonPlayoffs;
+    ///
+    /// let my_playoffs = LeagueSeasonPlayoffs::new();
+    /// assert!(!my_playoffs.conference_bracket_complete(0));
+    /// ```
+    pub fn conference_bracket_complete(&self, conference: usize) -> bool {
+        if let Some(bracket) = self.conference_brackets.get(&conference) {
+            // If no rounds generated yet, it hasn't completed
+            if bracket.is_empty() {
+                return false;
+            }
+            for round in bracket {
+                // If any round hasn't started or hasn't finished yet, it hasn't completed
+                if !(round.started() && round.complete()) {
+                    return false;
+                }
+
+                // This conference playoff bracket is complete when only 1 team remains
+                let conference = match self.teams.get_conference(conference) {
+                    Some(c) => c,
+                    None => return false,
+                };
+                let mut eliminated = 0;
+                for round in bracket {
+                    eliminated += round.matchups().len();
+                }
+                if conference.len() != eliminated + 1 {
+                    return false;
+                }
+            }
+            return true;
+        }
+        
+        // If no round was found, it hasn't completed
         false
     }
 
@@ -537,7 +640,7 @@ impl LeagueSeasonPlayoffs {
     /// assert!(!my_playoffs.conference_brackets_complete());
     /// ```
     pub fn conference_brackets_complete(&self) -> bool {
-        // If conference brackets have not started yet, they haven't started
+        // If conference brackets have not started yet, they haven't completed
         if !self.conference_brackets_started() {
             return false;
         }
@@ -552,9 +655,9 @@ impl LeagueSeasonPlayoffs {
             }
 
             // This conference playoff bracket is complete when only 1 team remains
-            let conference = match self.teams.get_conference(i) {
+            let conference = match self.teams.get_conference(*i) {
                 Some(c) => c,
-                None => return false;
+                None => return false
             };
             let mut eliminated = 0;
             for round in bracket {
@@ -567,6 +670,32 @@ impl LeagueSeasonPlayoffs {
         true
     }
 
+    /// Get the team ID of the conference champion for a specific conference
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::league::season::playoffs::LeagueSeasonPlayoffs;
+    ///
+    /// let my_playoffs = LeagueSeasonPlayoffs::new();
+    /// assert!(my_playoffs.conference_champion(0).is_none());
+    /// ```
+    pub fn conference_champion(&self, conference: usize) -> Option<usize> {
+        // Check if the conference bracket is complete
+        if !self.conference_bracket_complete(conference) {
+            return None;
+        }
+
+        // Get the conference champion
+        if let Some(bracket) = self.conference_brackets.get(&conference) {
+            if let Some(round) = bracket.last() {
+                if let Some(matchup) = round.matchups().first() {
+                    return matchup.winner();
+                }
+            }
+        }
+        None
+    }
+
     /// Determine whether the winners bracket has started
     ///
     /// ### Example
@@ -577,7 +706,14 @@ impl LeagueSeasonPlayoffs {
     /// assert!(!my_playoffs.winners_bracket_started());
     /// ```
     pub fn winners_bracket_started(&self) -> bool {
-        self.winners_bracket.is_empty()
+        if !self.winners_bracket.is_empty() {
+            for round in self.winners_bracket.iter() {
+                if round.started() {
+                    return true;
+                }
+            }
+        }
+        false
     }
 
     /// Determine whether the winners bracket is complete
@@ -725,11 +861,8 @@ impl LeagueSeasonPlayoffs {
     /// assert!(first_round_teams.unwrap() == 2);
     /// ```
     pub fn first_round_teams(&self, conference: Option<usize>) -> Result<usize, String> {
-        let conf = match conference {
-            Some(c) => c,
-            None => 0
-        };
-        let teams_per_conference = self.conference_teams(conf);
+        let conf = conference.unwrap_or_default();
+        let teams_per_conference = self.conference_teams(conf).len();
         self.num_first_round_teams(teams_per_conference)
     }
 
@@ -793,10 +926,7 @@ impl LeagueSeasonPlayoffs {
     /// assert!(wild_cards.unwrap() == 2);
     /// ```
     pub fn wild_cards(&self, conference: Option<usize>) -> Result<usize, String> {
-        let conf = match conference {
-            Some(c) => c,
-            None => 0
-        };
+        let conf = conference.unwrap_or_default();
         let num_teams = self.conference_teams(conf).len();
         let first_round_teams = self.first_round_teams(conference)?;
         self.num_wild_card_teams(num_teams, first_round_teams)
@@ -857,15 +987,12 @@ impl LeagueSeasonPlayoffs {
     /// let _ = my_playoffs.add_team(2, "THEM", None);
     ///
     /// // Get the number of byes
-    /// let byes = my_playoffs.byes();
+    /// let byes = my_playoffs.byes(None);
     /// assert!(byes.is_ok());
     /// assert!(byes.unwrap() == 1);
     /// ```
     pub fn byes(&self, conference: Option<usize>) -> Result<usize, String> {
-        let conf = match conference {
-            Some(c) => c,
-            None => 0
-        };
+        let conf = conference.unwrap_or_default();
         let num_teams = self.conference_teams(conf).len();
         let first_round_teams = self.first_round_teams(conference)?;
         self.num_bye_teams(num_teams, first_round_teams)
@@ -931,8 +1058,8 @@ impl LeagueSeasonPlayoffs {
         self.conference_brackets.insert(conference, Vec::new());
 
         // Get the number of wild card teams and byes
-        let byes = self.byes()?;
-        let wild_cards = self.wild_cards()?;
+        let byes = self.byes(Some(conference))?;
+        let wild_cards = self.wild_cards(Some(conference))?;
         let wild_card_matchups = wild_cards.checked_div(2).ok_or(
             String::from("Failed to calculate wild card matchups")
         )?;
@@ -968,15 +1095,7 @@ impl LeagueSeasonPlayoffs {
         }
 
         // Add the week to the conference bracket and return
-        self.conference_bracket.entry(conference).or_default().push(week);
-        Ok(())
-    }
-
-    /// Helper method for generating the wild card round for all conferences
-    fn gen_conference_wild_card_rounds(&mut self, rng: &mut impl Rng) -> Result<(), String> {
-        for conference in self.teams.conferences() {
-            self.gen_conference_wild_card_round(conference, rng)?;
-        }
+        self.conference_brackets.entry(conference).or_default().push(week);
         Ok(())
     }
 
@@ -1034,21 +1153,21 @@ impl LeagueSeasonPlayoffs {
             // determined by each conference champion's performance in the
             // regular season and playoffs
 
-            // Get the home and away teams by conference ID
-            let home_conf_id = byes + i + 1;
-            let away_conf_id = num_teams - i;
-            let (home_team_id, home_team) = self.teams.get_by_seed(conference, home_seed)
+            // Get the conference champions by conference ID
+            let home_conf_id = byes + i;
+            let away_conf_id = num_teams - (i + 1);
+            let home_team_id = self.conference_champion(home_conf_id)
                 .ok_or_else(|| format!(
-                    "No team found in conference {} with seed {}",
-                    conference,
-                    home_seed
+                    "No conference champion found for conference {}",
+                    home_conf_id
                 ))?;
-            let (away_team_id, away_team) = self.teams.get_by_seed(conference, away_seed)
+            let home_team = self.teams.get(home_team_id).unwrap();
+            let away_team_id = self.conference_champion(away_conf_id)
                 .ok_or_else(|| format!(
-                    "No team found in conference {} with seed {}",
-                    conference,
-                    away_seed
+                    "No conference champion found for conference {}",
+                    away_conf_id
                 ))?;
+            let away_team = self.teams.get(away_team_id).unwrap();
 
             // Create the matchup and add to the week
             let matchup = LeagueSeasonMatchup::new(
@@ -1062,7 +1181,7 @@ impl LeagueSeasonPlayoffs {
         }
 
         // Add the week to the conference bracket and return
-        self.conference_bracket.entry(conference).or_default().push(week);
+        self.winners_bracket.push(week);
         Ok(())
     }
 
@@ -1154,7 +1273,7 @@ impl LeagueSeasonPlayoffs {
                 |x| self.team_seed(x.winner().unwrap()).unwrap()
             ).collect();
             let num_winners = winner_seeds.len();
-            let byes = self.byes()?;
+            let byes = self.byes(Some(conference))?;
 
             // Populate the round with matchups
             let mut week = LeagueSeasonWeek::new();
@@ -1305,39 +1424,292 @@ impl LeagueSeasonPlayoffs {
         }
     }
 
-    /// Helper method for generating the first round for all conferences
-    fn gen_conference_first_rounds(&mut self, rng: &mut impl Rng) -> Result<(), String> {
-        for conference in self.teams.conferences() {
-            self.gen_conference_first_round(conference, rng)?;
+    /// Helper method for generating the winners' bracket first round matchups
+    fn gen_winners_first_round(&mut self, rng: &mut impl Rng) -> Result<(), String> {
+        // Ensure conditions are valid to generate conference wild card round
+        let num_teams = self.num_conferences();
+        if num_teams < 2 {
+            return Err(
+                format!(
+                    "Must contain at least 2 conferences for a winners bracket, got {}",
+                    num_teams
+                )
+            )
         }
-        Ok(())
+        if !self.conference_brackets_complete() {
+            return Err(
+                String::from(
+                    "Cannot generate winners bracket, conference playoffs not complete"
+                )
+            )
+        }
+
+        if num_teams.is_power_of_two() {
+            // In this case, there is no wild-card round, this is a true first round
+            // Ensure the winners bracket has not yet started
+            if self.winners_bracket_started() {
+                return Err(
+                    String::from(
+                        "Cannot re-generate first round, winners bracket already started"
+                    )
+                )
+            }
+
+            // Clear the winners bracket if it already exists
+            self.winners_bracket = Vec::new();
+
+            // Match up the first round teams against one another
+            let first_round_matchups = num_teams.checked_div(2).ok_or(
+                String::from("Failed to calculate first round matchups")
+            )?;
+            let mut week = LeagueSeasonWeek::new();
+            for i in 0..first_round_matchups {
+                // Get the home and away teams by conference ID
+                let home_conf_id = i;
+                let away_conf_id = num_teams - (i + 1);
+                let home_team_id = self.conference_champion(home_conf_id)
+                    .ok_or_else(|| format!(
+                        "No conference champion found for conference {}",
+                        home_conf_id
+                    ))?;
+                let home_team = self.teams.get(home_team_id).unwrap();
+                let away_team_id = self.conference_champion(away_conf_id)
+                    .ok_or_else(|| format!(
+                        "No conference champion found for conference {}",
+                        away_conf_id
+                    ))?;
+                let away_team = self.teams.get(away_team_id).unwrap();
+
+                // Create the matchup and add to the week
+                let matchup = LeagueSeasonMatchup::new(
+                    home_team_id,
+                    away_team_id,
+                    home_team.short_name(),
+                    away_team.short_name(),
+                    rng
+                );
+                week.matchups_mut().push(matchup);
+            }
+
+            // Add the week to the conference bracket and return
+            self.winners_bracket.push(week);
+            Ok(())
+        } else {
+            // In this case, we need to determine the winners of the wild card round
+            // Ensure only the wild card round exists in the conference bracket
+            let rounds = self.winners_bracket.len();
+            if rounds > 1 {
+                return Err(
+                    format!(
+                        "Expected only 1 round in winners bracket, found {}",
+                        rounds
+                    )
+                );
+            }
+
+            // Get the seeds of the wild card winners from the conference bracket
+            let round = match self.winners_bracket.last() {
+                Some(r) => r,
+                None => return Err(String::from("Wild card round not found"))
+            };
+            let winner_ids: Vec<usize> = round.matchups().iter().map(
+                |x| x.winner().unwrap()
+            ).collect();
+            let num_winners = winner_ids.len();
+            let byes = self.winners_bracket_byes()?;
+
+            // Populate the round with matchups
+            let mut week = LeagueSeasonWeek::new();
+            if num_winners >= byes {
+                // Match up winners of middle-ranked matchups with byes
+                for i in 0..byes {
+                    let bye_conf_id = i;
+                    let winner_index = num_winners - (i + 1);
+                    let away_team_id = match winner_ids.get(winner_index) {
+                        Some(s) => *s,
+                        None => return Err(format!("No winner found at index {}", winner_index))
+                    };
+                    let home_team_id = self.conference_champion(bye_conf_id)
+                        .ok_or_else(|| format!(
+                            "No conference champion found for conference {}",
+                            bye_conf_id
+                        ))?;
+                    let home_team = self.teams.get(home_team_id).unwrap();
+                    let away_team = self.teams.get(away_team_id)
+                        .ok_or_else(|| format!(
+                            "No team found with ID {}",
+                            away_team_id
+                        ))?;
+
+                    // Create the matchup and add to the week
+                    let matchup = LeagueSeasonMatchup::new(
+                        home_team_id,
+                        away_team_id,
+                        home_team.short_name(),
+                        away_team.short_name(),
+                        rng
+                    );
+                    week.matchups_mut().push(matchup);
+                }
+
+                // Match up winners of higher/lower ranked matchups with each other
+                let diff_winners = num_winners - byes;
+                let diff_winner_matchups = diff_winners.checked_div(2).ok_or(
+                    String::from("Failed to calculate first round matchups")
+                )?;
+                for i in 0..diff_winner_matchups {
+                    let t1_id = match winner_ids.get(i) {
+                        Some(s) => *s,
+                        None => return Err(format!("No winner found at index {}", i))
+                    };
+                    let t1_seed = self.team_seed(t1_id)?;
+                    let t1_conference = self.team_conference(t1_id)?;
+                    let t2_index = diff_winners - (i + 1);
+                    let t2_id = match winner_ids.get(t2_index) {
+                        Some(s) => *s,
+                        None => return Err(format!("No winner found at index {}", t2_index))
+                    };
+                    let t2_seed = self.team_seed(t2_id)?;
+                    let t2_conference = self.team_conference(t2_id)?;
+                    // Lower seed gets home field advantage
+                    let (home_seed, home_conference, away_seed, away_conference) = if t1_seed < t2_seed {
+                        (t1_seed, t1_conference, t2_seed, t2_conference)
+                    } else {
+                        (t2_seed, t2_conference, t1_seed, t1_conference)
+                    };
+                    let (home_team_id, home_team) = self.teams.get_by_seed(home_conference, home_seed)
+                        .ok_or_else(|| format!(
+                            "No team found in conference {} with seed {}",
+                            home_conference,
+                            home_seed
+                        ))?;
+                    let (away_team_id, away_team) = self.teams.get_by_seed(away_conference, away_seed)
+                        .ok_or_else(|| format!(
+                            "No team found in conference {} with seed {}",
+                            away_conference,
+                            away_seed
+                        ))?;
+
+                    // Create the matchup and add to the week
+                    let matchup = LeagueSeasonMatchup::new(
+                        home_team_id,
+                        away_team_id,
+                        home_team.short_name(),
+                        away_team.short_name(),
+                        rng
+                    );
+                    week.matchups_mut().push(matchup);
+                }
+            } else {
+                // Match up highest-ranked byes against winners
+                for i in 0..num_winners {
+                    let bye_conf_id = i;
+                    let winner_index = num_winners - (i + 1);
+                    let away_team_id = match winner_ids.get(winner_index) {
+                        Some(s) => *s,
+                        None => return Err(format!("No winner found at index {}", winner_index))
+                    };
+                    let home_team_id = self.conference_champion(bye_conf_id)
+                        .ok_or_else(|| format!(
+                            "No conference champion found for conference {}",
+                            bye_conf_id
+                        ))?;
+                    let home_team = self.teams.get(home_team_id).unwrap();
+                    let away_team = self.teams.get(away_team_id)
+                        .ok_or_else(|| format!(
+                            "No team found with ID {}",
+                            away_team_id
+                        ))?;
+
+                    // Create the matchup and add to the week
+                    let matchup = LeagueSeasonMatchup::new(
+                        home_team_id,
+                        away_team_id,
+                        home_team.short_name(),
+                        away_team.short_name(),
+                        rng
+                    );
+                    week.matchups_mut().push(matchup);
+                }
+
+                // Match up lowest-ranked byes against each other
+                let diff_winners = byes - num_winners;
+                let diff_winner_matchups = diff_winners.checked_div(2).ok_or(
+                    String::from("Failed to calculate first round matchups")
+                )?;
+                for i in 0..diff_winner_matchups {
+                    let t1_conference = num_winners + i;
+                    let t1_id = self.conference_champion(t1_conference)
+                        .ok_or_else(|| format!(
+                            "No conference champion found for conference {}",
+                            t1_conference
+                        ))?;
+                    let t1_seed = self.team_seed(t1_id)?;
+                    let t2_conference = byes - (i + 1);
+                    let t2_id = self.conference_champion(t2_conference)
+                        .ok_or_else(|| format!(
+                            "No conference champion found for conference {}",
+                            t2_conference
+                        ))?;
+                    let t2_seed = self.team_seed(t2_id)?;
+                    // Lower seed gets home field advantage
+                    let (home_seed, home_conference, away_seed, away_conference) = if t1_seed < t2_seed {
+                        (t1_seed, t1_conference, t2_seed, t2_conference)
+                    } else {
+                        (t2_seed, t2_conference, t1_seed, t1_conference)
+                    };
+                    let (home_team_id, home_team) = self.teams.get_by_seed(home_conference, home_seed)
+                        .ok_or_else(|| format!(
+                            "No team found in conference {} with seed {}",
+                            home_conference,
+                            home_seed
+                        ))?;
+                    let (away_team_id, away_team) = self.teams.get_by_seed(away_conference, away_seed)
+                        .ok_or_else(|| format!(
+                            "No team found in conference {} with seed {}",
+                            away_conference,
+                            away_seed
+                        ))?;
+
+                    // Create the matchup and add to the week
+                    let matchup = LeagueSeasonMatchup::new(
+                        home_team_id,
+                        away_team_id,
+                        home_team.short_name(),
+                        away_team.short_name(),
+                        rng
+                    );
+                    week.matchups_mut().push(matchup);
+                }
+            }
+            self.winners_bracket.push(week);
+            Ok(())
+        }
     }
 
     /// Helper method for generating the next round of the conference playoffs
     fn gen_next_conference_round(&mut self, conference: usize, rng: &mut impl Rng) -> Result<(), String> {
         // Ensure there are enough teams in the conference (at least 2)
-        let num_teams = self.conference_teams().len();
+        let num_teams = self.conference_teams(conference).len();
         if num_teams < 2 {
             return Err(format!("Playoffs must contain at least 2 teams, got {}", num_teams))
         }
-
-        let first_round_teams = self.first_round_teams()?;
+        let first_round_teams = self.first_round_teams(Some(conference))?;
         let bracket_len = self.conference_brackets.get(&conference).map(|b| b.len()).unwrap_or(0);
-
         if bracket_len == 0 {
             // Wild card round or first round
             if first_round_teams != num_teams {
-                self.gen_wild_card_round(rng)
+                self.gen_conference_wild_card_round(conference, rng)
             } else {
-                self.gen_first_round(rng)
+                self.gen_conference_first_round(conference, rng)
             }
         } else {
             // First round or later round
             if bracket_len == 1 && first_round_teams != num_teams {
-                self.gen_first_round(rng)
+                self.gen_conference_first_round(conference, rng)
             } else {
                 // Get seeds of winners from previous round and ensure more than one
-                let round = match self.rounds.get(&conference).and_then(|b| b.last()) {
+                let round = match self.conference_brackets.get(&conference).and_then(|b| b.last()) {
                     Some(r) => r,
                     None => return Err(
                         format!(
@@ -1391,7 +1763,7 @@ impl LeagueSeasonPlayoffs {
                             conference,
                             home_seed
                         ))?;
-                    let (away_team_id, away_team) = self.teams.get_by_seed(0, away_seed)
+                    let (away_team_id, away_team) = self.teams.get_by_seed(conference, away_seed)
                         .ok_or_else(|| format!(
                             "No team found in conference {} with seed {}",
                             conference,
@@ -1416,10 +1788,156 @@ impl LeagueSeasonPlayoffs {
 
     /// Helper method for generating the next round for all conference brackets
     fn gen_next_conference_rounds(&mut self, rng: &mut impl Rng) -> Result<(), String> {
-        for conference in self.teams.conferences() {
+        let conference_ids: Vec<usize> = self.teams.conferences().copied().collect();
+        for conference in conference_ids {
             self.gen_next_conference_round(conference, rng)?;
         }
         Ok(())
+    }
+
+    /// Helper method for generating the next round of the winners bracket
+    fn gen_next_winners_round(&mut self, rng: &mut impl Rng) -> Result<(), String> {
+        // Ensure there are enough conference champions
+        let num_teams = self.teams.num_conferences();
+        if num_teams < 2 {
+            return Err(
+                format!(
+                    "Winners bracket must contain at least 2 conference champions, got {}",
+                    num_teams
+                )
+            )
+        }
+
+        // Ensure the conference playoffs are complete
+        if !self.conference_brackets_complete() {
+            return Err(
+                String::from(
+                    "Cannot generate winners bracket: Conference playoffs not complete"
+                )
+            )
+        }
+
+        let first_round_teams = self.first_round_winners()?;
+        let bracket_len = self.winners_bracket.len();
+        if bracket_len == 0 {
+            // Wild card round or first round
+            if first_round_teams != num_teams {
+                self.gen_winners_wild_card_round(rng)
+            } else {
+                self.gen_winners_first_round(rng)
+            }
+        } else {
+            // First round or later round
+            if bracket_len == 1 && first_round_teams != num_teams {
+                self.gen_winners_first_round(rng)
+            } else {
+                // Get seeds of winners from previous round and ensure more than one
+                let round = match self.winners_bracket.last() {
+                    Some(r) => r,
+                    None => return Err(
+                        String::from(
+                            "Previous winners bracket round not found"
+                        )
+                    )
+                };
+                let winner_ids: Vec<usize> = round.matchups().iter().map(
+                    |x| x.winner().unwrap()
+                ).collect();
+                let num_winners = winner_ids.len();
+                if num_winners <= 1 {
+                    return Err(
+                        format!(
+                            "Cannot generate next round for winners bracket, only {} teams remain",
+                            num_winners
+                        )
+                    );
+                }
+                let next_round_matchups = num_winners.checked_div(2).ok_or(
+                    String::from(
+                        "Failed to calculate next round matchups for winners bracket"
+                    )
+                )?;
+
+                // Match up winners of previous round against each other
+                let mut week = LeagueSeasonWeek::new();
+                for i in 0..next_round_matchups {
+                    let t1_index = i * 2;
+                    let t1_id = match winner_ids.get(t1_index) {
+                        Some(s) => *s,
+                        None => return Err(format!("No winner found at index {}", t1_index))
+                    };
+                    let t1_seed = self.team_seed(t1_id)?;
+                    let t2_index = t1_index + 1;
+                    let t2_id = match winner_ids.get(t2_index) {
+                        Some(s) => *s,
+                        None => return Err(format!("No winner found at index {}", t2_index))
+                    };
+                    let t2_seed = self.team_seed(t2_id)?;
+                    // Get the home and away teams (lower seed gets home field)
+                    let (home_team_id, away_team_id) = if t1_seed < t2_seed {
+                        (t1_id, t2_id)
+                    } else {
+                        (t2_id, t1_id)
+                    };
+                    let home_team = self.teams.get(home_team_id).unwrap();
+                    let away_team = self.teams.get(away_team_id).unwrap();
+
+                    // Create the matchup and add to the week
+                    let matchup = LeagueSeasonMatchup::new(
+                        home_team_id,
+                        away_team_id,
+                        home_team.short_name(),
+                        away_team.short_name(),
+                        rng
+                    );
+                    week.matchups_mut().push(matchup);
+                }
+                self.winners_bracket.push(week);
+                Ok(())
+            }
+        }
+    }
+
+    /// Generate the next round of the playoffs
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::league::season::playoffs::LeagueSeasonPlayoffs;
+    ///
+    /// // Instantiate playoffs and add teams
+    /// let mut my_playoffs = LeagueSeasonPlayoffs::new();
+    /// let _ = my_playoffs.add_team(0, "A", Some(0));
+    /// let _ = my_playoffs.add_team(1, "B", Some(0));
+    /// let _ = my_playoffs.add_team(2, "C", Some(1));
+    /// let _ = my_playoffs.add_team(3, "D", Some(1));
+    /// let _ = my_playoffs.add_team(4, "E", Some(2));
+    /// let _ = my_playoffs.add_team(5, "F", Some(2));
+    ///
+    /// // Get the number of winners bracket first round byes
+    /// let mut rng = rand::thread_rng();
+    /// let res = my_playoffs.gen_next_playoff_round(&mut rng);
+    /// assert!(res.is_ok());
+    /// ```
+    pub fn gen_next_playoff_round(&mut self, rng: &mut impl Rng) -> Result<(), String> {
+        // Ensure playoffs are not already complete
+        if self.complete() {
+            return Err(
+                String::from(
+                    "Cannot generate next playoff round: Playoffs complete"
+                )
+            )
+        }
+
+        // Generate the next round of the playoffs
+        if self.is_conference_playoff() {
+            if self.conference_brackets_complete() {
+                self.gen_next_winners_round(rng)
+            } else {
+                self.gen_next_conference_rounds(rng)
+            }
+        } else {
+            self.gen_next_conference_rounds(rng)
+        }
     }
 
     /// Check if a team made it to the championship
@@ -1456,7 +1974,7 @@ impl LeagueSeasonPlayoffs {
             Ok(false)
         } else {
             // Single-conference: championship is last round of bracket 0
-            let bracket = match self.rounds.get(&0) {
+            let bracket = match self.conference_brackets.get(&0) {
                 Some(b) => b,
                 None => return Ok(false),
             };
@@ -1508,7 +2026,7 @@ impl LeagueSeasonPlayoffs {
             }
         } else {
             // Single-conference: winner is from bracket 0
-            if let Some(bracket) = self.rounds.get(&0) {
+            if let Some(bracket) = self.conference_brackets.get(&0) {
                 if let Some(final_round) = bracket.last() {
                     if let Some(final_matchup) = final_round.matchups().first() {
                         return final_matchup.winner();
@@ -1543,7 +2061,7 @@ impl LeagueSeasonPlayoffs {
         let mut record = LeagueTeamRecord::new();
 
         // Calculate the team's playoff record across all brackets
-        let all_rounds = self.rounds.values().flatten()
+        let all_rounds = self.conference_brackets.values().flatten()
             .chain(self.winners_bracket.iter());
 
         for round in all_rounds {
@@ -1564,264 +2082,5 @@ impl LeagueSeasonPlayoffs {
             }
         }
         Ok(record)
-    }
-
-    /// Generate the next round for conference-based playoffs
-    ///
-    /// This handles separate conference brackets until the championship round,
-    /// then merges conference winners for the final game.
-    ///
-    /// ### Example
-    /// ```
-    /// use fbsim_core::league::season::playoffs::LeagueSeasonPlayoffs;
-    ///
-    /// let mut my_playoffs = LeagueSeasonPlayoffs::new();
-    /// let _ = my_playoffs.add_team(0, "ME", Some(0));
-    /// let _ = my_playoffs.add_team(1, "YOU", Some(0));
-    /// let _ = my_playoffs.add_team(2, "THEM", Some(1));
-    /// let _ = my_playoffs.add_team(3, "US", Some(1));
-    ///
-    /// let mut rng = rand::thread_rng();
-    /// let res = my_playoffs.gen_next_conference_round(&mut rng);
-    /// assert!(res.is_ok());
-    /// ```
-    pub fn gen_next_conference_round(&mut self, rng: &mut impl Rng) -> Result<(), String> {
-        if !self.is_conference_playoff() {
-            return Err("Not a conference-based playoff. Use gen_next_round instead.".to_string());
-        }
-
-        // Ensure we have at least 2 conferences
-        if self.teams.num_conferences() < 2 {
-            return Err("Conference playoffs require at least 2 conferences".to_string());
-        }
-
-        // If all conference brackets are decided, generate the championship round
-        if self.conference_playoffs_complete() {
-            return self.gen_championship_round(rng);
-        }
-
-        // Collect conference indices first to avoid borrow issues
-        let conf_indices: Vec<usize> = self.teams.conferences().copied().collect();
-
-        let mut generated_any = false;
-
-        // Generate next round for each conference separately
-        for conf_index in conf_indices {
-            // Determine which teams are still active in this conference
-            let active_teams = self.get_active_conference_teams(conf_index)?;
-
-            if active_teams.len() <= 1 {
-                // Conference bracket is complete
-                continue;
-            }
-
-            // Generate matchups for this conference
-            let matchups = self.generate_conference_matchups(&active_teams, rng)?;
-            let mut week = LeagueSeasonWeek::new();
-            for matchup in matchups {
-                week.matchups_mut().push(matchup);
-            }
-
-            self.rounds.entry(conf_index).or_default().push(week);
-            generated_any = true;
-        }
-
-        if !generated_any {
-            return Err("No matchups to generate".to_string());
-        }
-
-        Ok(())
-    }
-
-    /// Check if all conference brackets have been decided (one team remaining
-    /// per conference), meaning the playoffs are ready for the championship round
-    fn conference_playoffs_complete(&self) -> bool {
-        let conference_winners = self.get_conference_winners();
-        conference_winners.len() == self.teams.num_conferences()
-            && conference_winners.iter().all(|(_, winner)| winner.is_some())
-    }
-
-    /// Get teams still active in a conference bracket
-    ///
-    /// Returns a list of `(team_id, &PlayoffTeam)` pairs sorted by seed.
-    fn get_active_conference_teams(&self, conf_index: usize) -> Result<Vec<(usize, &PlayoffTeam)>, String> {
-        let conference_teams = self.teams.conference_teams_by_seed(conf_index);
-        if conference_teams.is_empty() {
-            return Err(format!("Conference {} not found", conf_index));
-        }
-
-        // Check the conference's bracket rounds for eliminated teams
-        let all_rounds: Vec<&LeagueSeasonWeek> = self.rounds
-            .get(&conf_index)
-            .map(|r| r.iter().collect())
-            .unwrap_or_default();
-
-        if all_rounds.is_empty() {
-            // No rounds played yet, all teams active
-            return Ok(conference_teams);
-        }
-
-        // Find teams that have lost in previous rounds
-        let mut eliminated: std::collections::HashSet<usize> = std::collections::HashSet::new();
-        for round in all_rounds {
-            for matchup in round.matchups() {
-                if matchup.context().game_over() {
-                    if let Some(winner_id) = matchup.winner() {
-                        // The loser is eliminated
-                        let loser_id = if *matchup.home_team() == winner_id {
-                            *matchup.away_team()
-                        } else {
-                            *matchup.home_team()
-                        };
-                        eliminated.insert(loser_id);
-                    }
-                }
-            }
-        }
-
-        // Return active teams (not eliminated)
-        let active: Vec<(usize, &PlayoffTeam)> = conference_teams
-            .into_iter()
-            .filter(|(team_id, _)| !eliminated.contains(team_id))
-            .collect();
-        Ok(active)
-    }
-
-    /// Generate matchups for a conference round
-    fn generate_conference_matchups(
-        &self,
-        active_teams: &[(usize, &PlayoffTeam)],
-        rng: &mut impl Rng,
-    ) -> Result<Vec<LeagueSeasonMatchup>, String> {
-        let num_teams = active_teams.len();
-        if num_teams < 2 {
-            return Err("Not enough teams for matchups".to_string());
-        }
-
-        let num_matchups = num_teams / 2;
-        let mut matchups = Vec::new();
-
-        // Sort by seed
-        let mut sorted_teams: Vec<&(usize, &PlayoffTeam)> = active_teams.iter().collect();
-        sorted_teams.sort_by_key(|(_, t)| t.seed());
-
-        // Pair highest seed with lowest seed
-        for i in 0..num_matchups {
-            let (home_id, home_team) = sorted_teams[i];
-            let (away_id, away_team) = sorted_teams[num_teams - 1 - i];
-
-            // Lower seed gets home field
-            let (final_home_id, final_home, final_away_id, final_away) = if home_team.seed() < away_team.seed() {
-                (home_id, home_team, away_id, away_team)
-            } else {
-                (away_id, away_team, home_id, home_team)
-            };
-
-            let matchup = LeagueSeasonMatchup::new(
-                *final_home_id,
-                *final_away_id,
-                final_home.short_name(),
-                final_away.short_name(),
-                rng,
-            );
-            matchups.push(matchup);
-        }
-        Ok(matchups)
-    }
-
-    /// Get the conference winners (if determined)
-    fn get_conference_winners(&self) -> Vec<(usize, Option<(usize, &PlayoffTeam)>)> {
-        let mut winners = Vec::new();
-        for conf_index in self.teams.conferences() {
-            match self.get_active_conference_teams(*conf_index) {
-                Ok(active) if active.len() == 1 => {
-                    let (team_id, team) = active[0];
-                    winners.push((*conf_index, Some((team_id, team))));
-                }
-                _ => {
-                    winners.push((*conf_index, None));
-                }
-            }
-        }
-        winners
-    }
-
-    /// Generate the championship round (conference winners face off)
-    fn gen_championship_round(&mut self, rng: &mut impl Rng) -> Result<(), String> {
-        let winners = self.get_conference_winners();
-
-        // Collect actual winners (clone data to release borrow on self)
-        let mut final_teams: Vec<(usize, usize, String)> = Vec::new();
-        for (conf_index, winner) in winners {
-            if let Some((team_id, team)) = winner {
-                final_teams.push((conf_index, team_id, team.short_name().to_string()));
-            }
-        }
-
-        if final_teams.len() < 2 {
-            return Err(format!(
-                "Championship requires at least 2 conference winners, got {}",
-                final_teams.len()
-            ));
-        }
-
-        // For 2 conferences, create a single championship game
-        // For >2 conferences, create a winners bracket tournament
-        let mut week = LeagueSeasonWeek::new();
-
-        if final_teams.len() == 2 {
-            // Standard 2-conference championship
-            final_teams.sort_by_key(|(conf_index, _, _)| *conf_index);
-            let (_, home_id, home_name) = &final_teams[0];
-            let (_, away_id, away_name) = &final_teams[1];
-
-            let matchup = LeagueSeasonMatchup::new(
-                *home_id,
-                *away_id,
-                home_name,
-                away_name,
-                rng,
-            );
-            week.matchups_mut().push(matchup);
-            self.winners_bracket.push(week);
-        } else {
-            // Multi-conference tournament: pair up winners
-            final_teams.sort_by_key(|(conf_index, _, _)| *conf_index);
-            let num_matchups = final_teams.len() / 2;
-            for i in 0..num_matchups {
-                let (_, home_id, home_name) = &final_teams[i];
-                let (_, away_id, away_name) = &final_teams[final_teams.len() - 1 - i];
-
-                let matchup = LeagueSeasonMatchup::new(
-                    *home_id,
-                    *away_id,
-                    home_name,
-                    away_name,
-                    rng,
-                );
-                week.matchups_mut().push(matchup);
-            }
-            self.winners_bracket.push(week);
-        }
-        Ok(())
-    }
-
-    /// Get the conference champion for a specific conference
-    ///
-    /// ### Example
-    /// ```
-    /// use fbsim_core::league::season::playoffs::LeagueSeasonPlayoffs;
-    ///
-    /// let my_playoffs = LeagueSeasonPlayoffs::new();
-    /// assert!(my_playoffs.conference_champion(0).is_none());
-    /// ```
-    pub fn conference_champion(&self, conf_index: usize) -> Option<usize> {
-        let active = self.get_active_conference_teams(conf_index).ok()?;
-        if active.len() == 1 {
-            let (team_id, _) = active[0];
-            Some(team_id)
-        } else {
-            None
-        }
     }
 }

@@ -1875,7 +1875,7 @@ impl LeagueSeason {
         }
 
         // Generate the first round (or wild card round if not a power of 2)
-        self.playoffs.gen_next_round(rng)?;
+        self.playoffs.gen_next_playoff_round(rng)?;
         Ok(())
     }
 
@@ -1926,8 +1926,11 @@ impl LeagueSeason {
     /// my_league_season.generate_schedule(LeagueSeasonScheduleOptions::new(), &mut rng);
     /// my_league_season.sim_regular_season(&mut rng);
     ///
-    /// // Generate conference playoffs (1 team per conference)
-    /// let res = my_league_season.generate_playoffs_with_conferences(1, true, &mut rng);
+    /// // Generate conference playoffs (2 teams per conference)
+    /// let res = my_league_season.generate_playoffs_with_conferences(2, true, &mut rng);
+    /// if let Err(ref e) = res {
+    ///     println!("{}", e);
+    /// }
     /// assert!(res.is_ok());
     /// ```
     pub fn generate_playoffs_with_conferences(
@@ -2028,7 +2031,7 @@ impl LeagueSeason {
         }
 
         // Generate the first round of conference playoffs
-        self.playoffs.gen_next_conference_round(rng)?;
+        self.playoffs.gen_next_playoff_round(rng)?;
         Ok(())
     }
 
@@ -2051,7 +2054,7 @@ impl LeagueSeason {
         }
 
         // Ensure all current rounds across all brackets are complete
-        for conference_rounds in self.playoffs.rounds().values() {
+        for conference_rounds in self.playoffs.conference_brackets().values() {
             if let Some(current_round) = conference_rounds.last() {
                 if !current_round.complete() {
                     return Err("Cannot generate next round: Current round is not complete".to_string());
@@ -2064,7 +2067,7 @@ impl LeagueSeason {
             }
         }
 
-        self.playoffs.gen_next_conference_round(rng)
+        self.playoffs.gen_next_playoff_round(rng)
     }
 
     /// Generate the next playoff round
@@ -2112,11 +2115,8 @@ impl LeagueSeason {
         }
 
         // Ensure the current round is complete before generating the next
-        if let Some(bracket) = self.playoffs.conference_rounds(0) {
+        if let Some(bracket) = self.playoffs.conference_bracket(0) {
             if let Some(current_round) = bracket.last() {
-                for m in current_round.matchups() {
-                    println!("{}", m);
-                }
                 if !current_round.complete() {
                     return Err(String::from("Cannot generate playoff round: Current round is not complete"));
                 }
@@ -2124,7 +2124,7 @@ impl LeagueSeason {
         }
 
         // Generate the next round
-        self.playoffs.gen_next_round(rng)?;
+        self.playoffs.gen_next_playoff_round(rng)?;
         Ok(())
     }
 
@@ -2166,7 +2166,7 @@ impl LeagueSeason {
         }
 
         // Ensure the playoffs have started
-        let bracket = self.playoffs.conference_rounds(0)
+        let bracket = self.playoffs.conference_bracket(0)
             .ok_or("Cannot simulate playoff matchup: Playoffs have not been generated")?;
         if bracket.is_empty() {
             return Err(String::from("Cannot simulate playoff matchup: Playoffs have not been generated"));
@@ -2187,7 +2187,7 @@ impl LeagueSeason {
         }
 
         // Get the playoff round
-        let playoff_round = match self.playoffs.conference_rounds_mut(0)
+        let playoff_round = match self.playoffs.conference_bracket_mut(0)
             .and_then(|b| b.get_mut(round)) {
             Some(r) => r,
             None => return Err(format!("No such playoff round: {}", round))
@@ -2274,7 +2274,7 @@ impl LeagueSeason {
         }
 
         // Ensure the playoffs have started
-        let bracket = self.playoffs.conference_rounds(0)
+        let bracket = self.playoffs.conference_bracket(0)
             .ok_or("Cannot simulate playoff play: Playoffs have not been generated")?;
         if bracket.is_empty() {
             return Err(String::from("Cannot simulate playoff play: Playoffs have not been generated"));
@@ -2295,7 +2295,7 @@ impl LeagueSeason {
         }
 
         // Get the playoff round
-        let playoff_round = match self.playoffs.conference_rounds_mut(0)
+        let playoff_round = match self.playoffs.conference_bracket_mut(0)
             .and_then(|b| b.get_mut(round)) {
             Some(r) => r,
             None => return Err(format!("No such playoff round: {}", round))
@@ -2399,7 +2399,7 @@ impl LeagueSeason {
         }
 
         // Ensure the playoffs have started
-        let bracket = self.playoffs.conference_rounds(0)
+        let bracket = self.playoffs.conference_bracket(0)
             .ok_or("Cannot simulate playoff round: Playoffs have not been generated")?;
         if bracket.is_empty() {
             return Err(String::from("Cannot simulate playoff round: Playoffs have not been generated"));
@@ -2428,7 +2428,7 @@ impl LeagueSeason {
         // Simulate each matchup in the round
         for i in 0..num_matchups {
             // Skip matchups that have already been completed
-            let is_complete = match self.playoffs.conference_rounds(0)
+            let is_complete = match self.playoffs.conference_bracket(0)
                 .and_then(|b| b.get(round)) {
                 Some(r) => match r.matchups().get(i) {
                     Some(m) => m.context().game_over(),
@@ -2484,7 +2484,7 @@ impl LeagueSeason {
         }
 
         // Ensure the playoffs have started
-        if self.playoffs.rounds().is_empty() {
+        if self.playoffs.conference_brackets().is_empty() {
             return Err(String::from("Cannot simulate playoffs: playoffs have not been generated"));
         }
 
@@ -2492,22 +2492,15 @@ impl LeagueSeason {
         while !self.playoffs.complete() {
             // Get the current round index
             let current_round = self.playoffs
-                .rounds()
-                .iter()
-                .map(|(_, b)| b.len() - 1)
+                .conference_brackets().values().map(|b| b.len() - 1)
                 .min()
                 .unwrap_or_default();
 
             // Simulate the current round if not complete
             if !self.playoffs
-                .rounds()
-                .iter()
-                .map(|(_, b)| b
+                .conference_brackets().values().all(|b| b
                     .get(current_round)
-                    .is_none_or(|r: &LeagueSeasonWeek| r.complete()))
-                .all(
-                    |tf| tf
-            ) {
+                    .is_none_or(|r: &LeagueSeasonWeek| r.complete())) {
                 self.sim_playoff_round(current_round, rng)?;
             }
 
