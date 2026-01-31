@@ -331,6 +331,50 @@ impl LeagueSeasonScheduleOptions {
     }
 }
 
+/// # `LeagueSeasonPlayoffOptions` struct
+///
+/// Options for generating playoffs. Supports both single-bracket and
+/// multi-conference bracket modes.
+#[derive(Clone, Eq, PartialEq, Ord, PartialOrd, Debug, Serialize, Deserialize)]
+pub struct LeagueSeasonPlayoffOptions {
+    /// Total number of playoff teams (used when not using conference brackets)
+    pub num_playoff_teams: usize,
+    /// If true and the league has multiple conferences, use separate conference
+    /// brackets plus a winners bracket for conference champions
+    pub use_conference_brackets: bool,
+    /// Number of playoff teams per conference (only used when
+    /// `use_conference_brackets` is true and the league has multiple conferences)
+    pub playoff_teams_per_conference: usize,
+    /// If true, division winners are guaranteed playoff spots regardless of
+    /// record (only used when `use_conference_brackets` is true)
+    pub division_winners_guaranteed: bool,
+}
+
+impl Default for LeagueSeasonPlayoffOptions {
+    fn default() -> Self {
+        LeagueSeasonPlayoffOptions {
+            num_playoff_teams: 2,
+            use_conference_brackets: false,
+            playoff_teams_per_conference: 2,
+            division_winners_guaranteed: false,
+        }
+    }
+}
+
+impl LeagueSeasonPlayoffOptions {
+    /// Constructor for the `LeagueSeasonPlayoffOptions` struct
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::league::season::LeagueSeasonPlayoffOptions;
+    ///
+    /// let my_playoff_options = LeagueSeasonPlayoffOptions::new();
+    /// ```
+    pub fn new() -> LeagueSeasonPlayoffOptions {
+        LeagueSeasonPlayoffOptions::default()
+    }
+}
+
 /// # `LeagueSeason` struct
 ///
 /// A `LeagueSeason` represents a season of a football league.
@@ -1867,6 +1911,7 @@ impl LeagueSeason {
     /// use fbsim_core::team::FootballTeam;
     /// use fbsim_core::league::season::LeagueSeason;
     /// use fbsim_core::league::season::LeagueSeasonScheduleOptions;
+    /// use fbsim_core::league::season::LeagueSeasonPlayoffOptions;
     /// use fbsim_core::league::matchup::LeagueTeamRecord;
     ///
     /// // Create a new season
@@ -1886,7 +1931,9 @@ impl LeagueSeason {
     /// my_league_season.sim_regular_season(&mut rng);
     ///
     /// // Generate playoffs with 4 teams
-    /// my_league_season.generate_playoffs(4, &mut rng);
+    /// let mut playoff_options = LeagueSeasonPlayoffOptions::new();
+    /// playoff_options.num_playoff_teams = 4;
+    /// my_league_season.generate_playoffs(playoff_options, &mut rng);
     ///
     /// // Simulate the playoffs
     /// my_league_season.sim_playoffs(&mut rng);
@@ -1953,13 +2000,14 @@ impl LeagueSeason {
         Ok(false)
     }
 
-    /// Generate the playoffs with the specified number of teams
+    /// Generate the playoffs
     ///
-    /// ### Example
+    /// ### Example (single bracket)
     /// ```
     /// use fbsim_core::team::FootballTeam;
     /// use fbsim_core::league::season::LeagueSeason;
     /// use fbsim_core::league::season::LeagueSeasonScheduleOptions;
+    /// use fbsim_core::league::season::LeagueSeasonPlayoffOptions;
     ///
     /// // Create a new season
     /// let mut my_league_season = LeagueSeason::new();
@@ -1978,75 +2026,18 @@ impl LeagueSeason {
     /// my_league_season.sim_regular_season(&mut rng);
     ///
     /// // Generate playoffs with 4 teams
-    /// let res = my_league_season.generate_playoffs(4, &mut rng);
+    /// let mut options = LeagueSeasonPlayoffOptions::new();
+    /// options.num_playoff_teams = 4;
+    /// let res = my_league_season.generate_playoffs(options, &mut rng);
     /// assert!(res.is_ok());
     /// ```
-    pub fn generate_playoffs(&mut self, num_playoff_teams: usize, rng: &mut impl Rng) -> Result<(), String> {
-        // Ensure the regular season is complete
-        if !self.regular_season_complete() {
-            return Err(String::from("Cannot generate playoffs: Regular season is not complete"));
-        }
-
-        // Ensure the playoffs have not already started
-        if self.playoffs.started() {
-            return Err(String::from("Cannot generate playoffs: Playoffs have already started"));
-        }
-
-        // Validate the number of playoff teams
-        if num_playoff_teams < 2 {
-            return Err(format!("Playoffs must have at least 2 teams, got {}", num_playoff_teams));
-        }
-        if num_playoff_teams > self.teams.len() {
-            return Err(format!(
-                "Cannot have more playoff teams ({}) than season teams ({})",
-                num_playoff_teams, self.teams.len()
-            ));
-        }
-
-        // Get the standings and select the top teams
-        let standings = self.standings();
-
-        // Reset the playoffs
-        self.playoffs = LeagueSeasonPlayoffs::new();
-
-        // Add the top teams to the playoffs in seed order
-        for (i, (team_id, _)) in standings.iter().enumerate() {
-            if i >= num_playoff_teams {
-                break;
-            }
-
-            // Get the team's short name for the playoff bracket
-            let team = match self.teams.get(team_id) {
-                Some(t) => t,
-                None => return Err(format!("Team {} not found in season", team_id))
-            };
-            let short_name = team.short_name();
-
-            // Add the team to the playoffs
-            self.playoffs.add_team(*team_id, short_name, None)?;
-        }
-
-        // Generate the first round (or wild card round if not a power of 2)
-        self.playoffs.gen_next_playoff_round(rng)?;
-        Ok(())
-    }
-
-    /// Generate playoffs with separate conference brackets
     ///
-    /// This method creates a playoff structure where each conference has its own
-    /// bracket. Division winners are seeded first (if guaranteed), followed by
-    /// wild card teams based on conference standings.
-    ///
-    /// ### Arguments
-    /// * `playoff_teams_per_conference` - Number of teams per conference that make playoffs
-    /// * `division_winners_guaranteed` - If true, all division winners automatically qualify
-    /// * `rng` - Random number generator
-    ///
-    /// ### Example
+    /// ### Example (conference brackets)
     /// ```
     /// use fbsim_core::team::FootballTeam;
     /// use fbsim_core::league::season::LeagueSeason;
     /// use fbsim_core::league::season::LeagueSeasonScheduleOptions;
+    /// use fbsim_core::league::season::LeagueSeasonPlayoffOptions;
     /// use fbsim_core::league::season::conference::{LeagueConference, LeagueDivision};
     ///
     /// // Create a new season with 2 conferences
@@ -2079,182 +2070,145 @@ impl LeagueSeason {
     /// my_league_season.sim_regular_season(&mut rng);
     ///
     /// // Generate conference playoffs (2 teams per conference)
-    /// let res = my_league_season.generate_playoffs_with_conferences(2, true, &mut rng);
+    /// let mut options = LeagueSeasonPlayoffOptions::new();
+    /// options.use_conference_brackets = true;
+    /// options.playoff_teams_per_conference = 2;
+    /// options.division_winners_guaranteed = true;
+    /// let res = my_league_season.generate_playoffs(options, &mut rng);
     /// assert!(res.is_ok());
     /// ```
-    pub fn generate_playoffs_with_conferences(
-        &mut self,
-        playoff_teams_per_conference: usize,
-        division_winners_guaranteed: bool,
-        rng: &mut impl Rng,
-    ) -> Result<(), String> {
-        // Ensure we have conferences
-        if self.conferences.is_empty() {
-            return Err("Cannot generate conference playoffs: No conferences defined".to_string());
-        }
-
+    pub fn generate_playoffs(&mut self, options: LeagueSeasonPlayoffOptions, rng: &mut impl Rng) -> Result<(), String> {
         // Ensure the regular season is complete
         if !self.regular_season_complete() {
-            return Err("Cannot generate playoffs: Regular season is not complete".to_string());
+            return Err(String::from("Cannot generate playoffs: Regular season is not complete"));
         }
 
         // Ensure the playoffs have not already started
         if self.playoffs.started() {
-            return Err("Cannot generate playoffs: Playoffs have already started".to_string());
+            return Err(String::from("Cannot generate playoffs: Playoffs have already started"));
         }
 
-        // Validate teams per conference
-        if playoff_teams_per_conference < 1 {
-            return Err("Playoffs must have at least 1 team per conference".to_string());
-        }
+        // Determine whether to use conference brackets
+        let use_conferences = options.use_conference_brackets && self.conferences.len() > 1;
 
         // Reset the playoffs
         self.playoffs = LeagueSeasonPlayoffs::new();
 
-        // Process each conference
-        for (conf_index, conference) in self.conferences.iter().enumerate() {
-            // Validate that conference has enough teams
-            let conf_team_count = conference.num_teams();
-            if playoff_teams_per_conference > conf_team_count {
+        if use_conferences {
+            // Multi-conference path
+            let playoff_teams_per_conference = options.playoff_teams_per_conference;
+            let division_winners_guaranteed = options.division_winners_guaranteed;
+
+            // Validate teams per conference
+            if playoff_teams_per_conference < 1 {
+                return Err("Playoffs must have at least 1 team per conference".to_string());
+            }
+
+            // Process each conference
+            for (conf_index, conference) in self.conferences.iter().enumerate() {
+                // Validate that conference has enough teams
+                let conf_team_count = conference.num_teams();
+                if playoff_teams_per_conference > conf_team_count {
+                    return Err(format!(
+                        "Cannot have {} playoff teams in conference {} which only has {} teams",
+                        playoff_teams_per_conference,
+                        conference.name(),
+                        conf_team_count
+                    ));
+                }
+
+                // Get conference standings
+                let conf_standings = self.conference_standings(conf_index)?;
+
+                // Determine division winners if guaranteed spots
+                let mut division_winners: Vec<usize> = Vec::new();
+                if division_winners_guaranteed {
+                    for (div_id, _) in conference.divisions().iter().enumerate() {
+                        let div_standings = self.division_standings(conf_index, div_id)?;
+                        if let Some((winner_id, _)) = div_standings.first() {
+                            division_winners.push(*winner_id);
+                        }
+                    }
+                }
+
+                // Build playoff teams for this conference
+                let mut conf_playoff_teams: Vec<usize> = Vec::new();
+
+                // First, add division winners (in order of their conference standing)
+                let mut sorted_div_winners: Vec<(usize, usize)> = division_winners
+                    .iter()
+                    .filter_map(|&winner_id| {
+                        conf_standings
+                            .iter()
+                            .position(|(id, _)| *id == winner_id)
+                            .map(|pos| (pos, winner_id))
+                    })
+                    .collect();
+                sorted_div_winners.sort_by_key(|(pos, _)| *pos);
+
+                for (_, winner_id) in sorted_div_winners {
+                    if conf_playoff_teams.len() < playoff_teams_per_conference {
+                        conf_playoff_teams.push(winner_id);
+                    }
+                }
+
+                // Fill remaining spots with wild cards (best records not already in)
+                for (team_id, _record) in conf_standings.iter() {
+                    if conf_playoff_teams.len() >= playoff_teams_per_conference {
+                        break;
+                    }
+                    if !conf_playoff_teams.contains(team_id) {
+                        conf_playoff_teams.push(*team_id);
+                    }
+                }
+
+                // Add teams to conference bracket
+                for team_id in conf_playoff_teams {
+                    let team = self.teams.get(&team_id)
+                        .ok_or_else(|| format!("Team {} not found", team_id))?;
+                    let short_name = team.short_name();
+                    self.playoffs.add_team(team_id, short_name, Some(conf_index))?;
+                }
+            }
+        } else {
+            // Single-bracket path
+            let num_playoff_teams = options.num_playoff_teams;
+
+            // Validate the number of playoff teams
+            if num_playoff_teams < 2 {
+                return Err(format!("Playoffs must have at least 2 teams, got {}", num_playoff_teams));
+            }
+            if num_playoff_teams > self.teams.len() {
                 return Err(format!(
-                    "Cannot have {} playoff teams in conference {} which only has {} teams",
-                    playoff_teams_per_conference,
-                    conference.name(),
-                    conf_team_count
+                    "Cannot have more playoff teams ({}) than season teams ({})",
+                    num_playoff_teams, self.teams.len()
                 ));
             }
 
-            // Get conference standings
-            let conf_standings = self.conference_standings(conf_index)?;
+            // Get the standings and select the top teams
+            let standings = self.standings();
 
-            // Determine division winners if guaranteed spots
-            let mut division_winners: Vec<usize> = Vec::new();
-            if division_winners_guaranteed {
-                for (div_id, _) in conference.divisions().iter().enumerate() {
-                    let div_standings = self.division_standings(conf_index, div_id)?;
-                    if let Some((winner_id, _)) = div_standings.first() {
-                        division_winners.push(*winner_id);
-                    }
-                }
-            }
-
-            // Build playoff teams for this conference
-            let mut conf_playoff_teams: Vec<usize> = Vec::new();
-
-            // First, add division winners (in order of their conference standing)
-            // Sort division winners by their position in conference standings
-            let mut sorted_div_winners: Vec<(usize, usize)> = division_winners
-                .iter()
-                .filter_map(|&winner_id| {
-                    conf_standings
-                        .iter()
-                        .position(|(id, _)| *id == winner_id)
-                        .map(|pos| (pos, winner_id))
-                })
-                .collect();
-            sorted_div_winners.sort_by_key(|(pos, _)| *pos);
-
-            for (_, winner_id) in sorted_div_winners {
-                if conf_playoff_teams.len() < playoff_teams_per_conference {
-                    conf_playoff_teams.push(winner_id);
-                }
-            }
-
-            // Fill remaining spots with wild cards (best records not already in)
-            for (team_id, _record) in conf_standings.iter() {
-                if conf_playoff_teams.len() >= playoff_teams_per_conference {
+            // Add the top teams to the playoffs in seed order
+            for (i, (team_id, _)) in standings.iter().enumerate() {
+                if i >= num_playoff_teams {
                     break;
                 }
-                if !conf_playoff_teams.contains(team_id) {
-                    conf_playoff_teams.push(*team_id);
-                }
-            }
 
-            // Add teams to conference bracket
-            for team_id in conf_playoff_teams {
-                let team = self.teams.get(&team_id)
-                    .ok_or_else(|| format!("Team {} not found", team_id))?;
+                // Get the team's short name for the playoff bracket
+                let team = match self.teams.get(team_id) {
+                    Some(t) => t,
+                    None => return Err(format!("Team {} not found in season", team_id))
+                };
                 let short_name = team.short_name();
-                self.playoffs.add_team(team_id, short_name, Some(conf_index))?;
+
+                // Add the team to the playoffs
+                self.playoffs.add_team(*team_id, short_name, None)?;
             }
         }
 
-        // Generate the first round of conference playoffs
+        // Generate the first round
         self.playoffs.gen_next_playoff_round(rng)?;
         Ok(())
-    }
-
-    /// Generate the next playoff round for conference-based playoffs
-    ///
-    /// ### Example
-    /// ```
-    /// use fbsim_core::team::FootballTeam;
-    /// use fbsim_core::league::season::LeagueSeason;
-    /// use fbsim_core::league::season::LeagueSeasonScheduleOptions;
-    /// use fbsim_core::league::season::conference::{LeagueConference, LeagueDivision};
-    ///
-    /// // Create a new season with 2 conferences
-    /// let mut my_league_season = LeagueSeason::new();
-    ///
-    /// // Add teams
-    /// my_league_season.add_team(0, FootballTeam::new());
-    /// my_league_season.add_team(1, FootballTeam::new());
-    /// my_league_season.add_team(2, FootballTeam::new());
-    /// my_league_season.add_team(3, FootballTeam::new());
-    ///
-    /// // Create conference structure
-    /// let mut afc = LeagueConference::with_name("AFC");
-    /// let mut afc_div = LeagueDivision::with_name("East");
-    /// afc_div.add_team(0);
-    /// afc_div.add_team(1);
-    /// afc.add_division(afc_div);
-    /// my_league_season.add_conference(afc);
-    ///
-    /// let mut nfc = LeagueConference::with_name("NFC");
-    /// let mut nfc_div = LeagueDivision::with_name("East");
-    /// nfc_div.add_team(2);
-    /// nfc_div.add_team(3);
-    /// nfc.add_division(nfc_div);
-    /// my_league_season.add_conference(nfc);
-    ///
-    /// // Generate the season schedule and simulate the season
-    /// let mut rng = rand::thread_rng();
-    /// my_league_season.generate_schedule(LeagueSeasonScheduleOptions::new(), &mut rng);
-    /// my_league_season.sim_regular_season(&mut rng);
-    ///
-    /// // Generate and simulate the first round of the playoffs
-    /// let _ = my_league_season.generate_playoffs_with_conferences(2, true, &mut rng);
-    /// let _ = my_league_season.sim_playoff_round(0, &mut rng);
-    ///
-    /// // Generate the next round of the playoffs
-    /// let res = my_league_season.generate_next_conference_playoff_round(&mut rng);
-    /// assert!(res.is_ok());
-    /// ```
-    pub fn generate_next_conference_playoff_round(&mut self, rng: &mut impl Rng) -> Result<(), String> {
-        if !self.playoffs.is_conference_playoff() {
-            return Err("Not a conference playoff. Use generate_next_playoff_round instead.".to_string());
-        }
-
-        // Ensure the playoffs are not already complete
-        if self.playoffs.complete() {
-            return Err("Cannot generate playoff round: Playoffs are already complete".to_string());
-        }
-
-        // Ensure all current rounds across all brackets are complete
-        for conference_rounds in self.playoffs.conference_brackets().values() {
-            if let Some(current_round) = conference_rounds.last() {
-                if !current_round.complete() {
-                    return Err("Cannot generate next round: Current round is not complete".to_string());
-                }
-            }
-        }
-        for round in self.playoffs.winners_bracket() {
-            if !round.complete() {
-                return Err("Cannot generate next round: Winners bracket round is not complete".to_string());
-            }
-        }
-
-        self.playoffs.gen_next_playoff_round(rng)
     }
 
     /// Generate the next playoff round
@@ -2264,6 +2218,7 @@ impl LeagueSeason {
     /// use fbsim_core::team::FootballTeam;
     /// use fbsim_core::league::season::LeagueSeason;
     /// use fbsim_core::league::season::LeagueSeasonScheduleOptions;
+    /// use fbsim_core::league::season::LeagueSeasonPlayoffOptions;
     ///
     /// // Create a new season
     /// let mut my_league_season = LeagueSeason::new();
@@ -2282,7 +2237,9 @@ impl LeagueSeason {
     /// my_league_season.sim_regular_season(&mut rng);
     ///
     /// // Generate playoffs with 4 teams, simulate the first round
-    /// let _ = my_league_season.generate_playoffs(4, &mut rng);
+    /// let mut playoff_options = LeagueSeasonPlayoffOptions::new();
+    /// playoff_options.num_playoff_teams = 4;
+    /// let _ = my_league_season.generate_playoffs(playoff_options, &mut rng);
     /// let _ = my_league_season.sim_playoff_round(0, &mut rng);
     ///
     /// // Generate the next round of the playoffs
@@ -2290,42 +2247,51 @@ impl LeagueSeason {
     /// assert!(res.is_ok());
     /// ```
     pub fn generate_next_playoff_round(&mut self, rng: &mut impl Rng) -> Result<(), String> {
-        // Ensure the regular season is complete
+        // Ensure the playoffs have started, are set up, are not complete
         if !self.regular_season_complete() {
             return Err(String::from("Cannot generate playoff round: Regular season is not complete"));
         }
-
-        // Ensure the playoffs have started (teams have been added)
         if self.playoffs.num_teams() < 2 {
             return Err(String::from("Cannot generate playoff round: Playoffs have not been initialized"));
         }
-
-        // Ensure the playoffs are not already complete
         if self.playoffs.complete() {
             return Err(String::from("Cannot generate playoff round: Playoffs are already complete"));
         }
 
-        // Ensure the current round is complete before generating the next
-        if let Some(bracket) = self.playoffs.conference_bracket(0) {
-            if let Some(current_round) = bracket.last() {
+        // Ensure all current rounds across all conference brackets are complete
+        for conference_rounds in self.playoffs.conference_brackets().values() {
+            if let Some(current_round) = conference_rounds.last() {
                 if !current_round.complete() {
-                    return Err(String::from("Cannot generate playoff round: Current round is not complete"));
+                    return Err(String::from("Cannot generate next round: Current round is not complete"));
+                }
+            }
+        }
+
+        // Ensure the current winners bracket round is complete
+        if self.playoffs.is_conference_playoff() && self.playoffs.conference_brackets_complete() {
+            if let Some(round) = self.playoffs.winners_bracket().last() {
+                if !round.complete() {
+                    return Err(
+                        String::from(
+                            "Cannot generate next round: Current winners bracket round is not complete"
+                        )
+                    )
                 }
             }
         }
 
         // Generate the next round
-        self.playoffs.gen_next_playoff_round(rng)?;
-        Ok(())
+        self.playoffs.gen_next_playoff_round(rng)
     }
 
-    /// Simulate a playoff matchup
+    /// Simulate a playoff matchup in a specific conference bracket
     ///
     /// ### Example
     /// ```
     /// use fbsim_core::team::FootballTeam;
     /// use fbsim_core::league::season::LeagueSeason;
     /// use fbsim_core::league::season::LeagueSeasonScheduleOptions;
+    /// use fbsim_core::league::season::LeagueSeasonPlayoffOptions;
     ///
     /// // Create a new season
     /// let mut my_league_season = LeagueSeason::new();
@@ -2344,21 +2310,23 @@ impl LeagueSeason {
     /// my_league_season.sim_regular_season(&mut rng);
     ///
     /// // Generate playoffs with 4 teams
-    /// my_league_season.generate_playoffs(4, &mut rng);
+    /// let mut playoff_options = LeagueSeasonPlayoffOptions::new();
+    /// playoff_options.num_playoff_teams = 4;
+    /// my_league_season.generate_playoffs(playoff_options, &mut rng);
     ///
-    /// // Simulate the first playoff matchup
-    /// let res = my_league_season.sim_playoff_matchup(0, 0, &mut rng);
+    /// // Simulate the first playoff matchup in conference bracket 0
+    /// let res = my_league_season.sim_playoff_matchup(0, 0, 0, &mut rng);
     /// assert!(res.is_ok());
     /// ```
-    pub fn sim_playoff_matchup(&mut self, round: usize, matchup: usize, rng: &mut impl Rng) -> Result<Game, String> {
+    pub fn sim_playoff_matchup(&mut self, conference: usize, round: usize, matchup: usize, rng: &mut impl Rng) -> Result<Game, String> {
         // Ensure the regular season is complete
         if !self.regular_season_complete() {
             return Err(String::from("Cannot simulate playoff matchup: Regular season is not complete"));
         }
 
         // Ensure the playoffs have started
-        let bracket = self.playoffs.conference_bracket(0)
-            .ok_or("Cannot simulate playoff matchup: Playoffs have not been generated")?;
+        let bracket = self.playoffs.conference_bracket(conference)
+            .ok_or_else(|| format!("Cannot simulate playoff matchup: Conference bracket {} not found", conference))?;
         if bracket.is_empty() {
             return Err(String::from("Cannot simulate playoff matchup: Playoffs have not been generated"));
         }
@@ -2378,7 +2346,7 @@ impl LeagueSeason {
         }
 
         // Get the playoff round
-        let playoff_round = match self.playoffs.conference_bracket_mut(0)
+        let playoff_round = match self.playoffs.conference_bracket_mut(conference)
             .and_then(|b| b.get_mut(round)) {
             Some(r) => r,
             None => return Err(format!("No such playoff round: {}", round))
@@ -2427,13 +2395,147 @@ impl LeagueSeason {
         Ok(game)
     }
 
-    /// Simulate a single play of a playoff matchup
+    /// Simulate a winners bracket matchup
     ///
     /// ### Example
     /// ```
     /// use fbsim_core::team::FootballTeam;
     /// use fbsim_core::league::season::LeagueSeason;
     /// use fbsim_core::league::season::LeagueSeasonScheduleOptions;
+    /// use fbsim_core::league::season::LeagueSeasonPlayoffOptions;
+    /// use fbsim_core::league::season::conference::{LeagueConference, LeagueDivision};
+    ///
+    /// // Create a new season with 2 conferences
+    /// let mut my_league_season = LeagueSeason::new();
+    ///
+    /// // Add teams
+    /// my_league_season.add_team(0, FootballTeam::new());
+    /// my_league_season.add_team(1, FootballTeam::new());
+    /// my_league_season.add_team(2, FootballTeam::new());
+    /// my_league_season.add_team(3, FootballTeam::new());
+    ///
+    /// // Create conference structure
+    /// let mut afc = LeagueConference::with_name("AFC");
+    /// let mut afc_div = LeagueDivision::with_name("East");
+    /// afc_div.add_team(0);
+    /// afc_div.add_team(1);
+    /// afc.add_division(afc_div);
+    /// my_league_season.add_conference(afc);
+    ///
+    /// let mut nfc = LeagueConference::with_name("NFC");
+    /// let mut nfc_div = LeagueDivision::with_name("East");
+    /// nfc_div.add_team(2);
+    /// nfc_div.add_team(3);
+    /// nfc.add_division(nfc_div);
+    /// my_league_season.add_conference(nfc);
+    ///
+    /// // Generate schedule and simulate regular season
+    /// let mut rng = rand::thread_rng();
+    /// my_league_season.generate_schedule(LeagueSeasonScheduleOptions::new(), &mut rng);
+    /// my_league_season.sim_regular_season(&mut rng);
+    ///
+    /// // Generate conference playoffs and simulate all conference brackets
+    /// let mut options = LeagueSeasonPlayoffOptions::new();
+    /// options.use_conference_brackets = true;
+    /// options.playoff_teams_per_conference = 2;
+    /// options.division_winners_guaranteed = true;
+    /// let _ = my_league_season.generate_playoffs(options, &mut rng);
+    /// let _ = my_league_season.sim_playoff_round(0, &mut rng);
+    ///
+    /// // Generate the winners bracket
+    /// let _ = my_league_season.generate_next_playoff_round(&mut rng);
+    ///
+    /// // Simulate the first winners bracket matchup
+    /// let res = my_league_season.sim_winners_bracket_matchup(0, 0, &mut rng);
+    /// assert!(res.is_ok());
+    /// ```
+    pub fn sim_winners_bracket_matchup(&mut self, round: usize, matchup: usize, rng: &mut impl Rng) -> Result<Game, String> {
+        // Ensure the regular season is complete
+        if !self.regular_season_complete() {
+            return Err(String::from("Cannot simulate winners bracket matchup: Regular season is not complete"));
+        }
+
+        // Ensure this is a conference playoff with a winners bracket
+        if !self.playoffs.is_conference_playoff() {
+            return Err(String::from("Cannot simulate winners bracket: Not a conference playoff"));
+        }
+
+        // Ensure the winners bracket has started
+        if self.playoffs.winners_bracket().is_empty() {
+            return Err(String::from("Cannot simulate winners bracket matchup: Winners bracket has not been generated"));
+        }
+
+        // Check if the prior round is complete (if not the first round)
+        if round > 0 {
+            let prev_round = match self.playoffs.winners_bracket().get(round - 1) {
+                Some(r) => r,
+                None => return Err(format!("Failed to get previous winners bracket round {}", round - 1))
+            };
+            if !prev_round.complete() {
+                return Err(format!(
+                    "Cannot simulate winners bracket round {}: Previous round {} is not complete",
+                    round, round - 1
+                ));
+            }
+        }
+
+        // Get the round
+        let playoff_round = match self.playoffs.winners_bracket_mut().get_mut(round) {
+            Some(r) => r,
+            None => return Err(format!("No such winners bracket round: {}", round))
+        };
+
+        // Get the matchup
+        let playoff_matchup = match playoff_round.matchups_mut().get_mut(matchup) {
+            Some(m) => m,
+            None => return Err(format!("No such matchup {} in winners bracket round {}", matchup, round))
+        };
+
+        // Ensure the matchup is not already complete
+        if playoff_matchup.context().game_over() {
+            return Err(format!("Winners bracket round {} matchup {} is already complete", round, matchup));
+        }
+
+        // Get the home and away teams
+        let home_id = *playoff_matchup.home_team();
+        let away_id = *playoff_matchup.away_team();
+
+        let home_team = match self.teams.get(&home_id) {
+            Some(t) => t,
+            None => return Err(format!("Winners bracket matchup references nonexistent home team ID: {}", home_id))
+        };
+        let away_team = match self.teams.get(&away_id) {
+            Some(t) => t,
+            None => return Err(format!("Winners bracket matchup references nonexistent away team ID: {}", away_id))
+        };
+
+        // Simulate the matchup
+        let mut game = Game::new();
+        let simulator = GameSimulator::new();
+        let context = match simulator.sim_game(
+            home_team, away_team,
+            playoff_matchup.context().clone(),
+            &mut game, rng
+        ) {
+            Ok(c) => c,
+            Err(e) => return Err(format!("Error while simulating winners bracket matchup: {}", e))
+        };
+
+        // Update the matchup context and stats
+        *playoff_matchup.context_mut() = context;
+        *playoff_matchup.home_stats_mut() = Some(game.home_stats());
+        *playoff_matchup.away_stats_mut() = Some(game.away_stats());
+        Ok(game)
+    }
+
+    /// Simulate a single play of a playoff matchup in a specific conference bracket
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::team::FootballTeam;
+    /// use fbsim_core::league::season::LeagueSeason;
+    /// use fbsim_core::league::season::LeagueSeasonScheduleOptions;
+    /// use fbsim_core::league::season::LeagueSeasonPlayoffOptions;
     ///
     /// // Create a new season
     /// let mut my_league_season = LeagueSeason::new();
@@ -2452,21 +2554,23 @@ impl LeagueSeason {
     /// my_league_season.sim_regular_season(&mut rng);
     ///
     /// // Generate playoffs with 4 teams
-    /// my_league_season.generate_playoffs(4, &mut rng);
+    /// let mut playoff_options = LeagueSeasonPlayoffOptions::new();
+    /// playoff_options.num_playoff_teams = 4;
+    /// my_league_season.generate_playoffs(playoff_options, &mut rng);
     ///
     /// // Simulate a single play of the first playoff matchup
-    /// let res = my_league_season.sim_playoff_play(0, 0, &mut rng);
+    /// let res = my_league_season.sim_playoff_play(0, 0, 0, &mut rng);
     /// assert!(res.is_ok());
     /// ```
-    pub fn sim_playoff_play(&mut self, round: usize, matchup: usize, rng: &mut impl Rng) -> Result<Option<Game>, String> {
+    pub fn sim_playoff_play(&mut self, conference: usize, round: usize, matchup: usize, rng: &mut impl Rng) -> Result<Option<Game>, String> {
         // Ensure the regular season is complete
         if !self.regular_season_complete() {
             return Err(String::from("Cannot simulate playoff play: Regular season is not complete"));
         }
 
         // Ensure the playoffs have started
-        let bracket = self.playoffs.conference_bracket(0)
-            .ok_or("Cannot simulate playoff play: Playoffs have not been generated")?;
+        let bracket = self.playoffs.conference_bracket(conference)
+            .ok_or_else(|| format!("Cannot simulate playoff play: Conference bracket {} not found", conference))?;
         if bracket.is_empty() {
             return Err(String::from("Cannot simulate playoff play: Playoffs have not been generated"));
         }
@@ -2486,7 +2590,7 @@ impl LeagueSeason {
         }
 
         // Get the playoff round
-        let playoff_round = match self.playoffs.conference_bracket_mut(0)
+        let playoff_round = match self.playoffs.conference_bracket_mut(conference)
             .and_then(|b| b.get_mut(round)) {
             Some(r) => r,
             None => return Err(format!("No such playoff round: {}", round))
@@ -2552,13 +2656,14 @@ impl LeagueSeason {
         Ok(None)
     }
 
-    /// Simulate a full playoff round
+    /// Simulate all matchups in a specific conference bracket round
     ///
     /// ### Example
     /// ```
     /// use fbsim_core::team::FootballTeam;
     /// use fbsim_core::league::season::LeagueSeason;
     /// use fbsim_core::league::season::LeagueSeasonScheduleOptions;
+    /// use fbsim_core::league::season::LeagueSeasonPlayoffOptions;
     ///
     /// // Create a new season
     /// let mut my_league_season = LeagueSeason::new();
@@ -2577,21 +2682,23 @@ impl LeagueSeason {
     /// my_league_season.sim_regular_season(&mut rng);
     ///
     /// // Generate playoffs with 4 teams
-    /// my_league_season.generate_playoffs(4, &mut rng);
+    /// let mut playoff_options = LeagueSeasonPlayoffOptions::new();
+    /// playoff_options.num_playoff_teams = 4;
+    /// my_league_season.generate_playoffs(playoff_options, &mut rng);
     ///
-    /// // Simulate the first playoff round
-    /// let res = my_league_season.sim_playoff_round(0, &mut rng);
+    /// // Simulate the first round of conference bracket 0
+    /// let res = my_league_season.sim_playoff_conference_round(0, 0, &mut rng);
     /// assert!(res.is_ok());
     /// ```
-    pub fn sim_playoff_round(&mut self, round: usize, rng: &mut impl Rng) -> Result<(), String> {
+    pub fn sim_playoff_conference_round(&mut self, conference: usize, round: usize, rng: &mut impl Rng) -> Result<(), String> {
         // Ensure the regular season is complete
         if !self.regular_season_complete() {
             return Err(String::from("Cannot simulate playoff round: Regular season is not complete"));
         }
 
-        // Ensure the playoffs have started
-        let bracket = self.playoffs.conference_bracket(0)
-            .ok_or("Cannot simulate playoff round: Playoffs have not been generated")?;
+        // Ensure the bracket exists
+        let bracket = self.playoffs.conference_bracket(conference)
+            .ok_or_else(|| format!("Cannot simulate playoff round: Conference bracket {} not found", conference))?;
         if bracket.is_empty() {
             return Err(String::from("Cannot simulate playoff round: Playoffs have not been generated"));
         }
@@ -2619,7 +2726,7 @@ impl LeagueSeason {
         // Simulate each matchup in the round
         for i in 0..num_matchups {
             // Skip matchups that have already been completed
-            let is_complete = match self.playoffs.conference_bracket(0)
+            let is_complete = match self.playoffs.conference_bracket(conference)
                 .and_then(|b| b.get(round)) {
                 Some(r) => match r.matchups().get(i) {
                     Some(m) => m.context().game_over(),
@@ -2632,18 +2739,129 @@ impl LeagueSeason {
             }
 
             // Simulate the matchup
-            self.sim_playoff_matchup(round, i, rng)?;
+            self.sim_playoff_matchup(conference, round, i, rng)?;
         }
         Ok(())
     }
 
-    /// Simulate all remaining playoffs
+    /// Simulate a winners bracket round
     ///
     /// ### Example
     /// ```
     /// use fbsim_core::team::FootballTeam;
     /// use fbsim_core::league::season::LeagueSeason;
     /// use fbsim_core::league::season::LeagueSeasonScheduleOptions;
+    /// use fbsim_core::league::season::LeagueSeasonPlayoffOptions;
+    /// use fbsim_core::league::season::conference::{LeagueConference, LeagueDivision};
+    ///
+    /// // Create a new season with 2 conferences
+    /// let mut my_league_season = LeagueSeason::new();
+    ///
+    /// // Add teams
+    /// my_league_season.add_team(0, FootballTeam::new());
+    /// my_league_season.add_team(1, FootballTeam::new());
+    /// my_league_season.add_team(2, FootballTeam::new());
+    /// my_league_season.add_team(3, FootballTeam::new());
+    ///
+    /// // Create conference structure
+    /// let mut afc = LeagueConference::with_name("AFC");
+    /// let mut afc_div = LeagueDivision::with_name("East");
+    /// afc_div.add_team(0);
+    /// afc_div.add_team(1);
+    /// afc.add_division(afc_div);
+    /// my_league_season.add_conference(afc);
+    ///
+    /// let mut nfc = LeagueConference::with_name("NFC");
+    /// let mut nfc_div = LeagueDivision::with_name("East");
+    /// nfc_div.add_team(2);
+    /// nfc_div.add_team(3);
+    /// nfc.add_division(nfc_div);
+    /// my_league_season.add_conference(nfc);
+    ///
+    /// // Generate schedule and simulate regular season
+    /// let mut rng = rand::thread_rng();
+    /// my_league_season.generate_schedule(LeagueSeasonScheduleOptions::new(), &mut rng);
+    /// my_league_season.sim_regular_season(&mut rng);
+    ///
+    /// // Generate conference playoffs and simulate all conference brackets
+    /// let mut options = LeagueSeasonPlayoffOptions::new();
+    /// options.use_conference_brackets = true;
+    /// options.playoff_teams_per_conference = 2;
+    /// options.division_winners_guaranteed = true;
+    /// let _ = my_league_season.generate_playoffs(options, &mut rng);
+    /// let _ = my_league_season.sim_playoff_round(0, &mut rng);
+    ///
+    /// // Generate the winners bracket
+    /// let _ = my_league_season.generate_next_playoff_round(&mut rng);
+    ///
+    /// // Simulate the first winners bracket round
+    /// let res = my_league_season.sim_winners_bracket_round(0, &mut rng);
+    /// assert!(res.is_ok());
+    /// ```
+    pub fn sim_winners_bracket_round(&mut self, round: usize, rng: &mut impl Rng) -> Result<(), String> {
+        // Ensure the regular season is complete
+        if !self.regular_season_complete() {
+            return Err(String::from("Cannot simulate winners bracket round: Regular season is not complete"));
+        }
+
+        // Ensure this is a conference playoff
+        if !self.playoffs.is_conference_playoff() {
+            return Err(String::from("Cannot simulate winners bracket: Not a conference playoff"));
+        }
+
+        // Ensure the winners bracket has started
+        if self.playoffs.winners_bracket().is_empty() {
+            return Err(String::from("Cannot simulate winners bracket round: Winners bracket has not been generated"));
+        }
+
+        // Check if the prior round is complete (if not the first round)
+        if round > 0 {
+            let prev_round = match self.playoffs.winners_bracket().get(round - 1) {
+                Some(r) => r,
+                None => return Err(format!("Failed to get previous winners bracket round {}", round - 1))
+            };
+            if !prev_round.complete() {
+                return Err(format!(
+                    "Cannot simulate winners bracket round {}: Previous round {} is not complete",
+                    round, round - 1
+                ));
+            }
+        }
+
+        // Get the number of matchups in this round
+        let num_matchups = match self.playoffs.winners_bracket().get(round) {
+            Some(r) => r.matchups().len(),
+            None => return Err(format!("No such winners bracket round: {}", round))
+        };
+
+        // Simulate each matchup in the round
+        for i in 0..num_matchups {
+            // Skip matchups that have already been completed
+            let is_complete = match self.playoffs.winners_bracket().get(round) {
+                Some(r) => match r.matchups().get(i) {
+                    Some(m) => m.context().game_over(),
+                    None => continue
+                },
+                None => continue
+            };
+            if is_complete {
+                continue;
+            }
+
+            // Simulate the matchup
+            self.sim_winners_bracket_matchup(round, i, rng)?;
+        }
+        Ok(())
+    }
+
+    /// Simulate a full playoff round across all conference brackets
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::team::FootballTeam;
+    /// use fbsim_core::league::season::LeagueSeason;
+    /// use fbsim_core::league::season::LeagueSeasonScheduleOptions;
+    /// use fbsim_core::league::season::LeagueSeasonPlayoffOptions;
     ///
     /// // Create a new season
     /// let mut my_league_season = LeagueSeason::new();
@@ -2662,7 +2880,77 @@ impl LeagueSeason {
     /// my_league_season.sim_regular_season(&mut rng);
     ///
     /// // Generate playoffs with 4 teams
-    /// my_league_season.generate_playoffs(4, &mut rng);
+    /// let mut playoff_options = LeagueSeasonPlayoffOptions::new();
+    /// playoff_options.num_playoff_teams = 4;
+    /// my_league_season.generate_playoffs(playoff_options, &mut rng);
+    ///
+    /// // Simulate the first playoff round
+    /// let res = my_league_season.sim_playoff_round(0, &mut rng);
+    /// assert!(res.is_ok());
+    /// ```
+    pub fn sim_playoff_round(&mut self, round: usize, rng: &mut impl Rng) -> Result<(), String> {
+        // Ensure the regular season is complete
+        if !self.regular_season_complete() {
+            return Err(String::from("Cannot simulate playoff round: Regular season is not complete"));
+        }
+
+        // Ensure the playoffs have started
+        if self.playoffs.conference_brackets().is_empty() {
+            return Err(String::from("Cannot simulate playoff round: Playoffs have not been generated"));
+        }
+
+        // Simulate the round in each conference bracket
+        let conference_ids: Vec<usize> = self.playoffs.conference_brackets().keys().copied().collect();
+        for conf_id in conference_ids {
+            // Skip conferences that don't have this round
+            let has_round = self.playoffs.conference_bracket(conf_id)
+                .is_some_and(|b| b.len() > round);
+            if !has_round {
+                continue;
+            }
+
+            // Skip conferences whose round is already complete
+            let round_complete = self.playoffs.conference_bracket(conf_id)
+                .and_then(|b| b.get(round))
+                .is_some_and(|r| r.complete());
+            if round_complete {
+                continue;
+            }
+
+            self.sim_playoff_conference_round(conf_id, round, rng)?;
+        }
+        Ok(())
+    }
+
+    /// Simulate all remaining playoffs
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::team::FootballTeam;
+    /// use fbsim_core::league::season::LeagueSeason;
+    /// use fbsim_core::league::season::LeagueSeasonScheduleOptions;
+    /// use fbsim_core::league::season::LeagueSeasonPlayoffOptions;
+    ///
+    /// // Create a new season
+    /// let mut my_league_season = LeagueSeason::new();
+    ///
+    /// // Add 4 teams to the season
+    /// my_league_season.add_team(0, FootballTeam::new());
+    /// my_league_season.add_team(1, FootballTeam::new());
+    /// my_league_season.add_team(2, FootballTeam::new());
+    /// my_league_season.add_team(3, FootballTeam::new());
+    ///
+    /// // Generate the season schedule
+    /// let mut rng = rand::thread_rng();
+    /// my_league_season.generate_schedule(LeagueSeasonScheduleOptions::new(), &mut rng);
+    ///
+    /// // Simulate the entire regular season
+    /// my_league_season.sim_regular_season(&mut rng);
+    ///
+    /// // Generate playoffs with 4 teams
+    /// let mut playoff_options = LeagueSeasonPlayoffOptions::new();
+    /// playoff_options.num_playoff_teams = 4;
+    /// my_league_season.generate_playoffs(playoff_options, &mut rng);
     ///
     /// // Simulate all playoffs
     /// let res = my_league_season.sim_playoffs(&mut rng);
@@ -2681,23 +2969,31 @@ impl LeagueSeason {
 
         // Simulate rounds until playoffs are complete
         while !self.playoffs.complete() {
-            // Get the current round index
-            let current_round = self.playoffs
-                .conference_brackets().values().map(|b| b.len() - 1)
-                .min()
-                .unwrap_or_default();
+            // If conference brackets are not yet complete, simulate them
+            if !self.playoffs.conference_brackets_complete() {
+                // Get the current round index (minimum across all brackets)
+                let current_round = self.playoffs
+                    .conference_brackets().values().map(|b| b.len().saturating_sub(1))
+                    .min()
+                    .unwrap_or_default();
 
-            // Simulate the current round if not complete
-            if !self.playoffs
-                .conference_brackets().values().all(|b| b
-                    .get(current_round)
-                    .is_none_or(|r: &LeagueSeasonWeek| r.complete())) {
+                // Simulate the current round across all conferences
                 self.sim_playoff_round(current_round, rng)?;
-            }
 
-            // Generate the next round if the current round is complete and playoffs aren't done
-            if !self.playoffs.complete() {
-                self.generate_next_playoff_round(rng)?;
+                // Generate the next round if needed and playoffs aren't done
+                if !self.playoffs.complete() {
+                    self.generate_next_playoff_round(rng)?;
+                }
+            } else if self.playoffs.is_conference_playoff() {
+                // Conference brackets complete, simulate winners bracket
+                let current_round = self.playoffs.winners_bracket().len().saturating_sub(1);
+
+                self.sim_winners_bracket_round(current_round, rng)?;
+
+                // Generate the next winners bracket round if needed
+                if !self.playoffs.complete() {
+                    self.generate_next_playoff_round(rng)?;
+                }
             }
         }
         Ok(())
