@@ -196,6 +196,27 @@ impl LeagueSeasonRaw {
             }
         }
 
+        // Validate conference team IDs
+        let mut seen_conference_teams = HashSet::new();
+        for (conf_index, conference) in self.conferences.iter().enumerate() {
+            for &team_id in &conference.all_teams() {
+                // Ensure the team ID exists in the season
+                if !self.teams.contains_key(&team_id) {
+                    return Err(format!(
+                        "Conference {} ('{}') references nonexistent team ID: {}",
+                        conf_index, conference.name(), team_id
+                    ));
+                }
+                // Ensure no duplicate team IDs across conferences
+                if !seen_conference_teams.insert(team_id) {
+                    return Err(format!(
+                        "Duplicate team ID {} found across conferences (detected in conference {} '{}')",
+                        team_id, conf_index, conference.name()
+                    ));
+                }
+            }
+        }
+
         // Validate the season weeks
         let mut prev_started: bool = false;
         let mut prev_completed: bool = false;
