@@ -1940,6 +1940,50 @@ impl LeagueSeasonPlayoffs {
         }
     }
 
+    /// Gets the championship matchup if it exists
+    ///
+    /// ### Example
+    /// ```
+    /// use fbsim_core::league::season::playoffs::LeagueSeasonPlayoffs;
+    ///
+    /// // Create playoffs and add a team
+    /// let my_playoffs = LeagueSeasonPlayoffs::new();
+    /// let championship = my_playoffs.championship();
+    /// assert!(championship.is_none());
+    /// ```
+    pub fn championship(&self) -> Option<&LeagueSeasonMatchup> {
+        if self.is_conference_playoff() {
+            let conferences = self.teams.num_conferences();
+            if !self.winners_bracket_started() || 
+                self.winners_bracket.is_empty() ||
+                (
+                    self.winners_bracket.len() == 1 &&
+                    conferences > 2
+                ) {
+                return None;
+            }
+            if let Some(final_round) = self.winners_bracket.last() {
+                if final_round.matchups().len() != 1 {
+                    return None;
+                }
+                return final_round.matchups().first();
+            }
+            None
+        } else {
+            let bracket = self.conference_brackets.get(&0)?;
+            if bracket.is_empty() || (bracket.len() == 1 && self.teams.len() > 2) {
+                return None;
+            }
+            if let Some(final_round) = bracket.last() {
+                if final_round.matchups().len() != 1 {
+                    return None;
+                }
+                return final_round.matchups().first();
+            }
+            None
+        }
+    }
+
     /// Check if a team made it to the championship
     ///
     /// ### Example
@@ -1961,44 +2005,10 @@ impl LeagueSeasonPlayoffs {
             return Err(format!("Team {} not in playoffs", team_id));
         }
 
-        if self.is_conference_playoff() {
-            // Multi-conference: championship is in the winners bracket
-            if let Some(final_round) = self.winners_bracket.last() {
-                if let Some(final_matchup) = final_round.matchups().first() {
-                    return Ok(
-                        *final_matchup.home_team() == team_id ||
-                        *final_matchup.away_team() == team_id
-                    );
-                }
-            }
-            Ok(false)
-        } else {
-            // Single-conference: championship is last round of bracket 0
-            let bracket = match self.conference_brackets.get(&0) {
-                Some(b) => b,
-                None => return Ok(false),
-            };
-
-            if bracket.is_empty() {
-                return Ok(false);
-            }
-
-            // Not championship if more than 2 teams but only 1 round
-            if bracket.len() == 1 && self.teams.len() > 2 {
-                return Ok(false);
-            }
-
-            if let Some(final_round) = bracket.last() {
-                if final_round.matchups().len() == 1 {
-                    if let Some(final_matchup) = final_round.matchups().first() {
-                        return Ok(
-                            *final_matchup.home_team() == team_id ||
-                            *final_matchup.away_team() == team_id
-                        );
-                    }
-                }
-            }
-            Ok(false)
+        // Check if the team appeared in the championship matchup
+        match self.championship() {
+            Some(m) => Ok(*m.home_team() == team_id || *m.away_team() == team_id),
+            None => Ok(false)
         }
     }
 
@@ -2012,29 +2022,10 @@ impl LeagueSeasonPlayoffs {
     /// assert!(my_playoffs.champion().is_none());
     /// ```
     pub fn champion(&self) -> Option<usize> {
-        // If playoffs are not complete, there is no champion
-        if !self.complete() {
-            return None;
+        match self.championship() {
+            Some(m) => m.winner(),
+            None => None
         }
-
-        if self.is_conference_playoff() {
-            // Multi-conference: winner is from the winners bracket
-            if let Some(final_round) = self.winners_bracket.last() {
-                if let Some(final_matchup) = final_round.matchups().first() {
-                    return final_matchup.winner();
-                }
-            }
-        } else {
-            // Single-conference: winner is from bracket 0
-            if let Some(bracket) = self.conference_brackets.get(&0) {
-                if let Some(final_round) = bracket.last() {
-                    if let Some(final_matchup) = final_round.matchups().first() {
-                        return final_matchup.winner();
-                    }
-                }
-            }
-        }
-        None
     }
 
     /// Compute a team's playoff record
