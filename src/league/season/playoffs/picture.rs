@@ -232,6 +232,20 @@ impl RecordBounds {
     }
 }
 
+/// # `PlayoffPictureOptions` struct
+///
+/// Options for configuring how the playoff picture is generated
+#[cfg_attr(feature = "rocket_okapi", derive(JsonSchema))]
+#[derive(Clone, PartialEq, Debug, Default, Serialize, Deserialize)]
+pub struct PlayoffPictureOptions {
+    /// If `Some(true)`, force conference-based playoff picture.
+    /// If `Some(false)`, force flat (non-conference) playoff picture.
+    /// If `None`, auto-detect: use conferences if the season has multiple conferences.
+    pub by_conference: Option<bool>,
+    /// If true, division winners are guaranteed a playoff berth (conference mode only)
+    pub division_winners_guaranteed: bool,
+}
+
 /// # `PlayoffPicture` struct
 ///
 /// Represents the complete playoff picture for a season, showing the
@@ -247,9 +261,16 @@ pub struct PlayoffPicture {
 impl PlayoffPicture {
     /// Create a playoff picture from a season
     ///
+    /// When the season has multiple conferences, the playoff picture is organized
+    /// by conference by default (with `num_playoff_teams` interpreted as the number
+    /// of playoff teams *per conference*). This behavior can be overridden via
+    /// `PlayoffPictureOptions`.
+    ///
     /// ### Arguments
     /// * `season` - The league season to analyze
-    /// * `num_playoff_teams` - Number of teams that will make the playoffs
+    /// * `num_playoff_teams` - Number of teams that make the playoffs. In conference
+    ///   mode this is the number of teams *per conference*.
+    /// * `options` - Optional configuration; pass `None` for defaults
     ///
     /// ### Returns
     /// * `Ok(PlayoffPicture)` - The current playoff picture
@@ -274,10 +295,34 @@ impl PlayoffPicture {
     /// my_league_season.generate_schedule(LeagueSeasonScheduleOptions::new(), &mut rng);
     ///
     /// // Get the playoff picture for a 2-team playoff
-    /// let picture = PlayoffPicture::from_season(&my_league_season, 2);
+    /// let picture = PlayoffPicture::from_season(&my_league_season, 2, None);
     /// assert!(picture.is_ok());
     /// ```
-    pub fn from_season(season: &LeagueSeason, num_playoff_teams: usize) -> Result<Self, String> {
+    pub fn from_season(
+        season: &LeagueSeason,
+        num_playoff_teams: usize,
+        options: Option<PlayoffPictureOptions>,
+    ) -> Result<Self, String> {
+        let opts = options.unwrap_or_default();
+
+        let use_conferences = match opts.by_conference {
+            Some(v) => v,
+            None => season.conferences().len() > 1,
+        };
+
+        if use_conferences {
+            Self::conference_playoff_picture(
+                season,
+                num_playoff_teams,
+                opts.division_winners_guaranteed,
+            )
+        } else {
+            Self::non_conference_playoff_picture(season, num_playoff_teams)
+        }
+    }
+
+    /// Build a playoff picture using overall league standings (no conference separation)
+    fn non_conference_playoff_picture(season: &LeagueSeason, num_playoff_teams: usize) -> Result<Self, String> {
         let total_teams = season.teams().len();
 
         // Validate parameters
@@ -372,6 +417,173 @@ impl PlayoffPicture {
         Ok(PlayoffPicture {
             num_playoff_teams,
             entries,
+            games_remaining_in_season,
+        })
+    }
+
+    /// Build a playoff picture organized by conference
+    fn conference_playoff_picture(
+        season: &LeagueSeason,
+        playoff_teams_per_conference: usize,
+        division_winners_guaranteed: bool,
+    ) -> Result<Self, String> {
+        // Validate that we have conferences
+        if season.conferences().is_empty() {
+            return Err("Season has no conferences defined".to_string());
+        }
+
+        if season.weeks().is_empty() {
+            return Err("Season has no schedule".to_string());
+        }
+
+        if playoff_teams_per_conference == 0 {
+            return Err("Number of playoff teams per conference must be at least 1".to_string());
+        }
+
+        // Validate that playoff_teams_per_conference does not exceed the
+        // smallest conference size
+        let min_conference_size = season
+            .conferences()
+            .iter()
+            .map(|c| c.num_teams())
+            .min()
+            .unwrap_or(0);
+
+        if playoff_teams_per_conference > min_conference_size {
+            return Err(format!(
+                "Playoff teams per conference ({}) exceeds the smallest conference size ({})",
+                playoff_teams_per_conference, min_conference_size
+            ));
+        }
+
+        let num_conferences = season.conferences().len();
+        let total_playoff_teams = playoff_teams_per_conference * num_conferences;
+
+        // Compute remaining games for each team
+        let mut team_remaining_games: BTreeMap<usize, usize> = BTreeMap::new();
+        let mut games_remaining_in_season = 0;
+
+        for week in season.weeks().iter() {
+            for matchup in week.matchups().iter() {
+                if !matchup.context().game_over() {
+                    games_remaining_in_season += 1;
+                    *team_remaining_games.entry(*matchup.home_team()).or_insert(0) += 1;
+                    *team_remaining_games.entry(*matchup.away_team()).or_insert(0) += 1;
+                }
+            }
+        }
+
+        let total_games = season.weeks().len();
+        let mut all_entries = Vec::new();
+
+        // Process each conference
+        for conf_index in 0..num_conferences {
+            let conference = season.conferences().get(conf_index)
+                .ok_or_else(|| format!("Conference {} not found", conf_index))?;
+
+            // Get conference standings
+            let conf_standings = season.conference_standings(conf_index)?;
+
+            // Determine division winners
+            let mut division_winners: Vec<usize> = Vec::new();
+            if division_winners_guaranteed {
+                for (div_id, _) in conference.divisions().iter().enumerate() {
+                    let div_standings = season.division_standings(conf_index, div_id)?;
+                    if let Some((winner_id, _)) = div_standings.first() {
+                        division_winners.push(*winner_id);
+                    }
+                }
+            }
+
+            // Determine playoff teams for this conference
+            let mut conf_playoff_teams: Vec<usize> = Vec::new();
+
+            // First, add all division winners (if guaranteed)
+            for &winner in &division_winners {
+                if conf_playoff_teams.len() < playoff_teams_per_conference {
+                    conf_playoff_teams.push(winner);
+                }
+            }
+
+            // Fill remaining spots with wild cards (best records not already in)
+            for (team_id, _record) in conf_standings.iter() {
+                if conf_playoff_teams.len() >= playoff_teams_per_conference {
+                    break;
+                }
+                if !conf_playoff_teams.contains(team_id) {
+                    conf_playoff_teams.push(*team_id);
+                }
+            }
+
+            // Compute record bounds for conference teams
+            let bounds: Vec<RecordBounds> = conf_standings
+                .iter()
+                .map(|(team_id, record)| {
+                    let remaining = *team_remaining_games.get(team_id).unwrap_or(&0);
+                    RecordBounds::from_record(*team_id, record, remaining, total_games)
+                })
+                .collect();
+
+            // Build entries for each team in the conference
+            for (position, (team_id, record)) in conf_standings.iter().enumerate() {
+                let team_name = season
+                    .teams()
+                    .get(team_id)
+                    .map(|t| t.name().to_string())
+                    .unwrap_or_else(|| format!("Team {}", team_id));
+
+                let remaining = *team_remaining_games.get(team_id).unwrap_or(&0);
+                let in_playoff_position = position < playoff_teams_per_conference;
+                let is_division_winner = division_winners.contains(team_id);
+
+                // Calculate games back (within conference)
+                let games_back = if in_playoff_position {
+                    0.0
+                } else {
+                    Self::compute_games_back(&conf_standings, position, playoff_teams_per_conference)
+                };
+
+                // Determine status (within conference context)
+                let status = Self::compute_status(
+                    *team_id,
+                    position,
+                    &bounds,
+                    playoff_teams_per_conference,
+                );
+
+                // Calculate magic number
+                let magic_number = if matches!(status, PlayoffStatus::Eliminated) {
+                    None
+                } else {
+                    Self::compute_magic_number(*team_id, &bounds, playoff_teams_per_conference)
+                };
+
+                // Adjust status based on division winner guarantee
+                let final_status = if is_division_winner && division_winners_guaranteed {
+                    // Division winners get special consideration
+                    match &status {
+                        PlayoffStatus::Eliminated => status, // Can't be eliminated if div winner guaranteed
+                        _ => status,
+                    }
+                } else {
+                    status
+                };
+
+                all_entries.push(PlayoffPictureEntry {
+                    team_id: *team_id,
+                    team_name,
+                    current_record: record.clone(),
+                    status: final_status,
+                    games_back,
+                    remaining_games: remaining,
+                    magic_number,
+                });
+            }
+        }
+
+        Ok(PlayoffPicture {
+            num_playoff_teams: total_playoff_teams,
+            entries: all_entries,
             games_remaining_in_season,
         })
     }
@@ -658,7 +870,7 @@ impl PlayoffPicture {
     /// my_league_season.generate_schedule(LeagueSeasonScheduleOptions::new(), &mut rng);
     ///
     /// // Get the playoff picture for a 2-team playoff
-    /// let picture = PlayoffPicture::from_season(&my_league_season, 2).unwrap();
+    /// let picture = PlayoffPicture::from_season(&my_league_season, 2, None).unwrap();
     /// assert!(picture.num_playoff_teams() == 2);
     /// ```
     pub fn num_playoff_teams(&self) -> usize {
@@ -686,7 +898,7 @@ impl PlayoffPicture {
     /// my_league_season.generate_schedule(LeagueSeasonScheduleOptions::new(), &mut rng);
     ///
     /// // Get the playoff picture for a 2-team playoff
-    /// let picture = PlayoffPicture::from_season(&my_league_season, 2).unwrap();
+    /// let picture = PlayoffPicture::from_season(&my_league_season, 2, None).unwrap();
     /// let entries = picture.entries();
     /// ```
     pub fn entries(&self) -> &Vec<PlayoffPictureEntry> {
@@ -714,7 +926,7 @@ impl PlayoffPicture {
     /// my_league_season.generate_schedule(LeagueSeasonScheduleOptions::new(), &mut rng);
     ///
     /// // Get the playoff picture for a 2-team playoff
-    /// let picture = PlayoffPicture::from_season(&my_league_season, 2).unwrap();
+    /// let picture = PlayoffPicture::from_season(&my_league_season, 2, None).unwrap();
     /// let entries = picture.entries();
     /// ```
     pub fn games_remaining_in_season(&self) -> usize {
@@ -742,7 +954,7 @@ impl PlayoffPicture {
     /// my_league_season.generate_schedule(LeagueSeasonScheduleOptions::new(), &mut rng);
     ///
     /// // Get the playoff picture for a 2-team playoff
-    /// let picture = PlayoffPicture::from_season(&my_league_season, 2).unwrap();
+    /// let picture = PlayoffPicture::from_season(&my_league_season, 2, None).unwrap();
     /// let playoff_teams = picture.playoff_teams();
     /// ```
     pub fn playoff_teams(&self) -> Vec<&PlayoffPictureEntry> {
@@ -778,7 +990,7 @@ impl PlayoffPicture {
     /// my_league_season.generate_schedule(LeagueSeasonScheduleOptions::new(), &mut rng);
     ///
     /// // Get the playoff picture for a 2-team playoff
-    /// let picture = PlayoffPicture::from_season(&my_league_season, 2).unwrap();
+    /// let picture = PlayoffPicture::from_season(&my_league_season, 2, None).unwrap();
     /// let clinched_teams = picture.clinched_teams();
     /// ```
     pub fn clinched_teams(&self) -> Vec<&PlayoffPictureEntry> {
@@ -812,7 +1024,7 @@ impl PlayoffPicture {
     /// my_league_season.generate_schedule(LeagueSeasonScheduleOptions::new(), &mut rng);
     ///
     /// // Get the playoff picture for a 2-team playoff
-    /// let picture = PlayoffPicture::from_season(&my_league_season, 2).unwrap();
+    /// let picture = PlayoffPicture::from_season(&my_league_season, 2, None).unwrap();
     /// let in_the_hunt = picture.in_the_hunt();
     /// ```
     pub fn in_the_hunt(&self) -> Vec<&PlayoffPictureEntry> {
@@ -843,7 +1055,7 @@ impl PlayoffPicture {
     /// my_league_season.generate_schedule(LeagueSeasonScheduleOptions::new(), &mut rng);
     ///
     /// // Get the playoff picture for a 2-team playoff
-    /// let picture = PlayoffPicture::from_season(&my_league_season, 2).unwrap();
+    /// let picture = PlayoffPicture::from_season(&my_league_season, 2, None).unwrap();
     /// let eliminated_teams = picture.eliminated_teams();
     /// ```
     pub fn eliminated_teams(&self) -> Vec<&PlayoffPictureEntry> {
@@ -874,7 +1086,7 @@ impl PlayoffPicture {
     /// my_league_season.generate_schedule(LeagueSeasonScheduleOptions::new(), &mut rng);
     ///
     /// // Get the playoff picture for a 2-team playoff
-    /// let picture = PlayoffPicture::from_season(&my_league_season, 2).unwrap();
+    /// let picture = PlayoffPicture::from_season(&my_league_season, 2, None).unwrap();
     /// let team_status = picture.team_status(3);
     /// assert!(team_status.is_some());
     /// ```
@@ -961,7 +1173,7 @@ mod tests {
         season.generate_schedule(LeagueSeasonScheduleOptions::new(), &mut rng).unwrap();
 
         // Get playoff picture for 2-team playoffs
-        let picture = PlayoffPicture::from_season(&season, 2).unwrap();
+        let picture = PlayoffPicture::from_season(&season, 2, None).unwrap();
 
         // All teams should have games remaining
         assert!(picture.games_remaining_in_season() > 0);
@@ -1003,7 +1215,7 @@ mod tests {
         }
 
         // Get playoff picture
-        let picture = PlayoffPicture::from_season(&season, 2).unwrap();
+        let picture = PlayoffPicture::from_season(&season, 2, None).unwrap();
 
         // Should have some games remaining
         assert!(picture.games_remaining_in_season() > 0);
@@ -1037,7 +1249,7 @@ mod tests {
         season.sim_regular_season(&mut rng).unwrap();
 
         // Get playoff picture
-        let picture = PlayoffPicture::from_season(&season, 2).unwrap();
+        let picture = PlayoffPicture::from_season(&season, 2, None).unwrap();
 
         // No games remaining
         assert_eq!(picture.games_remaining_in_season(), 0);
@@ -1071,11 +1283,11 @@ mod tests {
         season.generate_schedule(LeagueSeasonScheduleOptions::new(), &mut rng).unwrap();
 
         // Test: num_playoff_teams = 0 should fail
-        let result = PlayoffPicture::from_season(&season, 0);
+        let result = PlayoffPicture::from_season(&season, 0, None);
         assert!(result.is_err());
 
         // Test: num_playoff_teams > total teams should fail
-        let result = PlayoffPicture::from_season(&season, 5);
+        let result = PlayoffPicture::from_season(&season, 5, None);
         assert!(result.is_err());
     }
 
@@ -1090,7 +1302,7 @@ mod tests {
         season.add_team(1, FootballTeam::new()).unwrap();
 
         // Should fail because no schedule
-        let result = PlayoffPicture::from_season(&season, 1);
+        let result = PlayoffPicture::from_season(&season, 1, None);
         assert!(result.is_err());
     }
 
@@ -1111,7 +1323,7 @@ mod tests {
         season.generate_schedule(LeagueSeasonScheduleOptions::new(), &mut rng).unwrap();
 
         // Get playoff picture
-        let picture = PlayoffPicture::from_season(&season, 2).unwrap();
+        let picture = PlayoffPicture::from_season(&season, 2, None).unwrap();
 
         // Should be able to look up each team
         for id in 0..4 {
@@ -1145,7 +1357,7 @@ mod tests {
             season.sim_week(week_idx, &mut rng).unwrap();
         }
 
-        let picture = PlayoffPicture::from_season(&season, 2).unwrap();
+        let picture = PlayoffPicture::from_season(&season, 2, None).unwrap();
 
         // Teams in playoff position should have games_back = 0
         for entry in picture.playoff_teams() {
