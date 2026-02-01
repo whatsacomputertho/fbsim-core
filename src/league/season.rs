@@ -668,8 +668,22 @@ impl LeagueSeason {
     /// let conference = LeagueConference::with_name("AFC");
     /// season.add_conference(conference);
     /// ```
-    pub fn add_conference(&mut self, conference: LeagueConference) {
+    pub fn add_conference(&mut self, conference: LeagueConference) -> Result<(), String> {
+        let existing_teams: Vec<usize> = self
+            .conferences
+            .iter()
+            .flat_map(|c| c.all_teams())
+            .collect();
+        for team_id in conference.all_teams() {
+            if existing_teams.contains(&team_id) {
+                return Err(format!(
+                    "Team with ID {} already exists in another conference",
+                    team_id
+                ));
+            }
+        }
         self.conferences.push(conference);
+        Ok(())
     }
 
     /// Get a conference by index
@@ -950,11 +964,11 @@ impl LeagueSeason {
     fn create_default_conference(&mut self) {
         let mut division = LeagueDivision::with_name("Default");
         for team_id in self.teams.keys() {
-            division.add_team(*team_id);
+            division.add_team(*team_id).expect("default conference has unique team IDs");
         }
 
         let mut conference = LeagueConference::with_name("Default");
-        conference.add_division(division);
+        conference.add_division(division).expect("default conference has a single division");
 
         self.conferences.clear();
         self.conferences.push(conference);

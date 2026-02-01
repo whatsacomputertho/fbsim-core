@@ -245,12 +245,19 @@ impl LeagueDivision {
     /// use fbsim_core::league::season::conference::LeagueDivision;
     ///
     /// let mut division = LeagueDivision::new();
-    /// division.add_team(0);
-    /// division.add_team(1);
+    /// division.add_team(0).unwrap();
+    /// division.add_team(1).unwrap();
     /// assert_eq!(division.teams().len(), 2);
     /// ```
-    pub fn add_team(&mut self, team_id: usize) {
+    pub fn add_team(&mut self, team_id: usize) -> Result<(), String> {
+        if self.teams.contains(&team_id) {
+            return Err(format!(
+                "Team with ID {} already exists in division '{}'",
+                team_id, self.name
+            ));
+        }
         self.teams.push(team_id);
+        Ok(())
     }
 
     /// Check if a team is in this division
@@ -413,8 +420,18 @@ impl LeagueConference {
     /// let division = LeagueDivision::with_name("East");
     /// conference.add_division(division);
     /// ```
-    pub fn add_division(&mut self, division: LeagueDivision) {
+    pub fn add_division(&mut self, division: LeagueDivision) -> Result<(), String> {
+        let existing_teams = self.all_teams();
+        for team_id in division.teams() {
+            if existing_teams.contains(team_id) {
+                return Err(format!(
+                    "Team with ID {} already exists in conference '{}'",
+                    team_id, self.name
+                ));
+            }
+        }
         self.divisions.push(division);
+        Ok(())
     }
 
     /// Get a division by ID
