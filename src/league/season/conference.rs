@@ -581,10 +581,10 @@ mod tests {
     #[test]
     fn test_division_creation() {
         let mut division = LeagueDivision::with_name("East");
-        division.add_team(0);
-        division.add_team(1);
-        division.add_team(2);
-        division.add_team(3);
+        let _ = division.add_team(0);
+        let _ = division.add_team(1);
+        let _ = division.add_team(2);
+        let _ = division.add_team(3);
 
         assert_eq!(division.name(), "East");
         assert_eq!(division.num_teams(), 4);
@@ -598,15 +598,15 @@ mod tests {
         let mut conference = LeagueConference::with_name("AFC");
 
         let mut east = LeagueDivision::with_name("East");
-        east.add_team(0);
-        east.add_team(1);
+        let _ = east.add_team(0);
+        let _ = east.add_team(1);
 
         let mut west = LeagueDivision::with_name("West");
-        west.add_team(2);
-        west.add_team(3);
+        let _ = west.add_team(2);
+        let _ = west.add_team(3);
 
-        conference.add_division(east);
-        conference.add_division(west);
+        let _ = conference.add_division(east);
+        let _ = conference.add_division(west);
 
         assert_eq!(conference.name(), "AFC");
         assert_eq!(conference.num_divisions(), 2);
@@ -621,15 +621,15 @@ mod tests {
         let mut conference = LeagueConference::new();
 
         let mut east = LeagueDivision::new();
-        east.add_team(0);
-        east.add_team(1);
+        let _ = east.add_team(0);
+        let _ = east.add_team(1);
 
         let mut west = LeagueDivision::new();
-        west.add_team(2);
-        west.add_team(3);
+        let _ = west.add_team(2);
+        let _ = west.add_team(3);
 
-        conference.add_division(east);
-        conference.add_division(west);
+        let _ = conference.add_division(east);
+        let _ = conference.add_division(west);
 
         assert_eq!(conference.team_division(0), Some(0));
         assert_eq!(conference.team_division(1), Some(0));
@@ -643,15 +643,15 @@ mod tests {
         let mut conference = LeagueConference::new();
 
         let mut div1 = LeagueDivision::new();
-        div1.add_team(0);
-        div1.add_team(1);
+        let _ = div1.add_team(0);
+        let _ = div1.add_team(1);
 
         let mut div2 = LeagueDivision::new();
-        div2.add_team(2);
-        div2.add_team(3);
+        let _ = div2.add_team(2);
+        let _ = div2.add_team(3);
 
-        conference.add_division(div1);
-        conference.add_division(div2);
+        let _ = conference.add_division(div1);
+        let _ = conference.add_division(div2);
 
         let teams = conference.all_teams();
         assert_eq!(teams.len(), 4);
