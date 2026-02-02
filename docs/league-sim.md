@@ -7,20 +7,37 @@
     - [League](#league)
     - [LeagueTeam](#leagueteam)
     - [LeagueSeason](#leagueseason)
-    - [LeagueSeasonTeam](#leagueseasonteam)
+    - [FootballTeam](#footballteam)
+    - [LeagueConference](#leagueconference)
+    - [LeagueDivision](#leaguedivision)
     - [LeagueSeasonWeek](#leagueseasonweek)
     - [LeagueSeasonMatchup](#leagueseasonmatchup)
+    - [LeagueSeasonPlayoffs](#leagueseasonplayoffs)
+    - [PlayoffTeam](#playoffteam)
+    - [PlayoffPicture](#playoffpicture)
+    - [LeagueTeamRecord](#leagueteamrecord)
   - [Architecture](#architecture)
+    - [Type Hierarchy](#type-hierarchy)
     - [Schema](#schema)
       - [Example](#example)
   - [API Specification](#api-specification)
   - [CLI Specification](#cli-specification)
     - [League](#league-1)
     - [League Team](#league-team)
+    - [League Team Stats](#league-team-stats)
     - [League Season](#league-season)
+    - [League Season Conference](#league-season-conference)
+    - [League Season Conference Division](#league-season-conference-division)
     - [League Season Team](#league-season-team)
+    - [League Season Team Stats](#league-season-team-stats)
+    - [League Season Standings](#league-season-standings)
+    - [League Season Schedule](#league-season-schedule)
     - [League Season Week](#league-season-week)
     - [League Season Week Matchup](#league-season-week-matchup)
+    - [League Season Week Matchup Play](#league-season-week-matchup-play)
+    - [League Season Playoffs](#league-season-playoffs)
+    - [League Season Playoffs Round](#league-season-playoffs-round)
+    - [League Season Playoffs Round Matchup](#league-season-playoffs-round-matchup)
   - [Roadmap](#roadmap)
   - [Next Steps](#next-steps)
 
@@ -34,98 +51,276 @@
 2. A `League` MUST aggregate `LeagueSeason` structures
 3. A `League` MAY contain 0 `LeagueSeason` structures
 4. A `League` MUST contain at most 1 active `LeagueSeason`
-5. A `League` MUST ONLY create a new `LeagueSeason` if it has no active `LeagueSeason`
-6. A `League` MUST distinguish between its active `LeagueSeason` and its history of past `LeagueSeason` structures
-7. A `League` MUST aggregate `LeagueTeam` structures
-8. A `League` MUST compute a unique ID for each of its `LeagueTeam` structures
-9.  A `League` MAY add new teams to its collection of `LeagueTeam` structures
+5. A `League` MUST ONLY create a new `LeagueSeason` if it has no active `LeagueSeason`, or its current `LeagueSeason` is complete
+6. A `League` MUST distinguish between its active `LeagueSeason` (current_season) and its history of past `LeagueSeason` structures (seasons)
+7. A `League` MUST aggregate `LeagueTeam` structures in a `BTreeMap` keyed by a unique `usize` ID
+8. A `League` MUST compute a unique ID for each of its `LeagueTeam` structures via auto-increment
+9. A `League` MAY add new teams to its collection of `LeagueTeam` structures
 10. A `League` MUST NOT remove teams from its collection of `LeagueTeam` structures
-11. A `League` MUST ONLY create a new `LeagueSeason` from an even subset (strictly greater than 2) of its `LeagueTeam` structures
-12. A `League` MUST be capable of simulating an entire season at once
-13. A `League` MUST be capable of computing the historical performance of a given `LeagueTeam`
+11. A `League` MUST validate on deserialization that all season team IDs exist in its `teams` map
+12. A `League` MUST be capable of simulating an entire season at once, a single week, a single matchup, or a single play
+13. A `League` MUST be capable of computing the historical performance of a given `LeagueTeam`, including all-time record, all-time stats, playoff record, championship appearances, and championship wins
 
 ### LeagueTeam
 
-> A `LeagueTeam` represents a football team over the course of many seasons.  As of writing the spec, it should only consist of a unique ID.
+> A `LeagueTeam` represents a football team identity over the course of many seasons.  It is a minimal wrapper serving as a unique identifier; season-specific properties (name, skill levels) are stored in `FootballTeam` within each `LeagueSeason`.
 
-1. A `LeagueTeam` MUST have a unique ID assigned to it
+1. A `LeagueTeam` MUST have a unique `usize` ID assigned to it by its parent `League`
 2. A `LeagueTeam` MUST ONLY contain properties which do not vary by season
-3. A `LeagueTeam` MAY generate a new `LeagueSeasonTeam` from its properties
-4. A `LeagueTeam` SHOULD default its generated `LeagueSeasonTeam` properties to its parent `League` structue's most recent `LeagueSeasonTeam` corresponding to the same unique ID
-5. A `LeagueTeam` MAY adjust its generated `LeagueSeasonTeam` properties with respect to its parent `League` structue's most recent `LeagueSeasonTeam` corresponding to the same unique ID
+3. A `LeagueTeam` is currently an empty struct; all mutable team properties live in `FootballTeam`
 
 ### LeagueSeason
 
 > A `LeagueSeason` represents a single season of a football league
 
-1. A `LeagueSeason` MUST contain an even subset (strictly greater than 2) of `LeagueSeasonTeam` structures generated from its parent `League` structure's `LeagueTeam` structures
-2. A `LeagueSeason` MUST be capable of generating a round-robin schedule, represented as a vector of `LeagueSeasonWeek` structures
+1. A `LeagueSeason` MUST have a `year` field of type `usize`
+2. A `LeagueSeason` MUST contain a `BTreeMap<usize, FootballTeam>` of season-specific team data, keyed by the league-level team ID
+3. A `LeagueSeason` MAY contain `LeagueConference` structures organizing teams into conferences and divisions
+4. A `LeagueSeason` MUST contain a vector of `LeagueSeasonWeek` structures representing the regular season schedule
+5. A `LeagueSeason` MUST contain a `LeagueSeasonPlayoffs` structure representing the postseason
+6. A `LeagueSeason` MUST validate that the number of scheduled weeks is between `num_teams` and `(num_teams - 1) * 3`
+7. A `LeagueSeason` MUST validate that started or completed seasons have at least 4 teams and an even team count
+8. A `LeagueSeason` MUST validate that conference team IDs exist in the season's teams and that no team ID is duplicated across conferences
+9. A `LeagueSeason` MUST validate that weeks progress sequentially (week N cannot be complete before week N-1)
+10. A `LeagueSeason` MUST validate that each team plays at most once per week
+11. A `LeagueSeason` MUST be capable of generating a schedule via `LeagueSeasonScheduleOptions`, supporting division-weighted, conference-weighted, and cross-conference scheduling
+12. A `LeagueSeason` MUST be capable of computing standings, division standings, and conference standings
+13. A `LeagueSeason` MUST be capable of computing a playoff picture with clinch numbers, elimination status, and magic numbers
+14. A `LeagueSeason` MUST be capable of generating and simulating playoffs via `LeagueSeasonPlayoffOptions`
 
-### LeagueSeasonTeam
+### FootballTeam
 
-> A `LeagueSeasonTeam` represents a football team during a particular season of a football league
+> A `FootballTeam` represents the season-specific attributes of a football team, including its name, coaching tendencies, and offensive/defensive skill ratings
 
-1. A `LeagueSeasonTeam` MUST contain a name and logo as properties
-2. A `LeagueSeasonTeam` MUST be capable of generating or supplying an offensive and defensive skill level
+1. A `FootballTeam` MUST have a `name` field of at most 64 characters
+2. A `FootballTeam` MUST have a `short_name` (acronym) field of at most 4 characters
+3. A `FootballTeam` MUST contain a `FootballTeamCoach` with attributes: `risk_taking`, `run_pass`, `up_tempo` (each 0-100)
+4. A `FootballTeam` MUST contain a `FootballTeamOffense` with 10 attributes (each 0-100): `passing`, `blocking`, `rushing`, `receiving`, `scrambling`, `turnovers`, `field_goals`, `punting`, `kickoffs`, `kick_return_defense`
+5. A `FootballTeam` MUST contain a `FootballTeamDefense` with 6 attributes (each 0-100): `blitzing`, `rush_defense`, `pass_defense`, `coverage`, `turnovers`, `kick_returning`
+6. A `FootballTeam` MUST validate name length, short_name length, and attribute ranges on deserialization
+
+### LeagueConference
+
+> A `LeagueConference` groups teams within a season into a named conference containing one or more divisions
+
+1. A `LeagueConference` MUST have a `name` of at most 64 characters
+2. A `LeagueConference` MUST contain a vector of `LeagueDivision` structures
+3. A `LeagueConference` MUST validate that no team ID is duplicated across its divisions
+4. A `LeagueConference` MUST validate that all division team IDs exist in the season's teams
+
+### LeagueDivision
+
+> A `LeagueDivision` groups teams within a conference into a named division
+
+1. A `LeagueDivision` MUST have a `name` of at most 64 characters
+2. A `LeagueDivision` MUST contain a vector of team IDs (`Vec<usize>`)
+3. A `LeagueDivision` MUST validate that no team ID is duplicated within the division
 
 ### LeagueSeasonWeek
 
-> A `LeagueSeasonWeek` represents a week of football matchups during a particular season of a football league
+> A `LeagueSeasonWeek` represents a week of football matchups during a particular season
 
-1. A `LeagueSeasonWeek` MAY contain matchups involving a subset of the `LeagueSeasonTeam` structures
-2. A `LeagueSeasonWeek` MUST be capable of computing whether all of its matchups are complete
+1. A `LeagueSeasonWeek` MUST contain a vector of `LeagueSeasonMatchup` structures
+2. A `LeagueSeasonWeek` MUST be capable of computing whether it has started (any matchup started)
+3. A `LeagueSeasonWeek` MUST be capable of computing whether it is complete (all matchups complete)
+4. A `LeagueSeasonWeek` MUST be capable of returning a specific team's matchup for the week
 
 ### LeagueSeasonMatchup
 
-> A `LeagueSeasonMatchup` represents a football matchup during a particular week of a particular season of a football league
+> A `LeagueSeasonMatchup` represents a football game between two teams during a season
 
-1. A `LeagueSeasonMatchup` MUST contain exactly 2 `LeagueSeasonTeam` references, one home and one away team
-2. A `LeagueSeasonMatchup` MUST contain home score and away score properties
-3. A `LeagueSeasonMatchup` MUST contain a property identifying whether the atchup is complete
-4. A `LeagueSeasonMatchup` MUST be convertible into a `BoxScore`
+1. A `LeagueSeasonMatchup` MUST contain `home_team` and `away_team` fields as `usize` team IDs
+2. A `LeagueSeasonMatchup` MUST contain a `GameContext` representing the full game state (score, down, distance, field position, time, timeouts)
+3. A `LeagueSeasonMatchup` MAY contain a `Game` (play-by-play log) and `OffensiveStats` for each team
+4. A `LeagueSeasonMatchup` MUST be capable of computing a `FootballMatchupResult` (Win, Loss, or Tie) for a given team
+5. A `LeagueSeasonMatchup` MUST be capable of determining the winner, if any
+
+### LeagueSeasonPlayoffs
+
+> `LeagueSeasonPlayoffs` represents the postseason bracket structure for a season
+
+1. A `LeagueSeasonPlayoffs` MUST contain a `PlayoffTeams` structure mapping conference IDs to seeded playoff teams
+2. A `LeagueSeasonPlayoffs` MUST contain `conference_brackets` as a `BTreeMap<usize, Vec<LeagueSeasonWeek>>`, one bracket per conference
+3. A `LeagueSeasonPlayoffs` MUST contain a `winners_bracket` as a `Vec<LeagueSeasonWeek>` for championship rounds in multi-conference mode
+4. In single-conference mode, all rounds MUST use conference bracket 0 with an empty winners bracket
+5. In multi-conference mode, conference champions MUST advance to the winners bracket
+
+### PlayoffTeam
+
+> A `PlayoffTeam` represents a team's entry in the playoffs with seeding information
+
+1. A `PlayoffTeam` MUST have a `seed` of type `usize`, auto-assigned in order of addition
+2. A `PlayoffTeam` MUST have a `short_name` of at most 4 characters
+3. A `PlayoffTeams` container MUST validate that no team ID is duplicated across conferences
+
+### PlayoffPicture
+
+> A `PlayoffPicture` provides a real-time view of which teams are in playoff contention during the regular season
+
+1. A `PlayoffPictureEntry` MUST contain: `team_id`, `team_name`, `current_record` (LeagueTeamRecord), `status` (PlayoffStatus), `games_back`, `remaining_games`, and `magic_number`
+2. `PlayoffStatus` MUST be one of: `ClinchedTopSeed`, `ClinchedPlayoffs { current_seed }`, `InPlayoffPosition { current_seed }`, `InTheHunt`, or `Eliminated`
+
+### LeagueTeamRecord
+
+> A `LeagueTeamRecord` tracks a team's win-loss-tie record
+
+1. A `LeagueTeamRecord` MUST contain `wins`, `losses`, and `ties` fields of type `usize`
+2. A `LeagueTeamRecord` MUST display as "W-L-T" format
 
 ## Architecture
+
+### Type Hierarchy
+
+The following is a UML-style diagram depicting the type/struct hierarchy for a `League`.
+
+```
+┌──────────────────────────┐
+│          League           │
+├──────────────────────────┤
+│ teams: BTreeMap<usize,   │
+│         LeagueTeam>      │
+│ current_season:          │
+│         Option<Season>   │
+│ seasons: Vec<Season>     │
+└────┬────────────┬────────┘
+     │            │
+     ▼            ▼
+┌──────────┐  ┌──────────────────────────────────────────────┐
+│LeagueTeam│  │              LeagueSeason                     │
+├──────────┤  ├──────────────────────────────────────────────┤
+│ (empty)  │  │ year: usize                                  │
+└──────────┘  │ teams: BTreeMap<usize, FootballTeam>         │
+              │ conferences: Vec<LeagueConference>           │
+              │ weeks: Vec<LeagueSeasonWeek>                 │
+              │ playoffs: LeagueSeasonPlayoffs               │
+              └───┬──────────┬──────────┬───────────┬───────┘
+                  │          │          │           │
+     ┌────────────┘          │          │           └──────────────┐
+     ▼                       ▼          ▼                          ▼
+┌──────────────────┐ ┌─────────────┐ ┌─────────────────┐ ┌────────────────────────┐
+│   FootballTeam   │ │  League     │ │ LeagueSeason    │ │  LeagueSeasonPlayoffs  │
+├──────────────────┤ │  Conference │ │ Week            │ ├────────────────────────┤
+│ name: String     │ ├─────────────┤ ├─────────────────┤ │ teams: PlayoffTeams    │
+│ short_name:      │ │ name: String│ │ matchups: Vec<  │ │ conference_brackets:   │
+│         String   │ │ divisions:  │ │  LeagueSeason   │ │   BTreeMap<usize,      │
+│ coach:           │ │  Vec<League │ │  Matchup>       │ │   Vec<LeagueSeason     │
+│  FBTeamCoach     │ │  Division>  │ └────────┬────────┘ │   Week>>               │
+│ offense:         │ └──────┬──────┘          │          │ winners_bracket:       │
+│  FBTeamOffense   │        │                 ▼          │   Vec<LeagueSeasonWeek>│
+│ defense:         │        ▼          ┌──────────────┐  └───────────┬────────────┘
+│  FBTeamDefense   │ ┌─────────────┐   │ LeagueSeason │              │
+└──────────────────┘ │  League     │   │ Matchup      │              ▼
+                     │  Division   │   ├──────────────┤       ┌─────────────┐
+                     ├─────────────┤   │ home_team:   │       │PlayoffTeams │
+                     │ name: String│   │       usize  │       ├─────────────┤
+                     │ teams:      │   │ away_team:   │       │ teams:      │
+                     │  Vec<usize> │   │       usize  │       │  BTreeMap<  │
+                     └─────────────┘   │ context:     │       │  usize,     │
+                                       │  GameContext  │       │  BTreeMap<  │
+                                       │ game:        │       │  usize,     │
+                                       │  Option<Game>│       │  PlayoffTeam│
+                                       │ home_stats:  │       │  >>         │
+                                       │  Option<     │       └──────┬──────┘
+                                       │  Offensive   │              │
+                                       │  Stats>      │              ▼
+                                       │ away_stats:  │       ┌─────────────┐
+                                       │  Option<     │       │ PlayoffTeam │
+                                       │  Offensive   │       ├─────────────┤
+                                       │  Stats>      │       │ seed: usize │
+                                       └──────────────┘       │ short_name: │
+                                                              │      String │
+                                                              └─────────────┘
+
+┌──────────────────┐  ┌──────────────────────┐  ┌──────────────────────┐
+│  FBTeamCoach     │  │   FBTeamOffense      │  │   FBTeamDefense      │
+├──────────────────┤  ├──────────────────────┤  ├──────────────────────┤
+│ risk_taking: u8  │  │ passing: u8          │  │ blitzing: u8         │
+│ run_pass: u8     │  │ blocking: u8         │  │ rush_defense: u8     │
+│ up_tempo: u8     │  │ rushing: u8          │  │ pass_defense: u8     │
+│ (each 0-100)    │  │ receiving: u8        │  │ coverage: u8         │
+└──────────────────┘  │ scrambling: u8       │  │ turnovers: u8        │
+                      │ turnovers: u8        │  │ kick_returning: u8   │
+                      │ field_goals: u8      │  │ (each 0-100)        │
+                      │ punting: u8          │  └──────────────────────┘
+                      │ kickoffs: u8         │
+                      │ kick_return_defense: │
+                      │               u8     │
+                      │ (each 0-100)        │
+                      └──────────────────────┘
+
+┌──────────────────────┐  ┌──────────────────────┐
+│  LeagueTeamRecord    │  │  OffensiveStats      │
+├──────────────────────┤  ├──────────────────────┤
+│ wins: usize          │  │ passing: PassingStats│
+│ losses: usize        │  │ rushing: RushingStats│
+│ ties: usize          │  │ receiving:           │
+│ Display: "W-L-T"    │  │   ReceivingStats     │
+└──────────────────────┘  └──────────────────────┘
+```
 
 ### Schema
 
 ```
 league (League)
-  teams (Vec<LeagueTeam>)
+  teams (BTreeMap<usize, LeagueTeam>)
     i (LeagueTeam)
-      id (int)
-      name (String)
-      logo (String)
-      offense_overall (int)
-      defense_overall (int)
-  current_season (LeagueSeason)
-    year (int)
-    teams (Vec<LeagueSeasonTeam>)
-      i (LeagueSeasonTeam)
+      (empty - identity only)
+  current_season (Option<LeagueSeason>)
+    year (usize)
+    teams (BTreeMap<usize, FootballTeam>)
+      i (FootballTeam)
+        name (String, max 64 chars)
+        short_name (String, max 4 chars)
+        coach (FootballTeamCoach)
+          risk_taking (u8, 0-100)
+          run_pass (u8, 0-100)
+          up_tempo (u8, 0-100)
+        offense (FootballTeamOffense)
+          passing (u8, 0-100)
+          blocking (u8, 0-100)
+          rushing (u8, 0-100)
+          receiving (u8, 0-100)
+          scrambling (u8, 0-100)
+          turnovers (u8, 0-100)
+          field_goals (u8, 0-100)
+          punting (u8, 0-100)
+          kickoffs (u8, 0-100)
+          kick_return_defense (u8, 0-100)
+        defense (FootballTeamDefense)
+          blitzing (u8, 0-100)
+          rush_defense (u8, 0-100)
+          pass_defense (u8, 0-100)
+          coverage (u8, 0-100)
+          turnovers (u8, 0-100)
+          kick_returning (u8, 0-100)
+    conferences (Vec<LeagueConference>)
+      i (LeagueConference)
+        name (String, max 64 chars)
+        divisions (Vec<LeagueDivision>)
+          j (LeagueDivision)
+            name (String, max 64 chars)
+            teams (Vec<usize>)
     weeks (Vec<LeagueSeasonWeek>)
       i (LeagueSeasonWeek)
-        week (int)
         matchups (Vec<LeagueSeasonMatchup>)
-          i (LeagueSeasonMatchup)
-            home_team (int)
-            away_team (int)
-            home_score (int)
-            away_score (int)
-            complete (bool)
+          j (LeagueSeasonMatchup)
+            home_team (usize)
+            away_team (usize)
+            context (GameContext)
+            game (Option<Game>)
+            home_stats (Option<OffensiveStats>)
+            away_stats (Option<OffensiveStats>)
+    playoffs (LeagueSeasonPlayoffs)
+      teams (PlayoffTeams)
+        teams (BTreeMap<usize, BTreeMap<usize, PlayoffTeam>>)
+          conference_id -> team_id -> PlayoffTeam
+            seed (usize)
+            short_name (String, max 4 chars)
+      conference_brackets (BTreeMap<usize, Vec<LeagueSeasonWeek>>)
+        conference_id -> rounds (Vec<LeagueSeasonWeek>)
+      winners_bracket (Vec<LeagueSeasonWeek>)
   seasons (Vec<LeagueSeason>)
-    i (LeagueSeason)
-      year (int)
-      teams (Vec<LeagueSeasonTeam>)
-        i (LeagueSeasonTeam)
-      weeks (Vec<LeagueSeasonWeek>)
-        i (LeagueSeasonWeek)
-          week (int)
-          matchups (Vec<LeagueSeasonMatchup>)
-            i (LeagueSeasonMatchup)
-              home_team (int)
-              away_team (int)
-              home_score (int)
-              away_score (int)
-              complete (bool)
+    (same structure as current_season)
 ```
 
 #### Example
@@ -136,104 +331,106 @@ league (League)
 
 ```json
 {
-  "teams": [
-    { "id": 1 },
-    { "id": 2 },
-    { "id": 3 },
-    { "id": 4 },
-    { "id": 5 }
-  ],
+  "teams": {
+    "0": {},
+    "1": {},
+    "2": {},
+    "3": {}
+  },
   "current_season": {
     "year": 2025,
-    "teams": [
-      {
-        "id": 1,
+    "teams": {
+      "0": {
         "name": "New York Monsters",
-        "logo": "<blob>",
-        "offense_overall": 50,
-        "defense_overall": 50
+        "short_name": "NYM",
+        "coach": { "risk_taking": 50, "run_pass": 50, "up_tempo": 50 },
+        "offense": {
+          "passing": 50, "blocking": 50, "rushing": 50, "receiving": 50,
+          "scrambling": 50, "turnovers": 50, "field_goals": 50, "punting": 50,
+          "kickoffs": 50, "kick_return_defense": 50
+        },
+        "defense": {
+          "blitzing": 50, "rush_defense": 50, "pass_defense": 50,
+          "coverage": 50, "turnovers": 50, "kick_returning": 50
+        }
       },
-      {
-        "id": 2,
+      "1": {
         "name": "Carolina Wombats",
-        "logo": "<blob>",
-        "offense_overall": 50,
-        "defense_overall": 50
+        "short_name": "CAR",
+        "coach": { "risk_taking": 50, "run_pass": 50, "up_tempo": 50 },
+        "offense": {
+          "passing": 50, "blocking": 50, "rushing": 50, "receiving": 50,
+          "scrambling": 50, "turnovers": 50, "field_goals": 50, "punting": 50,
+          "kickoffs": 50, "kick_return_defense": 50
+        },
+        "defense": {
+          "blitzing": 50, "rush_defense": 50, "pass_defense": 50,
+          "coverage": 50, "turnovers": 50, "kick_returning": 50
+        }
       },
-      {
-        "id": 3,
+      "2": {
         "name": "New England Tulips",
-        "logo": "<blob>",
-        "offense_overall": 50,
-        "defense_overall": 50
+        "short_name": "NET",
+        "coach": { "risk_taking": 50, "run_pass": 50, "up_tempo": 50 },
+        "offense": {
+          "passing": 50, "blocking": 50, "rushing": 50, "receiving": 50,
+          "scrambling": 50, "turnovers": 50, "field_goals": 50, "punting": 50,
+          "kickoffs": 50, "kick_return_defense": 50
+        },
+        "defense": {
+          "blitzing": 50, "rush_defense": 50, "pass_defense": 50,
+          "coverage": 50, "turnovers": 50, "kick_returning": 50
+        }
       },
-      {
-        "id": 4,
+      "3": {
         "name": "New Orleans Grouse",
-        "logo": "<blob>",
-        "offense_overall": 50,
-        "defense_overall": 50
+        "short_name": "NOG",
+        "coach": { "risk_taking": 50, "run_pass": 50, "up_tempo": 50 },
+        "offense": {
+          "passing": 50, "blocking": 50, "rushing": 50, "receiving": 50,
+          "scrambling": 50, "turnovers": 50, "field_goals": 50, "punting": 50,
+          "kickoffs": 50, "kick_return_defense": 50
+        },
+        "defense": {
+          "blitzing": 50, "rush_defense": 50, "pass_defense": 50,
+          "coverage": 50, "turnovers": 50, "kick_returning": 50
+        }
+      }
+    },
+    "conferences": [
+      {
+        "name": "American",
+        "divisions": [
+          { "name": "East", "teams": [0, 1] },
+          { "name": "West", "teams": [2, 3] }
+        ]
       }
     ],
     "weeks": [
       {
-        "week": 1,
         "matchups": [
           {
-            "home_team": 1,
-            "away_team": 2,
-            "home_score": 28,
-            "away_score": 14,
-            "complete": true
-          },
-          {
-            "home_team": 3,
-            "away_team": 4,
-            "home_score": 28,
-            "away_score": 14,
-            "complete": true
-          }
-        ]
-      },
-      {
-        "week": 2,
-        "matchups": [
-          {
-            "home_team": 1,
-            "away_team": 3,
-            "home_score": 28,
-            "away_score": 14,
-            "complete": true
-          },
-          {
-            "home_team": 2,
-            "away_team": 4,
-            "home_score": 28,
-            "away_score": 14,
-            "complete": true
-          }
-        ]
-      },
-      {
-        "week": 3,
-        "matchups": [
-          {
-            "home_team": 1,
-            "away_team": 4,
-            "home_score": 28,
-            "away_score": 14,
-            "complete": true
+            "home_team": 0,
+            "away_team": 1,
+            "context": { "home_score": 28, "away_score": 14, "game_over": true },
+            "home_stats": { "passing": {}, "rushing": {}, "receiving": {} },
+            "away_stats": { "passing": {}, "rushing": {}, "receiving": {} }
           },
           {
             "home_team": 2,
             "away_team": 3,
-            "home_score": 28,
-            "away_score": 14,
-            "complete": true
+            "context": { "home_score": 21, "away_score": 17, "game_over": true },
+            "home_stats": { "passing": {}, "rushing": {}, "receiving": {} },
+            "away_stats": { "passing": {}, "rushing": {}, "receiving": {} }
           }
         ]
       }
-    ]
+    ],
+    "playoffs": {
+      "teams": { "teams": {} },
+      "conference_brackets": {},
+      "winners_bracket": []
+    }
   },
   "seasons": []
 }
@@ -243,53 +440,186 @@ league (League)
 
 ## API Specification
 
-The following API endpoints will be available for the stateless FootballSim league API.  Each `POST` command will accept a JSON-serialized `League` and return the same `League` after making its mutations.  The one `GET` command will simply generate a new default, zeroed-out `League`.
+The API will store leagues in a database tied to authenticated users.  Rather than accepting a full `League` JSON in every request, the API will persist league state server-side and expose RESTful endpoints that transform the stored league.  All endpoints are prefixed with `/v1/`.
 
-- `GET /v1/stateless/leagues/new`: Get a newly created league
-- `POST /v1/stateless/leagues/teams`: List the teams belonging to a league
-- `POST /v1/stateless/leagues/teams/new`: Add a new team to an existing league
-- `POST /v1/stateless/leagues/teams/<id>`: Display historical information about a team in the league 
-- `POST /v1/stateless/leagues/seasons`: List the seasons belonging to a league
-- `POST /v1/stateless/leagues/seasons/create`: Create a new season in a league
-- `POST /v1/stateless/leagues/seasons/<year>/sim`: Simulate a league season in its entirety
-- `POST /v1/stateless/leagues/seasons/<year>/teams`: List the teams belonging to a league season
-- `POST /v1/stateless/leagues/seasons/<year>/teams/<id>`: Display information about a team belonging to a league season
-- `POST /v1/stateless/leagues/seasons/<year>/weeks`: List the weeks belonging to a league
-- `POST /v1/stateless/leagues/seasons/<year>/weeks/<id>`: Display information about a week of a league season
-- `POST /v1/stateless/leagues/seasons/<year>/weeks/<id>/sim`: Simulate a league season week in its entirety
-- `POST /v1/stateless/leagues/seasons/<year>/weeks/<id>/matchups`: List the matchups for a league season week
-- `POST /v1/stateless/leagues/seasons/<year>/weeks/<id>/matchups/<id>`: Display information about a matchup for a league season week
-- `POST /v1/stateless/leagues/seasons/<year>/weeks/<id>/matchups/<id>/sim`: Simulate a matchup belonging to a league season week
+### Leagues
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `POST` | `/v1/leagues` | Create a new league for the authenticated user |
+| `GET` | `/v1/leagues` | List the authenticated user's leagues |
+| `GET` | `/v1/leagues/:id` | Get a league by ID |
+| `DELETE` | `/v1/leagues/:id` | Delete a league by ID |
+
+### League Teams
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `GET` | `/v1/leagues/:id/teams` | List all teams in the league |
+| `POST` | `/v1/leagues/:id/teams` | Add a new team to the league |
+| `GET` | `/v1/leagues/:id/teams/:team_id` | Get a team (including all-time record, stats, playoff record, championship history) |
+
+### League Team Stats
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `GET` | `/v1/leagues/:id/teams/stats/passing` | All-time passing stats for all teams |
+| `GET` | `/v1/leagues/:id/teams/stats/rushing` | All-time rushing stats for all teams |
+| `GET` | `/v1/leagues/:id/teams/stats/receiving` | All-time receiving stats for all teams |
+
+### League Seasons
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `GET` | `/v1/leagues/:id/seasons` | List all seasons (past and current) |
+| `POST` | `/v1/leagues/:id/seasons` | Create a new season |
+| `GET` | `/v1/leagues/:id/seasons/:year` | Get a specific season |
+| `POST` | `/v1/leagues/:id/seasons/sim` | Simulate the current season in its entirety |
+
+### Season Conferences
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `GET` | `/v1/leagues/:id/seasons/:year/conferences` | List conferences |
+| `POST` | `/v1/leagues/:id/seasons/conferences` | Add a conference to the current season |
+| `GET` | `/v1/leagues/:id/seasons/:year/conferences/:conf_id` | Get a conference |
+
+### Season Conference Divisions
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `GET` | `/v1/leagues/:id/seasons/:year/conferences/:conf_id/divisions` | List divisions |
+| `POST` | `/v1/leagues/:id/seasons/conferences/:conf_id/divisions` | Add a division to a conference |
+| `GET` | `/v1/leagues/:id/seasons/:year/conferences/:conf_id/divisions/:div_id` | Get a division |
+
+### Season Teams
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `GET` | `/v1/leagues/:id/seasons/:year/teams` | List season teams |
+| `POST` | `/v1/leagues/:id/seasons/teams` | Add a team to the current season |
+| `POST` | `/v1/leagues/:id/seasons/teams/:team_id/assign` | Assign a team to a conference/division |
+| `GET` | `/v1/leagues/:id/seasons/:year/teams/:team_id` | Get a season team |
+
+### Season Team Stats
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `GET` | `/v1/leagues/:id/seasons/:year/teams/stats/passing` | Season passing stats |
+| `GET` | `/v1/leagues/:id/seasons/:year/teams/stats/rushing` | Season rushing stats |
+| `GET` | `/v1/leagues/:id/seasons/:year/teams/stats/receiving` | Season receiving stats |
+
+### Season Standings
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `GET` | `/v1/leagues/:id/seasons/:year/standings` | Overall standings (supports query params: `conference`, `division`, `by_conference`, `by_division`) |
+
+### Season Schedule
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `POST` | `/v1/leagues/:id/seasons/schedule` | Generate a schedule (accepts schedule options in body) |
+
+### Season Weeks
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `GET` | `/v1/leagues/:id/seasons/:year/weeks` | List weeks |
+| `GET` | `/v1/leagues/:id/seasons/:year/weeks/:week_id` | Get a specific week |
+| `POST` | `/v1/leagues/:id/seasons/weeks/:week_id/sim` | Simulate a week |
+
+### Season Week Matchups
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `GET` | `/v1/leagues/:id/seasons/:year/weeks/:week_id/matchups` | List matchups for a week |
+| `GET` | `/v1/leagues/:id/seasons/:year/weeks/:week_id/matchups/:matchup_id` | Get a matchup |
+| `POST` | `/v1/leagues/:id/seasons/weeks/:week_id/matchups/:matchup_id/sim` | Simulate a matchup |
+| `POST` | `/v1/leagues/:id/seasons/weeks/:week_id/matchups/:matchup_id/play` | Simulate the next play of a matchup |
+
+### Season Playoffs
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `POST` | `/v1/leagues/:id/seasons/playoffs` | Generate playoffs (accepts playoff options in body) |
+| `GET` | `/v1/leagues/:id/seasons/:year/playoffs` | Get the playoff bracket |
+| `GET` | `/v1/leagues/:id/seasons/:year/playoffs/picture` | Get the playoff picture (supports query params: `num_teams`, `per_conference`, `division_winners`, `conference`) |
+| `POST` | `/v1/leagues/:id/seasons/playoffs/sim` | Simulate all playoff rounds |
+
+### Season Playoff Rounds
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `GET` | `/v1/leagues/:id/seasons/:year/playoffs/rounds/:round_id` | Get a playoff round (supports query params: `conference`, `winners_bracket`) |
+| `POST` | `/v1/leagues/:id/seasons/playoffs/rounds/sim` | Simulate the next playoff round |
+| `GET` | `/v1/leagues/:id/seasons/:year/playoffs/rounds/:round_id/matchups/:matchup_id` | Get a playoff matchup (supports query params: `conference`, `winners_bracket`) |
+| `POST` | `/v1/leagues/:id/seasons/playoffs/rounds/:round_id/matchups/:matchup_id/sim` | Simulate a playoff matchup (supports query params: `conference`, `winners_bracket`) |
 
 ## CLI Specification
 
-The following subcommand hierarchy will be implemented in support of league management & simulation
-- fbsim (root command)
-  - league
-    - create
-    - team
-      - add
-      - get
-      - list
-    - season
-      - create
-      - list
-      - sim
-      - team
-        - get
-        - list
-      - week
-        - get
-        - list
-        - sim
-        - matchup
-          - get
-          - list
-          - sim
+The following subcommand hierarchy is implemented in the `fbsim` CLI for league management and simulation.
+
+```
+fbsim
+└── league
+    ├── create
+    ├── team
+    │   ├── add
+    │   ├── get
+    │   ├── list
+    │   └── stats
+    │       ├── passing
+    │       ├── rushing
+    │       └── receiving
+    └── season
+        ├── add
+        ├── get
+        ├── list
+        ├── sim
+        ├── standings
+        ├── conference
+        │   ├── add
+        │   ├── get
+        │   ├── list
+        │   └── division
+        │       ├── add
+        │       ├── get
+        │       └── list
+        ├── team
+        │   ├── add
+        │   ├── assign
+        │   ├── get
+        │   ├── list
+        │   └── stats
+        │       ├── passing
+        │       ├── rushing
+        │       └── receiving
+        ├── schedule
+        │   └── gen
+        ├── week
+        │   ├── get
+        │   ├── list
+        │   ├── sim
+        │   └── matchup
+        │       ├── get
+        │       ├── sim
+        │       └── play
+        │           └── sim
+        └── playoffs
+            ├── gen
+            ├── get
+            ├── picture
+            ├── sim
+            └── round
+                ├── get
+                ├── sim
+                └── matchup
+                    ├── get
+                    └── sim
+```
 
 ### League
-
-The expected usage for the `fbsim league` subcommand is as follows
 
 ```
 Manage FootballSim leagues
@@ -303,13 +633,19 @@ Commands:
 
 Options:
   -h, --help     Print help
-  -o, --output   The output format of the newly created league
-  -f, --file     The destination filepath of the newly created league
+```
+
+#### `fbsim league create`
+
+```
+Create a new FootballSim league
+
+Options:
+  -f, --file <OUTPUT_FILE>   File path to write the new league to (required)
+  -h, --help                 Print help
 ```
 
 ### League Team
-
-The expected usage for the `fbsim league team` subcommand is as follows
 
 ```
 Manage teams for an existing FootballSim league
@@ -317,20 +653,63 @@ Manage teams for an existing FootballSim league
 Usage: fbsim league team <COMMAND>
 
 Commands:
-  add    Add a new team to the FootballSim league
-  get    Display historical information about a team in the league
-  list   List all teams in the league
+  add     Add a new team to the FootballSim league
+  get     Display historical information about a team in the league
+  list    List all teams in the league
+  stats   View team statistics
 
 Options:
   -h, --help     Print help
-  -o, --output   The output format for the team history command
-  -l, --league   The input filepath for the league
-  -t, --team     The ID of the team to manage
+```
+
+#### `fbsim league team add`
+
+```
+Options:
+  -l, --league <LEAGUE>   Path to the league file (required)
+  -h, --help              Print help
+```
+
+#### `fbsim league team get`
+
+```
+Options:
+  -l, --league <LEAGUE>   Path to the league file (required)
+  -t, --team <TEAM>       The ID of the team to display (required)
+  -h, --help              Print help
+```
+
+#### `fbsim league team list`
+
+```
+Options:
+  -l, --league <LEAGUE>   Path to the league file (required)
+  -h, --help              Print help
+```
+
+### League Team Stats
+
+```
+Usage: fbsim league team stats <COMMAND>
+
+Commands:
+  passing     Get all-time passing stats for each team
+  rushing     Get all-time rushing stats for each team
+  receiving   Get all-time receiving stats for each team
+
+Options:
+  -h, --help   Print help
+```
+
+Each stats subcommand accepts:
+
+```
+Options:
+  -l, --league <LEAGUE>   Path to the league file (required)
+  -h, --help              Print help
 ```
 
 ### League Season
-
-The expected usage for the `fbsim league season` subcommand is as follows
 
 ```
 Manage seasons for an existing FootballSim league
@@ -338,99 +717,507 @@ Manage seasons for an existing FootballSim league
 Usage: fbsim league season <COMMAND>
 
 Commands:
-  create   Create a new season for the FootballSim league
-  list     List all past and current seasons for the FootballSim league
-  sim      Simulate the current season in its entirety
-  team     Manage teams for a season of a FootballSim league
-  week     Manage weeks for a season of a FootballSim league
+  add          Add a new season to the league
+  get          Get a past or current season
+  list         List all past and current seasons
+  sim          Simulate the current season in its entirety
+  standings    Display season standings
+  conference   Manage conferences for a season
+  team         Manage teams for a season
+  schedule     Generate a schedule for the season
+  week         Manage weeks for a season
+  playoffs     Manage playoffs for a season
 
 Options:
   -h, --help     Print help
-  -o, --output   The output format for the season list command
-  -l, --league   The input filepath for the league
-  -s, --season   The year of the season to manage
+```
+
+#### `fbsim league season add`
+
+```
+Options:
+  -l, --league <LEAGUE>   Path to the league file (required)
+  -h, --help              Print help
+```
+
+#### `fbsim league season get`
+
+```
+Options:
+  -l, --league <LEAGUE>   Path to the league file (required)
+  -y, --year <YEAR>       The year of the season (required)
+  -h, --help              Print help
+```
+
+#### `fbsim league season list`
+
+```
+Options:
+  -l, --league <LEAGUE>   Path to the league file (required)
+  -h, --help              Print help
+```
+
+#### `fbsim league season sim`
+
+```
+Options:
+  -l, --league <LEAGUE>   Path to the league file (required)
+  -h, --help              Print help
+```
+
+### League Season Conference
+
+```
+Usage: fbsim league season conference <COMMAND>
+
+Commands:
+  add        Add a conference to the current season
+  get        Get a specific conference
+  list       List all conferences
+  division   Manage divisions within a conference
+
+Options:
+  -h, --help   Print help
+```
+
+#### `fbsim league season conference add`
+
+```
+Options:
+  -l, --league <LEAGUE>   Path to the league file (required)
+  -n, --name <NAME>       Name of the conference (required)
+  -h, --help              Print help
+```
+
+#### `fbsim league season conference get`
+
+```
+Options:
+  -l, --league <LEAGUE>           Path to the league file (required)
+  -y, --year <YEAR>               The year of the season (required)
+  -c, --conference <CONFERENCE>   The conference index (required)
+  -h, --help                      Print help
+```
+
+#### `fbsim league season conference list`
+
+```
+Options:
+  -l, --league <LEAGUE>   Path to the league file (required)
+  -y, --year <YEAR>       The year of the season (required)
+  -h, --help              Print help
+```
+
+### League Season Conference Division
+
+```
+Usage: fbsim league season conference division <COMMAND>
+
+Commands:
+  add    Add a division to a conference
+  get    Get a specific division
+  list   List all divisions in a conference
+
+Options:
+  -h, --help   Print help
+```
+
+#### `fbsim league season conference division add`
+
+```
+Options:
+  -l, --league <LEAGUE>           Path to the league file (required)
+  -c, --conference <CONFERENCE>   The conference index (required)
+  -n, --name <NAME>               Name of the division (required)
+  -h, --help                      Print help
+```
+
+#### `fbsim league season conference division get`
+
+```
+Options:
+  -l, --league <LEAGUE>           Path to the league file (required)
+  -y, --year <YEAR>               The year of the season (required)
+  -c, --conference <CONFERENCE>   The conference index (required)
+  -d, --division <DIVISION>       The division index (required)
+  -h, --help                      Print help
+```
+
+#### `fbsim league season conference division list`
+
+```
+Options:
+  -l, --league <LEAGUE>           Path to the league file (required)
+  -y, --year <YEAR>               The year of the season (required)
+  -c, --conference <CONFERENCE>   The conference index (required)
+  -h, --help                      Print help
 ```
 
 ### League Season Team
 
-The expected usage for the `fbsim league season team` subcommand is as follows
-
 ```
-Manage teams for a season of a FootballSim league
-
 Usage: fbsim league season team <COMMAND>
 
 Commands:
-  get    Display information about a team for a season
-  list   List all teams for a season
+  add      Add a team to the current season
+  assign   Assign a team to a conference/division
+  get      Display a team from a season
+  list     List all teams from a season
+  stats    View season team statistics
 
 Options:
-  -h, --help     Print help
-  -o, --output   The output format for the team get command
-  -l, --league   The input filepath for the league
-  -s, --season   The year of the season to manage
-  -t, --team     The ID of the team to manage
+  -h, --help   Print help
+```
+
+#### `fbsim league season team add`
+
+```
+Options:
+  -l, --league <LEAGUE>   Path to the league file (required)
+  -t, --team <TEAM>       Path to the team file (JSON) (required)
+  -i, --id <ID>           The league-level team ID (required)
+  -h, --help              Print help
+```
+
+#### `fbsim league season team assign`
+
+```
+Options:
+  -l, --league <LEAGUE>           Path to the league file (required)
+  -t, --team <TEAM>               The team ID to assign (required)
+  -c, --conference <CONFERENCE>   The conference index (required)
+  -d, --division <DIVISION>       The division index (required)
+  -h, --help                      Print help
+```
+
+#### `fbsim league season team get`
+
+```
+Options:
+  -l, --league <LEAGUE>                           Path to the league file (required)
+  -y, --year <YEAR>                               The year of the season (required)
+  -t, --team <TEAM>                               The team ID (required)
+  -n, --num-playoff-teams <NUM_PLAYOFF_TEAMS>     Number of playoff teams for picture calculation (default: 4)
+  -h, --help                                      Print help
+```
+
+#### `fbsim league season team list`
+
+```
+Options:
+  -l, --league <LEAGUE>                           Path to the league file (required)
+  -y, --year <YEAR>                               The year of the season (required)
+  -n, --num-playoff-teams <NUM_PLAYOFF_TEAMS>     Number of playoff teams for picture calculation (default: 4)
+  -h, --help                                      Print help
+```
+
+### League Season Team Stats
+
+```
+Usage: fbsim league season team stats <COMMAND>
+
+Commands:
+  passing     Get passing stats for each team in a season
+  rushing     Get rushing stats for each team in a season
+  receiving   Get receiving stats for each team in a season
+
+Options:
+  -h, --help   Print help
+```
+
+Each stats subcommand accepts:
+
+```
+Options:
+  -l, --league <LEAGUE>   Path to the league file (required)
+  -y, --year <YEAR>       The year of the season (required)
+  -h, --help              Print help
+```
+
+### League Season Standings
+
+```
+fbsim league season standings
+
+Options:
+  -l, --league <LEAGUE>           Path to the league file (required)
+  -y, --year <YEAR>               The year of the season (required)
+  -c, --conference <CONFERENCE>   Filter by conference index (optional)
+  -d, --division <DIVISION>       Filter by division index (optional, requires --conference)
+      --by-conference             Group standings by conference
+      --by-division               Group standings by division
+  -h, --help                      Print help
+```
+
+### League Season Schedule
+
+```
+Usage: fbsim league season schedule <COMMAND>
+
+Commands:
+  gen   Generate a schedule for the current season
+
+Options:
+  -h, --help   Print help
+```
+
+#### `fbsim league season schedule gen`
+
+```
+Options:
+  -l, --league <LEAGUE>                                   Path to the league file (required)
+  -w, --weeks <WEEKS>                                     Number of weeks (optional)
+  -s, --seed <SEED>                                       Schedule generation seed (optional)
+      --shift <SHIFT>                                     Shift weeks after generating (optional)
+  -p, --permute <PERMUTE>                                 Permute the schedule (optional) [true/false]
+      --division-games <DIVISION_GAMES>                   Games per division opponent (optional)
+      --conference-games <CONFERENCE_GAMES>               Games per non-div conference opponent (optional)
+      --cross-conference-games <CROSS_CONFERENCE_GAMES>   Total cross-conference games (optional)
+  -h, --help                                              Print help
 ```
 
 ### League Season Week
 
-The expected usage for the `fbsim league season week` subcommand is as follows
-
 ```
-Manage weeks for a season of a FootballSim league
-
 Usage: fbsim league season week <COMMAND>
 
 Commands:
-  get       Display information about a week of a season
+  get       Display a week from a season
   list      List all weeks of a season
-  matchup   Manage matchups for a week of a FootballSim season
-  sim       Simulate the week in its entirety
+  sim       Simulate a week in its entirety
+  matchup   Manage matchups for a week
 
 Options:
-  -h, --help     Print help
-  -o, --output   The output format for each week subcommand
-  -l, --league   The input filepath for the league
-  -s, --season   The year of the season to manage
-  -w, --week     The ID of the week to manage
+  -h, --help   Print help
+```
+
+#### `fbsim league season week get`
+
+```
+Options:
+  -l, --league <LEAGUE>   Path to the league file (required)
+  -y, --year <YEAR>       The year of the season (required)
+  -w, --week <WEEK>       The week index (required)
+  -h, --help              Print help
+```
+
+#### `fbsim league season week list`
+
+```
+Options:
+  -l, --league <LEAGUE>   Path to the league file (required)
+  -y, --year <YEAR>       The year of the season (required)
+  -h, --help              Print help
+```
+
+#### `fbsim league season week sim`
+
+```
+Options:
+  -l, --league <LEAGUE>   Path to the league file (required)
+  -w, --week <WEEK>       The week index (required)
+  -h, --help              Print help
 ```
 
 ### League Season Week Matchup
 
-The expected usage for the `fbsim league season week matchup` subcommand is as follows
-
 ```
-Manage matchups for a week of a FootballSim season
-
 Usage: fbsim league season week matchup <COMMAND>
 
-Command:
-  get    Display information about a matchup
-  list   List all matchups for a week
-  sim    Simulate the matchup
+Commands:
+  get    Display a matchup
+  sim    Simulate a matchup
+  play   Manage plays for a matchup
 
 Options:
-  -h, --help      Print help
-  -o, --output    The output format for each matchup subcommand
-  -l, --league    The input filepath for the league
-  -s, --season    The year of the season to manage
-  -w, --week      The ID of the week to manage
-  -m, --matchup   The ID of the matchup to manage
+  -h, --help   Print help
+```
+
+#### `fbsim league season week matchup get`
+
+```
+Options:
+  -l, --league <LEAGUE>     Path to the league file (required)
+  -y, --year <YEAR>         The year of the season (required)
+  -w, --week <WEEK>         The week index (required)
+  -m, --matchup <MATCHUP>   The matchup index (required)
+  -h, --help                Print help
+```
+
+#### `fbsim league season week matchup sim`
+
+```
+Options:
+  -l, --league <LEAGUE>           Path to the league file (required)
+  -w, --week <WEEK>               The week index (required)
+  -m, --matchup <MATCHUP>         The matchup index (required)
+  -s, --speed <PLAYBACK_SPEED>    Playback speed (optional)
+  -h, --help                      Print help
+```
+
+### League Season Week Matchup Play
+
+```
+Usage: fbsim league season week matchup play <COMMAND>
+
+Commands:
+  sim   Simulate the next play in a matchup
+
+Options:
+  -h, --help   Print help
+```
+
+#### `fbsim league season week matchup play sim`
+
+```
+Options:
+  -l, --league <LEAGUE>     Path to the league file (required)
+  -w, --week <WEEK>         The week index (required)
+  -m, --matchup <MATCHUP>   The matchup index (required)
+  -h, --help                Print help
+```
+
+### League Season Playoffs
+
+```
+Usage: fbsim league season playoffs <COMMAND>
+
+Commands:
+  gen       Generate playoffs for the current season
+  get       Display the playoff bracket
+  picture   Display the playoff picture
+  sim       Simulate all playoff rounds
+  round     Manage individual playoff rounds
+
+Options:
+  -h, --help   Print help
+```
+
+#### `fbsim league season playoffs gen`
+
+```
+Options:
+  -l, --league <LEAGUE>           Path to the league file (required)
+  -n, --num-teams <NUM_TEAMS>     Number of playoff teams (required)
+  -p, --per-conference            Use per-conference bracket mode
+  -d, --division-winners          Guarantee division winners a playoff berth
+  -h, --help                      Print help
+```
+
+#### `fbsim league season playoffs get`
+
+```
+Options:
+  -l, --league <LEAGUE>   Path to the league file (required)
+  -y, --year <YEAR>       The year of the season (required)
+  -h, --help              Print help
+```
+
+#### `fbsim league season playoffs picture`
+
+```
+Options:
+  -l, --league <LEAGUE>                           Path to the league file (required)
+  -y, --year <YEAR>                               The year of the season (required)
+  -n, --num-playoff-teams <NUM_PLAYOFF_TEAMS>     Number of playoff teams (default: 4)
+  -p, --per-conference                            Calculate per-conference
+  -d, --division-winners                          Account for guaranteed division winners
+  -c, --conference <CONFERENCE>                   Show only this conference (optional)
+  -h, --help                                      Print help
+```
+
+#### `fbsim league season playoffs sim`
+
+```
+Options:
+  -l, --league <LEAGUE>   Path to the league file (required)
+  -h, --help              Print help
+```
+
+### League Season Playoffs Round
+
+```
+Usage: fbsim league season playoffs round <COMMAND>
+
+Commands:
+  get       Display a playoff round
+  sim       Simulate the next playoff round
+  matchup   Manage playoff matchups
+
+Options:
+  -h, --help   Print help
+```
+
+#### `fbsim league season playoffs round get`
+
+```
+Options:
+  -l, --league <LEAGUE>           Path to the league file (required)
+  -y, --year <YEAR>               The year of the season (required)
+  -r, --round <ROUND>             The round index (required)
+  -c, --conference <CONFERENCE>   Conference bracket index (optional)
+  -w, --winners-bracket           Get from winners bracket
+  -h, --help                      Print help
+```
+
+#### `fbsim league season playoffs round sim`
+
+```
+Options:
+  -l, --league <LEAGUE>   Path to the league file (required)
+  -h, --help              Print help
+```
+
+### League Season Playoffs Round Matchup
+
+```
+Usage: fbsim league season playoffs round matchup <COMMAND>
+
+Commands:
+  get   Display a playoff matchup
+  sim   Simulate a playoff matchup
+
+Options:
+  -h, --help   Print help
+```
+
+#### `fbsim league season playoffs round matchup get`
+
+```
+Options:
+  -l, --league <LEAGUE>           Path to the league file (required)
+  -y, --year <YEAR>               The year of the season (required)
+  -r, --round <ROUND>             The round index (required)
+  -m, --matchup <MATCHUP>         The matchup index (required)
+  -c, --conference <CONFERENCE>   Conference bracket index (optional)
+  -w, --winners-bracket           Get from winners bracket
+  -h, --help                      Print help
+```
+
+#### `fbsim league season playoffs round matchup sim`
+
+```
+Options:
+  -l, --league <LEAGUE>           Path to the league file (required)
+  -r, --round <ROUND>             The round index (required)
+  -m, --matchup <MATCHUP>         The matchup index (required)
+  -s, --speed <PLAYBACK_SPEED>    Playback speed (optional)
+  -c, --conference <CONFERENCE>   Conference bracket index (default: 0)
+  -w, --winners-bracket           Simulate from winners bracket
+  -h, --help                      Print help
 ```
 
 ## Roadmap
 
-At a high-level, my view of the roadmap is:
-1. We iteratively develop the aforementioned CLI subcommands in the `fbsim` CLI, in the process developing re-usable functionality in `fbsim-core`
-2. We revise the above CLI and/or API specifications based on new findings in the process of developing the CLI
-3. We fully implement the above CLI specification in the `fbsim` CLI and it functions as required
-4. We iteratively develop equivalent endpoints in the stateless `fbsim` API alongside new corresponding pages and web components in the `fbsim` UI
-5. We revise the above CLI and/or API specifications based on new findings in the process of developing the API and UI
-6. We fully implement the stateless `fbsim` API and UI.  We have a full-fledged user experience in the UI in which users upload their league, modify it in the UI, then download their league to store it on the client side
+At a high-level, the roadmap is:
+
+1. **CLI development** (largely complete): Iteratively develop league management and simulation subcommands in the `fbsim` CLI, building reusable functionality in `fbsim-core`
+2. **API development**: Implement authenticated, stateful REST API endpoints backed by a database, allowing users to create and manage leagues tied to their accounts
+3. **UI development**: Build corresponding pages and web components in the `fbsim` UI that interact with the stateful API
+4. **Full integration**: A full-fledged user experience in which users manage their leagues entirely through the UI, with all state persisted server-side
 
 ## Next Steps
 
-Out of scope for this initial iteration, but which may come in future iterations
-- **Authentication**: The API and UI are authenticated and user-based
-- **Stateful API**: The API has an ORM layer atop a relational database, the UI can toggle between stateful and stateless mode
-- **PWA Experience**: The stateless API can compile into WASM and be executed on the client side without making networked API calls, this is handled seamlessly in the UI (not sure if we want this to be dynamic or user-driven)
+- **Authentication**: The API and UI are authenticated and user-based; leagues are stored per-user in a database
+- **Database layer**: The API has an ORM layer atop a relational database for persisting league state
+- **PWA Experience**: The stateless simulation engine can compile into WASM and be executed on the client side without making networked API calls, handled seamlessly in the UI
