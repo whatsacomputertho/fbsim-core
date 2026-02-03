@@ -1,3 +1,4 @@
+#![doc = include_str!("../../../../docs/league/season/playoffs/picture.md")]
 use std::collections::BTreeMap;
 
 #[cfg(feature = "rocket_okapi")]
