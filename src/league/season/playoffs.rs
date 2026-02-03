@@ -1,3 +1,4 @@
+#![doc = include_str!("../../../docs/league/season/playoffs.md")]
 pub mod picture;
 
 #[cfg(feature = "rocket_okapi")]
