@@ -48,124 +48,128 @@
 > A `League` is the top-level structure representing a football league over the course of many seasons
 
 1. A `League` MUST be serializable as JSON and YAML
-2. A `League` MUST aggregate `LeagueSeason` structures
+2. A `League` aggregates `LeagueSeason` structures
 3. A `League` MAY contain 0 `LeagueSeason` structures
 4. A `League` MUST contain at most 1 active `LeagueSeason`
-5. A `League` MUST ONLY create a new `LeagueSeason` if it has no active `LeagueSeason`, or its current `LeagueSeason` is complete
-6. A `League` MUST distinguish between its active `LeagueSeason` (current_season) and its history of past `LeagueSeason` structures (seasons)
-7. A `League` MUST aggregate `LeagueTeam` structures in a `BTreeMap` keyed by a unique `usize` ID
-8. A `League` MUST compute a unique ID for each of its `LeagueTeam` structures via auto-increment
+5. A `League` MUST ONLY create a new `LeagueSeason` if it has no active `LeagueSeason`
+6. A `League` MUST distinguish between its active `LeagueSeason` and its history of past `LeagueSeason` structures
+7. A `League` MUST aggregate `LeagueTeam` structures
+8. A `League` MUST compute a unique ID for each of its `LeagueTeam` structures
 9. A `League` MAY add new teams to its collection of `LeagueTeam` structures
 10. A `League` MUST NOT remove teams from its collection of `LeagueTeam` structures
-11. A `League` MUST validate on deserialization that all season team IDs exist in its `teams` map
-12. A `League` MUST be capable of simulating an entire season at once, a single week, a single matchup, or a single play
-13. A `League` MUST be capable of computing the historical performance of a given `LeagueTeam`, including all-time record, all-time stats, playoff record, championship appearances, and championship wins
+11. A `League` MUST validate that all teams that appear in a season exist in its collection of `LeagueTeam` structures
+12. A `League` MUST be capable of simulating an entire season at once
+13. A `League` MUST be capable of computing the historical performance of a given `LeagueTeam`
 
 ### LeagueTeam
 
-> A `LeagueTeam` represents a football team identity over the course of many seasons.  It is a minimal wrapper serving as a unique identifier; season-specific properties (name, skill levels) are stored in `FootballTeam` within each `LeagueSeason`.
+> A `LeagueTeam` represents a football team over the course of many seasons
 
-1. A `LeagueTeam` MUST have a unique `usize` ID assigned to it by its parent `League`
+1. A `LeagueTeam` MUST have a unique ID assigned to it by its parent `League`
 2. A `LeagueTeam` MUST ONLY contain properties which do not vary by season
-3. A `LeagueTeam` is currently an empty struct; all mutable team properties live in `FootballTeam`
 
 ### LeagueSeason
 
 > A `LeagueSeason` represents a single season of a football league
 
-1. A `LeagueSeason` MUST have a `year` field of type `usize`
-2. A `LeagueSeason` MUST contain a `BTreeMap<usize, FootballTeam>` of season-specific team data, keyed by the league-level team ID
-3. A `LeagueSeason` MAY contain `LeagueConference` structures organizing teams into conferences and divisions
-4. A `LeagueSeason` MUST contain a vector of `LeagueSeasonWeek` structures representing the regular season schedule
-5. A `LeagueSeason` MUST contain a `LeagueSeasonPlayoffs` structure representing the postseason
-6. A `LeagueSeason` MUST validate that the number of scheduled weeks is between `num_teams` and `(num_teams - 1) * 3`
-7. A `LeagueSeason` MUST validate that started or completed seasons have at least 4 teams and an even team count
-8. A `LeagueSeason` MUST validate that conference team IDs exist in the season's teams and that no team ID is duplicated across conferences
-9. A `LeagueSeason` MUST validate that weeks progress sequentially (week N cannot be complete before week N-1)
-10. A `LeagueSeason` MUST validate that each team plays at most once per week
-11. A `LeagueSeason` MUST be capable of generating a schedule via `LeagueSeasonScheduleOptions`, supporting division-weighted, conference-weighted, and cross-conference scheduling
-12. A `LeagueSeason` MUST be capable of computing standings, division standings, and conference standings
-13. A `LeagueSeason` MUST be capable of computing a playoff picture with clinch numbers, elimination status, and magic numbers
-14. A `LeagueSeason` MUST be capable of generating and simulating playoffs via `LeagueSeasonPlayoffOptions`
+1. A `LeagueSeason` aggregates `FootballTeam`, `LeagueConference`, and `LeagueSeasonWeek` structures
+2. A `LeagueSeason` contains `LeagueSeasonPlayoffs` structures
+3. A `LeagueSeason` MAY contain 0 `FootballTeam` structures
+4. A `LeagueSeason` MUST contain an even number (greater than or equal to 4) of `FootballTeam` structures before generating its schedule
+5. A `LeagueSeason` MAY contain 0 `LeagueConference` structures
+6. A `LeagueSeason` MUST contain at least one `LeagueConference` structure before generating its schedule
+7. A `LeagueSeason` MAY contain 0 `LeagueSeasonWeek` structures
+8. A `LeagueSeason` MUST NOT populate its `LeagueSeasonPlayoffs` structure until all of its `LeagueSeasonWeek` structures contain completed matchups
+9. A `LeagueSeason` MUST validate that the number of scheduled weeks, if nonzero, is between `num_teams` and `(num_teams - 1) * 3`
+10. A `LeagueSeason` MUST validate that all teams that appear in a conference exist in its collection of teams and that none are duplicated across conferences
+11. A `LeagueSeason` MUST validate that weeks progress sequentially (week N cannot start before week N-1)
+12. A `LeagueSeason` MUST validate that each team plays at most once per week
+13. A `LeagueSeason` MUST be capable of generating a schedule customizable by number of division, in-conference, and out-of-conference games
+14. A `LeagueSeason` MUST be capable of computing league, conference, and division standings
+15. A `LeagueSeason` MUST be capable of computing a playoff picture identifying teams that have clinched the playoffs, or that have been eliminated customizable by number of teams (in total or per conference) that make the playoffs
+16. A `LeagueSeason` MUST be capable of generating and simulating playoffs customizable by number of teams (in total or per conference) that make the playoffs
+17. A `LeagueSeason` MUST validate that its conference playoff bracket IDs each correspond to valid conference IDs
 
 ### FootballTeam
 
-> A `FootballTeam` represents the season-specific attributes of a football team, including its name, coaching tendencies, and offensive/defensive skill ratings
+> A `FootballTeam` represents the season-specific attributes of a league team
 
-1. A `FootballTeam` MUST have a `name` field of at most 64 characters
-2. A `FootballTeam` MUST have a `short_name` (acronym) field of at most 4 characters
-3. A `FootballTeam` MUST contain a `FootballTeamCoach` with attributes: `risk_taking`, `run_pass`, `up_tempo` (each 0-100)
-4. A `FootballTeam` MUST contain a `FootballTeamOffense` with 10 attributes (each 0-100): `passing`, `blocking`, `rushing`, `receiving`, `scrambling`, `turnovers`, `field_goals`, `punting`, `kickoffs`, `kick_return_defense`
-5. A `FootballTeam` MUST contain a `FootballTeamDefense` with 6 attributes (each 0-100): `blitzing`, `rush_defense`, `pass_defense`, `coverage`, `turnovers`, `kick_returning`
-6. A `FootballTeam` MUST validate name length, short_name length, and attribute ranges on deserialization
+1. A `FootballTeam` has a name, acronym, `FootballTeamCoach`, `FootballTeamOffense`, and `FootballTeamDefense`
+2. A `FootballTeam` MUST validate that its name is at most 64 characters
+3. A `FootballTeam` MUST validate that its acronym at most 4 characters
+
+### FootballTeamCoach
+
+> A `FootballTeamCoach` represents the coach of a football team
+
+1. A `FootballTeamCoach` has various numeric coaching behavior attributes
+2. A `FootballTeamCoach` MUST validate that its attributes are in range `[0, 100]`
+
+### FootballTeamOffense
+
+> A `FootballTeamOffense` represents the offense of a football team
+
+1. A `FootballTeamOffense` has various numeric skill attributes
+2. A `FootballTeamOffense` MUST validate that its attributes are in range `[0, 100]`
+
+### FootballTeamDefense
+
+> A `FootballTeamDefense` represents the defense of a football team
+
+1. A `FootballTeamDefense` has various numeric skill attributes
+2. A `FootballTeamDefense` MUST validate that its attributes are in range `[0, 100]`
 
 ### LeagueConference
 
 > A `LeagueConference` groups teams within a season into a named conference containing one or more divisions
 
-1. A `LeagueConference` MUST have a `name` of at most 64 characters
-2. A `LeagueConference` MUST contain a vector of `LeagueDivision` structures
-3. A `LeagueConference` MUST validate that no team ID is duplicated across its divisions
-4. A `LeagueConference` MUST validate that all division team IDs exist in the season's teams
+1. A `LeagueConference` has a name and a collection of `LeagueDivision` structures
+2. A `LeagueConference` MUST validate that its name is at most 64 characters
+3. A `LeagueConference` MUST validate that no team is duplicated across its collection of divisions
 
 ### LeagueDivision
 
 > A `LeagueDivision` groups teams within a conference into a named division
 
-1. A `LeagueDivision` MUST have a `name` of at most 64 characters
-2. A `LeagueDivision` MUST contain a vector of team IDs (`Vec<usize>`)
-3. A `LeagueDivision` MUST validate that no team ID is duplicated within the division
+1. A `LeagueDivision` has a name and a collection of team IDs
+2. A `LeagueDivision` MUST validate that its name is at most 64 characters
+3. A `LeagueDivision` MUST validate that no team ID is duplicated in its collection of team IDs
 
 ### LeagueSeasonWeek
 
 > A `LeagueSeasonWeek` represents a week of football matchups during a particular season
 
 1. A `LeagueSeasonWeek` MUST contain a vector of `LeagueSeasonMatchup` structures
-2. A `LeagueSeasonWeek` MUST be capable of computing whether it has started (any matchup started)
-3. A `LeagueSeasonWeek` MUST be capable of computing whether it is complete (all matchups complete)
-4. A `LeagueSeasonWeek` MUST be capable of returning a specific team's matchup for the week
+2. A `LeagueSeasonWeek` MUST be capable of computing whether it has started and whether it has completed
+3. A `LeagueSeasonWeek` MUST be capable of returning a specific team's matchup for the week
 
 ### LeagueSeasonMatchup
 
 > A `LeagueSeasonMatchup` represents a football game between two teams during a season
 
-1. A `LeagueSeasonMatchup` MUST contain `home_team` and `away_team` fields as `usize` team IDs
-2. A `LeagueSeasonMatchup` MUST contain a `GameContext` representing the full game state (score, down, distance, field position, time, timeouts)
-3. A `LeagueSeasonMatchup` MAY contain a `Game` (play-by-play log) and `OffensiveStats` for each team
-4. A `LeagueSeasonMatchup` MUST be capable of computing a `FootballMatchupResult` (Win, Loss, or Tie) for a given team
-5. A `LeagueSeasonMatchup` MUST be capable of determining the winner, if any
+1. A `LeagueSeasonMatchup` MUST contain the full game log when a game is in-progress
+2. A `LeagueSeasonMatchup` MUST contain the final game stats after a game is complete
+3. A `LeagueSeasonMatchup` MUST be capable of producing a matchup result (Win, Loss, or Tie) for a given team
 
 ### LeagueSeasonPlayoffs
 
 > `LeagueSeasonPlayoffs` represents the postseason bracket structure for a season
 
-1. A `LeagueSeasonPlayoffs` MUST contain a `PlayoffTeams` structure mapping conference IDs to seeded playoff teams
-2. A `LeagueSeasonPlayoffs` MUST contain `conference_brackets` as a `BTreeMap<usize, Vec<LeagueSeasonWeek>>`, one bracket per conference
-3. A `LeagueSeasonPlayoffs` MUST contain a `winners_bracket` as a `Vec<LeagueSeasonWeek>` for championship rounds in multi-conference mode
-4. In single-conference mode, all rounds MUST use conference bracket 0 with an empty winners bracket
-5. In multi-conference mode, conference champions MUST advance to the winners bracket
+1. A `LeagueSeasonPlayoffs` has a collection of `PlayoffTeam` structures organized by conference
+2. A `LeagueSeasonPlayoffs` MUST auto-increment its `PlayoffTeam` structures' seeds as they are added
+3. A `LeagueSeasonPlayoffs` has a winners bracket and a collection of conference brackets identified by conference ID, which themselves each have a collection of `LeagueSeasonWeek` structures representing the rounds of the playoff bracket
+4. A `LeagueSeasonPlayoffs` MUST validate that each team ID that appears across each of its brackets exist in its collection of `PlayoffTeam` structures
+5. A `LeagueSeasonPlayoffs` MUST validate that no duplicate team IDs appear across conferences or conference brackets
+5. A `LeagueSeasonPlayoffs` MUST support both single-conference and multi-conference league playoffs
+6. A `LeagueSeasonPlayoffs` MUST advance conference champions to a winners bracket for multi-conference playoffs
+7. A `LeagueSeasonPlayoffs` MAY also support single-bracket playoffs for multi-conference leagues
 
 ### PlayoffTeam
 
 > A `PlayoffTeam` represents a team's entry in the playoffs with seeding information
 
-1. A `PlayoffTeam` MUST have a `seed` of type `usize`, auto-assigned in order of addition
-2. A `PlayoffTeam` MUST have a `short_name` of at most 4 characters
-3. A `PlayoffTeams` container MUST validate that no team ID is duplicated across conferences
-
-### PlayoffPicture
-
-> A `PlayoffPicture` provides a real-time view of which teams are in playoff contention during the regular season
-
-1. A `PlayoffPictureEntry` MUST contain: `team_id`, `team_name`, `current_record` (LeagueTeamRecord), `status` (PlayoffStatus), `games_back`, `remaining_games`, and `magic_number`
-2. `PlayoffStatus` MUST be one of: `ClinchedTopSeed`, `ClinchedPlayoffs { current_seed }`, `InPlayoffPosition { current_seed }`, `InTheHunt`, or `Eliminated`
-
-### LeagueTeamRecord
-
-> A `LeagueTeamRecord` tracks a team's win-loss-tie record
-
-1. A `LeagueTeamRecord` MUST contain `wins`, `losses`, and `ties` fields of type `usize`
-2. A `LeagueTeamRecord` MUST display as "W-L-T" format
+1. A `PlayoffTeam` has a seed and a team acronym
+2. A `PlayoffTeam` MUST validate that its acronym is at most 4 characters
 
 ## Architecture
 
@@ -175,7 +179,7 @@ The following is a UML-style diagram depicting the type/struct hierarchy for a `
 
 ```
 ┌──────────────────────────┐
-│          League           │
+│          League          │
 ├──────────────────────────┤
 │ teams: BTreeMap<usize,   │
 │         LeagueTeam>      │
@@ -186,14 +190,14 @@ The following is a UML-style diagram depicting the type/struct hierarchy for a `
      │            │
      ▼            ▼
 ┌──────────┐  ┌──────────────────────────────────────────────┐
-│LeagueTeam│  │              LeagueSeason                     │
+│LeagueTeam│  │              LeagueSeason                    │
 ├──────────┤  ├──────────────────────────────────────────────┤
 │ (empty)  │  │ year: usize                                  │
 └──────────┘  │ teams: BTreeMap<usize, FootballTeam>         │
               │ conferences: Vec<LeagueConference>           │
               │ weeks: Vec<LeagueSeasonWeek>                 │
               │ playoffs: LeagueSeasonPlayoffs               │
-              └───┬──────────┬──────────┬───────────┬───────┘
+              └───┬──────────┬──────────┬───────────┬────────┘
                   │          │          │           │
      ┌────────────┘          │          │           └──────────────┐
      ▼                       ▼          ▼                          ▼
@@ -216,7 +220,7 @@ The following is a UML-style diagram depicting the type/struct hierarchy for a `
                      │ teams:      │   │ away_team:   │       │ teams:      │
                      │  Vec<usize> │   │       usize  │       │  BTreeMap<  │
                      └─────────────┘   │ context:     │       │  usize,     │
-                                       │  GameContext  │       │  BTreeMap<  │
+                                       │  GameContext │       │  BTreeMap<  │
                                        │ game:        │       │  usize,     │
                                        │  Option<Game>│       │  PlayoffTeam│
                                        │ home_stats:  │       │  >>         │
@@ -237,15 +241,15 @@ The following is a UML-style diagram depicting the type/struct hierarchy for a `
 │ risk_taking: u8  │  │ passing: u8          │  │ blitzing: u8         │
 │ run_pass: u8     │  │ blocking: u8         │  │ rush_defense: u8     │
 │ up_tempo: u8     │  │ rushing: u8          │  │ pass_defense: u8     │
-│ (each 0-100)    │  │ receiving: u8        │  │ coverage: u8         │
+│ (each 0-100)     │  │ receiving: u8        │  │ coverage: u8         │
 └──────────────────┘  │ scrambling: u8       │  │ turnovers: u8        │
                       │ turnovers: u8        │  │ kick_returning: u8   │
-                      │ field_goals: u8      │  │ (each 0-100)        │
+                      │ field_goals: u8      │  │ (each 0-100)         │
                       │ punting: u8          │  └──────────────────────┘
                       │ kickoffs: u8         │
                       │ kick_return_defense: │
                       │               u8     │
-                      │ (each 0-100)        │
+                      │ (each 0-100)         │
                       └──────────────────────┘
 
 ┌──────────────────────┐  ┌──────────────────────┐
@@ -254,7 +258,7 @@ The following is a UML-style diagram depicting the type/struct hierarchy for a `
 │ wins: usize          │  │ passing: PassingStats│
 │ losses: usize        │  │ rushing: RushingStats│
 │ ties: usize          │  │ receiving:           │
-│ Display: "W-L-T"    │  │   ReceivingStats     │
+│ Display: "W-L-T"     │  │   ReceivingStats     │
 └──────────────────────┘  └──────────────────────┘
 ```
 
@@ -1212,12 +1216,10 @@ Options:
 At a high-level, the roadmap is:
 
 1. **CLI development** (largely complete): Iteratively develop league management and simulation subcommands in the `fbsim` CLI, building reusable functionality in `fbsim-core`
-2. **API development**: Implement authenticated, stateful REST API endpoints backed by a database, allowing users to create and manage leagues tied to their accounts
-3. **UI development**: Build corresponding pages and web components in the `fbsim` UI that interact with the stateful API
-4. **Full integration**: A full-fledged user experience in which users manage their leagues entirely through the UI, with all state persisted server-side
+2. **UI development**: Build corresponding pages and web components in the `fbsim` UI that use a WASM module based on `fbsim-core` to interact with `League` types locally in the browser
 
 ## Next Steps
 
 - **Authentication**: The API and UI are authenticated and user-based; leagues are stored per-user in a database
 - **Database layer**: The API has an ORM layer atop a relational database for persisting league state
-- **PWA Experience**: The stateless simulation engine can compile into WASM and be executed on the client side without making networked API calls, handled seamlessly in the UI
+- **PWA Experience**: The WASM module is used as a PWA layer when the network is unavailable, while the UI supports both local and remote (authenticated) leagues
