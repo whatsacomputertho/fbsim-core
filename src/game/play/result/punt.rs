@@ -4,7 +4,9 @@ use rand::Rng;
 use rocket_okapi::okapi::schemars;
 #[cfg(feature = "rocket_okapi")]
 use rocket_okapi::okapi::schemars::JsonSchema;
-use serde::{Serialize, Deserialize, Deserializer};
+use serde::{Deserialize, Deserializer, Serialize};
+#[cfg(feature = "wasm")]
+use tsify_next::Tsify;
 use rand_distr::{Normal, Distribution, Exp, SkewNormal};
 
 use crate::game::context::GameContext;
@@ -215,6 +217,8 @@ impl PuntResultRaw {
 ///
 /// A `PuntResult` represents a result of a punt play
 #[cfg_attr(feature = "rocket_okapi", derive(JsonSchema))]
+#[cfg_attr(feature = "wasm", derive(Tsify))]
+#[cfg_attr(feature = "wasm", tsify(into_wasm_abi, from_wasm_abi))]
 #[derive(Clone, Copy, Eq, PartialEq, Ord, PartialOrd, Debug, Serialize)]
 pub struct PuntResult {
     fumble_return_yards: i32,

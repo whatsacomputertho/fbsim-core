@@ -16,5 +16,6 @@ jobs:
         if: github.event.release.prerelease == false
         env:
           CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_TOKEN }}
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
           RELEASE_ARGS="--verbose" make release

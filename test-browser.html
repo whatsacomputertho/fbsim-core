@@ -1,0 +1,374 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>fbsim-core WASM Test</title>
+    <style>
+        body {
+            font-family: 'Courier New', monospace;
+            max-width: 900px;
+            margin: 0 auto;
+            padding: 20px;
+            background: #1a1a2e;
+            color: #eee;
+        }
+        h1 { color: #4ecca3; }
+        .scoreboard {
+            display: flex;
+            justify-content: center;
+            gap: 40px;
+            font-size: 24px;
+            margin: 20px 0;
+            padding: 20px;
+            background: #16213e;
+            border-radius: 8px;
+        }
+        .team { text-align: center; }
+        .team.possession { color: #4ecca3; font-weight: bold; }
+        .score { font-size: 48px; }
+        .game-info {
+            text-align: center;
+            margin: 10px 0;
+            color: #aaa;
+        }
+        .controls {
+            display: flex;
+            gap: 10px;
+            justify-content: center;
+            margin: 20px 0;
+        }
+        button {
+            padding: 12px 24px;
+            font-size: 16px;
+            cursor: pointer;
+            background: #4ecca3;
+            color: #1a1a2e;
+            border: none;
+            border-radius: 4px;
+            font-weight: bold;
+        }
+        button:hover { background: #3ba888; }
+        button:disabled {
+            background: #555;
+            cursor: not-allowed;
+        }
+        .play-log {
+            background: #16213e;
+            padding: 15px;
+            border-radius: 8px;
+            max-height: 400px;
+            overflow-y: auto;
+        }
+        .play-entry {
+            padding: 8px;
+            border-bottom: 1px solid #2a2a4a;
+            font-size: 14px;
+        }
+        .play-entry:last-child { border-bottom: none; }
+        .play-entry .context { color: #4ecca3; }
+        .play-entry .result { color: #fff; }
+        .drive-header {
+            background: #2a2a4a;
+            padding: 8px;
+            margin-top: 10px;
+            border-radius: 4px;
+            font-weight: bold;
+        }
+        #status { color: #f39c12; margin: 10px 0; text-align: center; }
+    </style>
+</head>
+<body>
+    <h1>fbsim-core WASM Play-by-Play Test</h1>
+
+    <div id="status">Loading WASM module...</div>
+
+    <div class="scoreboard">
+        <div class="team" id="home-team">
+            <div>HOME</div>
+            <div class="score" id="home-score">0</div>
+        </div>
+        <div class="team" id="away-team">
+            <div>AWAY</div>
+            <div class="score" id="away-score">0</div>
+        </div>
+    </div>
+
+    <div class="game-info">
+        <div id="quarter">Q1 - 15:00</div>
+        <div id="down-distance">Kickoff</div>
+    </div>
+
+    <div class="controls">
+        <button id="new-game-btn" disabled>New Game</button>
+        <button id="play-btn" disabled>Simulate Play</button>
+        <button id="drive-btn" disabled>Simulate Drive</button>
+        <button id="game-btn" disabled>Simulate Rest</button>
+    </div>
+
+    <h3>Play Log</h3>
+    <div class="play-log" id="play-log">
+        <div class="play-entry">Waiting for game to start...</div>
+    </div>
+
+    <script type="module">
+        import init, {
+            WasmFootballTeam,
+            WasmRng,
+            WasmGameSession,
+            getVersion
+        } from './pkg/web/fbsim_core.js';
+
+        let session = null;
+        let rng = null;
+        let currentDrive = 0;
+
+        async function main() {
+            try {
+                await init();
+
+                document.getElementById('status').textContent =
+                    `WASM loaded! fbsim-core v${getVersion()}`;
+
+                // Enable buttons
+                document.getElementById('new-game-btn').disabled = false;
+
+                // Set up event listeners
+                document.getElementById('new-game-btn').addEventListener('click', startNewGame);
+                document.getElementById('play-btn').addEventListener('click', simPlay);
+                document.getElementById('drive-btn').addEventListener('click', simDrive);
+                document.getElementById('game-btn').addEventListener('click', simRest);
+
+            } catch (err) {
+                document.getElementById('status').textContent = `Error: ${err.message}`;
+                console.error(err);
+            }
+        }
+
+        function startNewGame() {
+            // Create teams with different ratings
+            const homeTeam = WasmFootballTeam.fromOveralls("Home Eagles", "HOME", 75, 70);
+            const awayTeam = WasmFootballTeam.fromOveralls("Away Tigers", "AWAY", 65, 75);
+
+            // Create RNG (seeded for reproducibility)
+            rng = WasmRng.fromSeed(BigInt(Date.now()));
+
+            // Create game session
+            session = WasmGameSession.withNames(homeTeam, awayTeam, "HOME", "AWAY");
+            currentDrive = 0;
+
+            // Clear play log
+            document.getElementById('play-log').innerHTML =
+                '<div class="play-entry">Game started! HOME receives the opening kickoff.</div>';
+
+            // Enable simulation buttons
+            document.getElementById('play-btn').disabled = false;
+            document.getElementById('drive-btn').disabled = false;
+            document.getElementById('game-btn').disabled = false;
+
+            updateDisplay();
+        }
+
+        function simPlay() {
+            if (!session || session.isGameOver) return;
+
+            const prevDriveCount = session.driveCount;
+            const play = session.simPlay(rng);
+
+            // Check if new drive started
+            if (session.driveCount > prevDriveCount && currentDrive < session.driveCount - 1) {
+                currentDrive = session.driveCount - 1;
+                addDriveHeader();
+            }
+
+            addPlayToLog(play);
+            updateDisplay();
+        }
+
+        function simDrive() {
+            if (!session || session.isGameOver) return;
+
+            addDriveHeader();
+            const drive = session.simDrive(rng);
+
+            // Add all plays from the drive to the log
+            for (const play of drive.plays) {
+                addPlayToLog(play);
+            }
+
+            currentDrive = session.driveCount;
+            updateDisplay();
+        }
+
+        function simRest() {
+            if (!session || session.isGameOver) return;
+
+            session.simGame(rng);
+
+            // Refresh display with final game state
+            document.getElementById('play-log').innerHTML =
+                '<div class="play-entry">Game simulated to completion!</div>';
+
+            const game = session.getGame();
+            for (let i = 0; i < game.drives.length; i++) {
+                const drive = game.drives[i];
+                addDriveHeader(i + 1, drive.result);
+                for (const play of drive.plays) {
+                    addPlayToLog(play);
+                }
+            }
+
+            updateDisplay();
+        }
+
+        function addDriveHeader(driveNum, result) {
+            const log = document.getElementById('play-log');
+            const num = driveNum || session.driveCount;
+            const res = result || '';
+            log.innerHTML += `<div class="drive-header">Drive #${num} ${res ? '- ' + res : ''}</div>`;
+        }
+
+        function addPlayToLog(play) {
+            const log = document.getElementById('play-log');
+            const ctx = play.context;
+
+            // Format down and distance
+            let downStr = '';
+            if (ctx.down === 0) {
+                downStr = ctx.next_play_kickoff ? 'Kickoff' :
+                          ctx.next_play_extra_point ? 'Extra Point' : '???';
+            } else {
+                const suffix = ctx.down === 1 ? 'st' : ctx.down === 2 ? 'nd' :
+                               ctx.down === 3 ? 'rd' : 'th';
+                downStr = `${ctx.down}${suffix} & ${ctx.distance}`;
+            }
+
+            // Format yard line
+            const yl = ctx.yard_line;
+            const yardLineStr = yl === 50 ? '50' :
+                yl < 50 ? `OWN ${yl}` : `OPP ${100 - yl}`;
+
+            // Format time
+            const mins = Math.floor(ctx.half_seconds / 60);
+            const secs = ctx.half_seconds % 60;
+            const timeStr = `Q${ctx.quarter} ${mins}:${secs.toString().padStart(2, '0')}`;
+
+            // Format play result
+            let resultStr = '';
+            const result = play.result;
+            console.log(result);
+            if (result.type === 'Run') {
+                // TODO: Implement this in the lib (net_yards method impl in rust library)
+                const yards = result.data.yards_gained - result.data.return_yards;
+
+                // TODO: Implement this in the lib (display trait impl in rust library)
+                resultStr = `Run for ${yards} yard${yards !== 1 ? 's' : ''}`;
+                if (result.data.touchdown) resultStr += ' TOUCHDOWN!';
+                if (result.data.fumble) resultStr += ' FUMBLE!';
+            } else if (result.type === 'Pass') {
+                // TODO: Implement this in the lib (net_yards method impl in rust library)
+                let yards;
+                if (result.data.complete) {
+                    yards = result.data.pass_dist + result.data.yards_after_catch - (result.data.return_yards + result.data.sack_yards_lost);
+                } else {
+                    yards = result.data.scramble_yards - (result.data.return_yards + result.data.sack_yards_lost);
+                };
+
+                // TODO: Implement this in the lib (display trait impl in rust library)
+                if (result.data.complete) {
+                    resultStr = `Pass complete for ${yards} yard${yards !== 1 ? 's' : ''}`;
+                } else if (result.data.interception) {
+                    resultStr = 'INTERCEPTED!';
+                } else if (result.data.sack) {
+                    resultStr = `Sacked for ${yards} yards`;
+                } else {
+                    resultStr = 'Incomplete pass';
+                }
+                if (result.data.touchdown) resultStr += ' TOUCHDOWN!';
+            } else if (result.type === 'Kickoff') {
+                const retYards = result.data.kick_return_yards;
+
+                // TODO: Implement this in the lib (display trait impl in rust library)
+                if (result.data.touchback) {
+                    resultStr = 'Kickoff, touchback';
+                } else {
+                    resultStr = `Kickoff returned ${retYards} yards`;
+                }
+            } else if (result.type === 'Punt') {
+                // TODO: Implement this in the lib (display trait impl in rust library)
+                resultStr = `Punt for ${result.data.punt_yards} yards`;
+            } else if (result.type === 'FieldGoal' || result.type === 'ExtraPoint') {
+                // TODO: Implement this in the lib (display trait impl in rust library)
+                if (result.data.made) {
+                    resultStr = result.type === 'ExtraPoint' ?
+                        'Extra point GOOD!' : 'Field goal GOOD!';
+                } else {
+                    resultStr = result.type === 'ExtraPoint' ?
+                        'Extra point NO GOOD' : 'Field goal NO GOOD';
+                }
+            } else if (result.type === 'BetweenPlay') {
+                return; // Don't log between-play results
+            }
+
+            const possession = ctx.home_possession ? 'HOME' : 'AWAY';
+
+            log.innerHTML += `
+                <div class="play-entry">
+                    <span class="context">[${timeStr}] ${possession} ${downStr} at ${yardLineStr}</span><br>
+                    <span class="result">${resultStr}</span>
+                </div>
+            `;
+
+            // Scroll to bottom
+            log.scrollTop = log.scrollHeight;
+        }
+
+        function updateDisplay() {
+            if (!session) return;
+
+            // Update scores
+            document.getElementById('home-score').textContent = session.homeScore;
+            document.getElementById('away-score').textContent = session.awayScore;
+
+            // Update possession indicator
+            document.getElementById('home-team').className =
+                'team' + (session.homePossession ? ' possession' : '');
+            document.getElementById('away-team').className =
+                'team' + (!session.homePossession ? ' possession' : '');
+
+            // Update quarter/time
+            const mins = Math.floor(session.halfSeconds / 60);
+            const secs = session.halfSeconds % 60;
+            document.getElementById('quarter').textContent =
+                `Q${session.quarter} - ${mins}:${secs.toString().padStart(2, '0')}`;
+
+            // Update down/distance
+            let downStr = '';
+            if (session.down === 0) {
+                if (session.nextPlayKickoff) downStr = 'Kickoff';
+                else if (session.nextPlayExtraPoint) downStr = 'Extra Point';
+                else downStr = '---';
+            } else {
+                const suffix = session.down === 1 ? 'st' : session.down === 2 ? 'nd' :
+                               session.down === 3 ? 'rd' : 'th';
+                const yl = session.yardLine;
+                const yardLineStr = yl === 50 ? '50' :
+                    yl < 50 ? `Own ${yl}` : `Opp ${100 - yl}`;
+                downStr = `${session.down}${suffix} & ${session.distance} at ${yardLineStr}`;
+            }
+            document.getElementById('down-distance').textContent = downStr;
+
+            // Disable buttons if game over
+            if (session.isGameOver) {
+                document.getElementById('play-btn').disabled = true;
+                document.getElementById('drive-btn').disabled = true;
+                document.getElementById('game-btn').disabled = true;
+                document.getElementById('status').textContent =
+                    `FINAL: HOME ${session.homeScore} - AWAY ${session.awayScore}`;
+            }
+        }
+
+        main();
+    </script>
+</body>
+</html>

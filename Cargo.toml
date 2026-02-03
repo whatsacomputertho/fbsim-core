@@ -13,16 +13,43 @@ categories = ["games","simulation"]
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
+[lib]
+crate-type = ["cdylib", "rlib"]
+
 [dependencies]
 chrono = "0.4.42"
 lazy_static = "1.5.0"
-rand = "0.8.5"
+rand = { version = "0.8.5", features = ["small_rng"] }
 rand_distr = "0.4.3"
 rocket_okapi = { version = "0.9.0", features = ["swagger"], optional = true }
 serde = { version = "1.0.217", features = ["derive"] }
+serde_json = "1.0"
 statrs = "0.18.0"
 tokio = "1.48.0" # Overrides rocket dependency
 tracing-subscriber = "0.3.22" # Overrides rocket dependency
 
+# WASM dependencies (optional)
+wasm-bindgen = { version = "0.2", optional = true }
+js-sys = { version = "0.3", optional = true }
+serde-wasm-bindgen = { version = "0.6", optional = true }
+getrandom = { version = "0.2", features = ["js"], optional = true }
+console_error_panic_hook = { version = "0.1", optional = true }
+tsify-next = { version = "0.5", optional = true, features = ["js"] }
+
+[dev-dependencies]
+wasm-bindgen-test = "0.3"
+
 [features]
 rocket_okapi = ["dep:rocket_okapi"]
+wasm = [
+    "dep:wasm-bindgen",
+    "dep:js-sys",
+    "dep:serde-wasm-bindgen",
+    "dep:getrandom",
+    "dep:console_error_panic_hook",
+    "dep:tsify-next",
+]
+
+[profile.release]
+lto = true
+opt-level = "s"
