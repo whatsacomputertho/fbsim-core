@@ -1,6 +1,6 @@
 # Playoffs module
 
-The `playoffs` module defines the `LeagueSeasonPlayoffs`, `PlayoffTeams`, and `PlayoffTeam` structs which represent the postseason bracket structure for a league season. There is also a `PlayoffTeamRaw` struct used for validating playoff team properties before converting via its `TryFrom` trait implementation. The module also contains the `picture` submodule for computing real-time playoff standings.
+The `playoffs` module defines the `LeagueSeasonPlayoffs`, `PlayoffTeams`, and `PlayoffTeam` structs which represent the postseason bracket structure for a league season. There is also a `PlayoffTeamRaw` struct used for validating playoff team properties before converting via its `TryFrom` trait implementation. The module also contains the `picture` submodule for computing playoff standings.
 
 ## PlayoffTeam struct
 

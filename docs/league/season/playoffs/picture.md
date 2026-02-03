@@ -1,6 +1,6 @@
 # Picture module
 
-The `picture` module defines the `PlayoffPicture`, `PlayoffPictureEntry`, `PlayoffPictureOptions`, and `PlayoffStatus` types which provide a real-time view of playoff qualification status during an ongoing season.
+The `picture` module defines the `PlayoffPicture`, `PlayoffPictureEntry`, `PlayoffPictureOptions`, and `PlayoffStatus` types which provide a view of playoff qualification status during an ongoing season.
 
 ## PlayoffStatus enum
 
