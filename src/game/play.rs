@@ -9,6 +9,8 @@ use rocket_okapi::okapi::schemars;
 use rocket_okapi::okapi::schemars::JsonSchema;
 use serde::{Serialize, Deserialize};
 use rand::Rng;
+#[cfg(feature = "wasm")]
+use tsify_next::Tsify;
 
 use crate::game::context::GameContext;
 use crate::game::play::call::{PlayCallSimulator, PlayCall};
@@ -300,6 +302,8 @@ impl PlaySimulator {
 ///
 /// Enumerates the possible outcomes of a drive
 #[cfg_attr(feature = "rocket_okapi", derive(JsonSchema))]
+#[cfg_attr(feature = "wasm", derive(Tsify))]
+#[cfg_attr(feature = "wasm", tsify(into_wasm_abi, from_wasm_abi))]
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Ord, PartialOrd, Serialize, Deserialize)]
 pub enum DriveResult {
     None,

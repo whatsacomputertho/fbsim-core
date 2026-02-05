@@ -3,12 +3,16 @@
 use rocket_okapi::okapi::schemars;
 #[cfg(feature = "rocket_okapi")]
 use rocket_okapi::okapi::schemars::JsonSchema;
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
+#[cfg(feature = "wasm")]
+use tsify_next::Tsify;
 
 /// # `RushingStats` struct
 ///
 /// A `RushingStats` represents aggregated rushing statistics
 #[cfg_attr(feature = "rocket_okapi", derive(JsonSchema))]
+#[cfg_attr(feature = "wasm", derive(Tsify))]
+#[cfg_attr(feature = "wasm", tsify(into_wasm_abi, from_wasm_abi))]
 #[derive(Clone, Eq, PartialEq, Ord, PartialOrd, Debug, Default, Serialize, Deserialize)]
 pub struct RushingStats {
     rushes: u32,
@@ -181,6 +185,8 @@ impl std::fmt::Display for RushingStats {
 ///
 /// A `PassingStats` represents aggregated passing statistics
 #[cfg_attr(feature = "rocket_okapi", derive(JsonSchema))]
+#[cfg_attr(feature = "wasm", derive(Tsify))]
+#[cfg_attr(feature = "wasm", tsify(into_wasm_abi, from_wasm_abi))]
 #[derive(Clone, Eq, PartialEq, Ord, PartialOrd, Debug, Default, Serialize, Deserialize)]
 pub struct PassingStats {
     attempts: u32,
@@ -383,6 +389,8 @@ impl std::fmt::Display for PassingStats {
 ///
 /// A `ReceivingStats` represents aggregated receiving statistics
 #[cfg_attr(feature = "rocket_okapi", derive(JsonSchema))]
+#[cfg_attr(feature = "wasm", derive(Tsify))]
+#[cfg_attr(feature = "wasm", tsify(into_wasm_abi, from_wasm_abi))]
 #[derive(Clone, Eq, PartialEq, Ord, PartialOrd, Debug, Default, Serialize, Deserialize)]
 pub struct ReceivingStats {
     targets: u32,
@@ -581,10 +589,12 @@ impl std::fmt::Display for ReceivingStats {
     }
 }
 
-/// # `ReceivingStats` struct
+/// # `OffensiveStats` struct
 ///
-/// A `ReceivingStats` represents aggregated receiving statistics
+/// An `OffensiveStats` represents aggregated offensive statistics
 #[cfg_attr(feature = "rocket_okapi", derive(JsonSchema))]
+#[cfg_attr(feature = "wasm", derive(Tsify))]
+#[cfg_attr(feature = "wasm", tsify(into_wasm_abi, from_wasm_abi))]
 #[derive(Clone, Eq, PartialEq, Ord, PartialOrd, Debug, Default, Serialize, Deserialize)]
 pub struct OffensiveStats {
     passing: PassingStats,

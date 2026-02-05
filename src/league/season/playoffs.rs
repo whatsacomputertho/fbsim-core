@@ -200,6 +200,8 @@ impl TryFrom<LeagueSeasonPlayoffsRaw> for LeagueSeasonPlayoffs {
 ///
 /// Represents a single team's playoff entry with its seed and short name.
 #[cfg_attr(feature = "rocket_okapi", derive(JsonSchema))]
+#[cfg_attr(feature = "wasm", derive(tsify_next::Tsify))]
+#[cfg_attr(feature = "wasm", tsify(into_wasm_abi))]
 #[derive(Clone, Eq, PartialEq, Ord, PartialOrd, Default, Debug, Serialize)]
 pub struct PlayoffTeam {
     seed: usize,
@@ -233,6 +235,8 @@ impl PlayoffTeam {
 /// A collection of teams participating in the playoffs, organized by conference.
 /// Conference ID 0 is used for non-conference playoffs.
 #[cfg_attr(feature = "rocket_okapi", derive(JsonSchema))]
+#[cfg_attr(feature = "wasm", derive(tsify_next::Tsify))]
+#[cfg_attr(feature = "wasm", tsify(into_wasm_abi))]
 #[derive(Clone, Eq, PartialEq, Ord, PartialOrd, Default, Debug, Serialize)]
 pub struct PlayoffTeams {
     /// conference_id -> team_id -> PlayoffTeam
@@ -510,6 +514,8 @@ impl<'de> Deserialize<'de> for PlayoffTeams {
 /// playoffs use bracket ID 0. Multi-conference playoffs have one bracket per
 /// conference, plus a `winners_bracket` for the championship between conference winners.
 #[cfg_attr(feature = "rocket_okapi", derive(JsonSchema))]
+#[cfg_attr(feature = "wasm", derive(tsify_next::Tsify))]
+#[cfg_attr(feature = "wasm", tsify(into_wasm_abi))]
 #[derive(Clone, Eq, PartialEq, Ord, PartialOrd, Default, Debug, Serialize)]
 pub struct LeagueSeasonPlayoffs {
     /// Teams participating in the playoffs

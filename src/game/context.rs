@@ -3,7 +3,9 @@
 use rocket_okapi::okapi::schemars;
 #[cfg(feature = "rocket_okapi")]
 use rocket_okapi::okapi::schemars::JsonSchema;
-use serde::{Serialize, Deserialize, Deserializer};
+use serde::{Deserialize, Deserializer, Serialize};
+#[cfg(feature = "wasm")]
+use tsify_next::Tsify;
 
 use crate::game::play::context::PlayContext;
 use crate::game::play::result::{ScoreResult, PlayResult};
@@ -244,6 +246,8 @@ pub struct GameContextUpdateOptions {
 ///
 /// A `GameContext` represents a game scenario
 #[cfg_attr(feature = "rocket_okapi", derive(JsonSchema))]
+#[cfg_attr(feature = "wasm", derive(Tsify))]
+#[cfg_attr(feature = "wasm", tsify(into_wasm_abi, from_wasm_abi))]
 #[derive(Clone, Eq, PartialEq, Ord, PartialOrd, Debug, Serialize)]
 pub struct GameContext {
     home_team_short: String,

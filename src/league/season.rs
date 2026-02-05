@@ -304,6 +304,8 @@ impl LeagueSeasonRaw {
 ///
 /// A `LeagueSeasonScheduleOptions` represents a collection of options used
 /// to generate a season schedule
+#[cfg_attr(feature = "wasm", derive(tsify_next::Tsify))]
+#[cfg_attr(feature = "wasm", tsify(into_wasm_abi, from_wasm_abi))]
 #[derive(Clone, Eq, PartialEq, Ord, PartialOrd, Debug, Serialize, Deserialize)]
 pub struct LeagueSeasonScheduleOptions {
     pub weeks: Option<usize>,
@@ -356,6 +358,8 @@ impl LeagueSeasonScheduleOptions {
 ///
 /// Options for generating playoffs. Supports both single-bracket and
 /// multi-conference bracket modes.
+#[cfg_attr(feature = "wasm", derive(tsify_next::Tsify))]
+#[cfg_attr(feature = "wasm", tsify(into_wasm_abi, from_wasm_abi))]
 #[derive(Clone, Eq, PartialEq, Ord, PartialOrd, Debug, Serialize, Deserialize)]
 pub struct LeagueSeasonPlayoffOptions {
     /// Total number of playoff teams (used when not using conference brackets)

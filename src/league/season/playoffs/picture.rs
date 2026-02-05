@@ -14,6 +14,8 @@ use crate::league::season::LeagueSeason;
 ///
 /// Represents a team's playoff qualification status during an ongoing season
 #[cfg_attr(feature = "rocket_okapi", derive(JsonSchema))]
+#[cfg_attr(feature = "wasm", derive(tsify_next::Tsify))]
+#[cfg_attr(feature = "wasm", tsify(into_wasm_abi, from_wasm_abi))]
 #[derive(Clone, Eq, PartialEq, Ord, PartialOrd, Debug, Default, Serialize, Deserialize)]
 pub enum PlayoffStatus {
     /// Team has clinched the #1 seed
@@ -32,6 +34,8 @@ pub enum PlayoffStatus {
 ///
 /// Represents a single team's entry in the playoff picture
 #[cfg_attr(feature = "rocket_okapi", derive(JsonSchema))]
+#[cfg_attr(feature = "wasm", derive(tsify_next::Tsify))]
+#[cfg_attr(feature = "wasm", tsify(into_wasm_abi))]
 #[derive(Clone, PartialEq, Debug, Default, Serialize, Deserialize)]
 pub struct PlayoffPictureEntry {
     team_id: usize,
@@ -237,6 +241,8 @@ impl RecordBounds {
 ///
 /// Options for configuring how the playoff picture is generated
 #[cfg_attr(feature = "rocket_okapi", derive(JsonSchema))]
+#[cfg_attr(feature = "wasm", derive(tsify_next::Tsify))]
+#[cfg_attr(feature = "wasm", tsify(into_wasm_abi, from_wasm_abi))]
 #[derive(Clone, PartialEq, Debug, Default, Serialize, Deserialize)]
 pub struct PlayoffPictureOptions {
     /// If `Some(true)`, force conference-based playoff picture.
@@ -252,6 +258,8 @@ pub struct PlayoffPictureOptions {
 /// Represents the complete playoff picture for a season, showing the
 /// qualification status of all teams
 #[cfg_attr(feature = "rocket_okapi", derive(JsonSchema))]
+#[cfg_attr(feature = "wasm", derive(tsify_next::Tsify))]
+#[cfg_attr(feature = "wasm", tsify(into_wasm_abi))]
 #[derive(Clone, PartialEq, Debug, Serialize, Deserialize)]
 pub struct PlayoffPicture {
     num_playoff_teams: usize,

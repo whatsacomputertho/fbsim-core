@@ -3,7 +3,9 @@
 use rocket_okapi::okapi::schemars;
 #[cfg(feature = "rocket_okapi")]
 use rocket_okapi::okapi::schemars::JsonSchema;
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
+#[cfg(feature = "wasm")]
+use tsify_next::Tsify;
 
 pub mod betweenplay;
 pub mod fieldgoal;
@@ -50,7 +52,10 @@ pub trait PlayResult {
 /// The `PlayTypeResult` enum is used to store the result of an arbirary play
 /// for gathering game statistics
 #[cfg_attr(feature = "rocket_okapi", derive(JsonSchema))]
+#[cfg_attr(feature = "wasm", derive(Tsify))]
+#[cfg_attr(feature = "wasm", tsify(into_wasm_abi, from_wasm_abi))]
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Ord, PartialOrd, Serialize, Deserialize)]
+#[serde(tag = "type", content = "data")]
 pub enum PlayTypeResult {
     BetweenPlay(BetweenPlayResult),
     Run(RunResult),
@@ -314,7 +319,9 @@ pub trait PlayResultSimulator {
 /// `ScoreResult` enum
 ///
 /// Enumerates the various ways a team can score points in football
-#[derive(PartialEq, Clone, Copy, Eq, Ord, PartialOrd, Debug, Default)]
+#[cfg_attr(feature = "wasm", derive(Tsify))]
+#[cfg_attr(feature = "wasm", tsify(into_wasm_abi, from_wasm_abi))]
+#[derive(PartialEq, Clone, Copy, Eq, Ord, PartialOrd, Debug, Default, Serialize, Deserialize)]
 pub enum ScoreResult {
     #[default] None,
     ExtraPoint,

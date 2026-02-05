@@ -1,0 +1,61 @@
+{
+  "name": "@whatsacomputertho/fbsim-core",
+  "version": "1.0.0-beta.1",
+  "description": "American football simulation engine (WASM)",
+  "main": "pkg/node/fbsim_core.js",
+  "module": "pkg/web/fbsim_core.js",
+  "types": "pkg/web/fbsim_core.d.ts",
+  "exports": {
+    ".": {
+      "node": {
+        "import": "./pkg/node/fbsim_core.js",
+        "require": "./pkg/node/fbsim_core.js",
+        "types": "./pkg/node/fbsim_core.d.ts"
+      },
+      "default": {
+        "import": "./pkg/web/fbsim_core.js",
+        "types": "./pkg/web/fbsim_core.d.ts"
+      }
+    },
+    "./web": {
+      "import": "./pkg/web/fbsim_core.js",
+      "types": "./pkg/web/fbsim_core.d.ts"
+    },
+    "./node": {
+      "import": "./pkg/node/fbsim_core.js",
+      "require": "./pkg/node/fbsim_core.js",
+      "types": "./pkg/node/fbsim_core.d.ts"
+    }
+  },
+  "files": [
+    "pkg/web/",
+    "pkg/node/"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/whatsacomputertho/fbsim-core"
+  },
+  "keywords": [
+    "football",
+    "simulation",
+    "wasm",
+    "rust",
+    "sports",
+    "game"
+  ],
+  "author": "whatsacomputertho",
+  "license": "GPL-3.0",
+  "homepage": "https://github.com/whatsacomputertho/fbsim-core",
+  "bugs": {
+    "url": "https://github.com/whatsacomputertho/fbsim-core/issues"
+  },
+  "scripts": {
+    "build": "npm run build:web && npm run build:node",
+    "build:web": "wasm-pack build --target web --out-dir pkg/web --features wasm",
+    "build:node": "wasm-pack build --target nodejs --out-dir pkg/node --features wasm",
+    "test": "wasm-pack test --node --features wasm",
+    "clean": "rm -rf pkg-web ./pkg",
+    "prepublishOnly": "npm run build"
+  },
+  "sideEffects": false
+}
