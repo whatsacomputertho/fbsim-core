@@ -21,12 +21,15 @@ chrono = "0.4.42"
 lazy_static = "1.5.0"
 rand = { version = "0.8.5", features = ["small_rng"] }
 rand_distr = "0.4.3"
-rocket_okapi = { version = "0.9.0", features = ["swagger"], optional = true }
 serde = { version = "1.0.217", features = ["derive"] }
 serde_json = "1.0"
 statrs = "0.18.0"
-tokio = "1.48.0" # Overrides rocket dependency
-tracing-subscriber = "0.3.22" # Overrides rocket dependency
+
+# Rocket dependencies (optional)
+rocket_okapi = { version = "0.9.0", features = ["swagger"], optional = true }
+tokio = { version = "1.49.0", optional = true } # Overrides rocket dependency
+tracing-subscriber = { version = "0.3.22", optional = true } # Overrides rocket dependency
+bytes = { version = "1.11.1", optional = true } # Overrides rocket dependency
 
 # WASM dependencies (optional)
 wasm-bindgen = { version = "0.2", optional = true }
@@ -40,7 +43,12 @@ tsify-next = { version = "0.5", optional = true, features = ["js"] }
 wasm-bindgen-test = "0.3"
 
 [features]
-rocket_okapi = ["dep:rocket_okapi"]
+rocket_okapi = [
+    "dep:rocket_okapi",
+    "dep:tokio",
+    "dep:tracing-subscriber",
+    "dep:bytes"
+]
 wasm = [
     "dep:wasm-bindgen",
     "dep:js-sys",
