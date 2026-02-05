@@ -6,7 +6,8 @@
 use wasm_bindgen::prelude::*;
 
 use crate::game::context::GameContext;
-use crate::game::play::{Drive, Game, GameSimulator, Play};
+use crate::game::play::{Game as CoreGame, GameSimulator};
+use crate::wasm::play::{Drive, Game, Play};
 use crate::wasm::rng::WasmRng;
 use crate::wasm::team::WasmFootballTeam;
 
@@ -15,16 +16,16 @@ use crate::wasm::team::WasmFootballTeam;
 /// This struct holds all the state needed to simulate a football game,
 /// including both teams, the game context, and the accumulated game log.
 /// It provides methods to simulate plays incrementally or all at once.
-#[wasm_bindgen]
+#[wasm_bindgen(js_name = "GameSession")]
 pub struct WasmGameSession {
     home_team: crate::team::FootballTeam,
     away_team: crate::team::FootballTeam,
     context: GameContext,
-    game: Game,
+    game: CoreGame,
     simulator: GameSimulator,
 }
 
-#[wasm_bindgen]
+#[wasm_bindgen(js_class = "GameSession")]
 impl WasmGameSession {
     /// Creates a new game session with the given teams.
     ///
@@ -39,7 +40,7 @@ impl WasmGameSession {
             home_team: home_team.inner().clone(),
             away_team: away_team.inner().clone(),
             context: GameContext::new(),
-            game: Game::new(),
+            game: CoreGame::new(),
             simulator: GameSimulator::new(),
         }
     }
@@ -70,7 +71,7 @@ impl WasmGameSession {
             home_team: home_team.inner().clone(),
             away_team: away_team.inner().clone(),
             context,
-            game: Game::new(),
+            game: CoreGame::new(),
             simulator: GameSimulator::new(),
         })
     }
@@ -165,13 +166,17 @@ impl WasmGameSession {
         self.game.drives().iter().map(|d| d.plays().len()).sum()
     }
 
-    /// Simulates the next play and returns the play result.
+    /// Simulates the next play and returns the enriched play result.
+    ///
+    /// The returned `Play` includes computed values from the `PlayResult` trait
+    /// (such as `net_yards`, `turnover`, `offense_score`) and a human-readable
+    /// `description` string.
     ///
     /// # Arguments
     /// * `rng` - The random number generator to use
     ///
     /// # Returns
-    /// The play that was simulated, or an error if the game is already over.
+    /// The enriched play that was simulated, or an error if the game is already over.
     #[wasm_bindgen(js_name = "simPlay")]
     pub fn sim_play(&mut self, rng: &mut WasmRng) -> Result<Play, JsError> {
         if self.context.game_over() {
@@ -195,7 +200,7 @@ impl WasmGameSession {
         for drive in drives.iter().rev() {
             if let Some(play) = drive.plays().last() {
                 if self.play_count() > prev_play_count {
-                    return Ok(play.clone());
+                    return Ok(Play::from(play));
                 }
             }
         }
@@ -205,11 +210,14 @@ impl WasmGameSession {
 
     /// Simulates until the current drive is complete.
     ///
+    /// The returned `Drive` includes enriched `Play` entries with computed
+    /// values, total yards, and a human-readable display string.
+    ///
     /// # Arguments
     /// * `rng` - The random number generator to use
     ///
     /// # Returns
-    /// The completed drive, or an error if the game is already over.
+    /// The enriched completed drive, or an error if the game is already over.
     #[wasm_bindgen(js_name = "simDrive")]
     pub fn sim_drive(&mut self, rng: &mut WasmRng) -> Result<Drive, JsError> {
         if self.context.game_over() {
@@ -231,7 +239,7 @@ impl WasmGameSession {
         self.game
             .drives()
             .last()
-            .cloned()
+            .map(Drive::from)
             .ok_or_else(|| JsError::new("No drive was simulated"))
     }
 
@@ -268,13 +276,13 @@ impl WasmGameSession {
         Ok(self.context.clone())
     }
 
-    /// Returns the full game log as a JSON object.
+    /// Returns the full game log with enriched play data.
     #[wasm_bindgen(js_name = "getGame")]
     pub fn get_game(&self) -> Result<Game, JsError> {
-        Ok(self.game.clone())
+        Ok(Game::from(&self.game))
     }
 
-    /// Returns a specific drive by index.
+    /// Returns a specific drive by index with enriched play data.
     ///
     /// # Arguments
     /// * `index` - The drive index (0-based)
@@ -283,18 +291,18 @@ impl WasmGameSession {
         self.game
             .drives()
             .get(index)
-            .cloned()
+            .map(Drive::from)
             .ok_or_else(|| JsError::new(&format!("Drive {} not found", index)))
     }
 
-    /// Returns the latest play, or null if no plays have been simulated.
+    /// Returns the latest play with enriched data, or null if no plays have been simulated.
     #[wasm_bindgen(js_name = "getLatestPlay")]
     pub fn get_latest_play(&self) -> Option<Play> {
         self.game
             .drives()
             .last()
             .and_then(|d| d.plays().last())
-            .cloned()
+            .map(Play::from)
     }
 
     /// Returns the home team's offensive stats as a JSON object.

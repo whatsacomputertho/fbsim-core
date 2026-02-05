@@ -37,8 +37,6 @@ pub trait PlaySimulatable {
 ///
 /// A `Play` represents the outcome of a play
 #[cfg_attr(feature = "rocket_okapi", derive(JsonSchema))]
-#[cfg_attr(feature = "wasm", derive(Tsify))]
-#[cfg_attr(feature = "wasm", tsify(into_wasm_abi, from_wasm_abi))]
 #[derive(Clone, Eq, PartialEq, Ord, PartialOrd, Debug, Serialize, Deserialize)]
 pub struct Play {
     context: GameContext,
@@ -353,8 +351,6 @@ impl std::fmt::Display for DriveResult {
 ///
 /// A `Drive` represents the outcome of a drive
 #[cfg_attr(feature = "rocket_okapi", derive(JsonSchema))]
-#[cfg_attr(feature = "wasm", derive(Tsify))]
-#[cfg_attr(feature = "wasm", tsify(into_wasm_abi, from_wasm_abi))]
 #[derive(Clone, Eq, PartialEq, Ord, PartialOrd, Debug, Serialize, Deserialize)]
 pub struct Drive {
     plays: Vec<Play>,
@@ -906,8 +902,6 @@ impl DriveSimulator {
 ///
 /// A `Game` represents the outcome of a game
 #[cfg_attr(feature = "rocket_okapi", derive(JsonSchema))]
-#[cfg_attr(feature = "wasm", derive(Tsify))]
-#[cfg_attr(feature = "wasm", tsify(into_wasm_abi, from_wasm_abi))]
 #[derive(Clone, Eq, PartialEq, Ord, PartialOrd, Debug, Serialize, Deserialize)]
 pub struct Game {
     drives: Vec<Drive>,

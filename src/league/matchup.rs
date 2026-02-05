@@ -16,6 +16,8 @@ use crate::league::season::matchup::LeagueSeasonMatchups;
 /// A 3-tuple of usizes representing the number of wins, losses, and ties
 /// for a given team.  May be for a season or for many seasons.
 #[cfg_attr(feature = "rocket_okapi", derive(JsonSchema))]
+#[cfg_attr(feature = "wasm", derive(tsify_next::Tsify))]
+#[cfg_attr(feature = "wasm", tsify(into_wasm_abi, from_wasm_abi))]
 #[derive(Clone, Eq, PartialEq, Ord, PartialOrd, Debug, Serialize, Deserialize)]
 pub struct LeagueTeamRecord {
     wins: usize,
@@ -156,7 +158,7 @@ impl fmt::Display for LeagueTeamRecord {
 /// # `LeagueMatchups` struct
 ///
 /// Represents a list of matchups for a given team during a given season
-#[derive(Clone, Eq, PartialEq, Ord, PartialOrd, Debug)]
+#[derive(Clone, Eq, PartialEq, Ord, PartialOrd, Debug, Serialize)]
 pub struct LeagueMatchups {
     matchups: BTreeMap<usize, LeagueSeasonMatchups>
 }

@@ -11,12 +11,12 @@ use wasm_bindgen::prelude::*;
 ///
 /// This wrapper uses `SmallRng` internally, which is suitable for
 /// game simulations where cryptographic security is not required.
-#[wasm_bindgen]
+#[wasm_bindgen(js_name = "Rng")]
 pub struct WasmRng {
     inner: SmallRng,
 }
 
-#[wasm_bindgen]
+#[wasm_bindgen(js_class = "Rng")]
 impl WasmRng {
     /// Creates a new RNG with a random seed.
     ///

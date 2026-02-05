@@ -68,6 +68,7 @@
         .play-entry:last-child { border-bottom: none; }
         .play-entry .context { color: #4ecca3; }
         .play-entry .result { color: #fff; }
+        .play-entry .yards { color: #aaa; font-size: 12px; }
         .drive-header {
             background: #2a2a4a;
             padding: 8px;
@@ -113,9 +114,9 @@
 
     <script type="module">
         import init, {
-            WasmFootballTeam,
-            WasmRng,
-            WasmGameSession,
+            FootballTeam,
+            Rng,
+            GameSession,
             getVersion
         } from './pkg/web/fbsim_core.js';
 
@@ -147,14 +148,14 @@
 
         function startNewGame() {
             // Create teams with different ratings
-            const homeTeam = WasmFootballTeam.fromOveralls("Home Eagles", "HOME", 75, 70);
-            const awayTeam = WasmFootballTeam.fromOveralls("Away Tigers", "AWAY", 65, 75);
+            const homeTeam = FootballTeam.fromOveralls("Home Eagles", "HOME", 75, 70);
+            const awayTeam = FootballTeam.fromOveralls("Away Tigers", "AWAY", 65, 75);
 
             // Create RNG (seeded for reproducibility)
-            rng = WasmRng.fromSeed(BigInt(Date.now()));
+            rng = Rng.fromSeed(BigInt(Date.now()));
 
             // Create game session
-            session = WasmGameSession.withNames(homeTeam, awayTeam, "HOME", "AWAY");
+            session = GameSession.withNames(homeTeam, awayTeam, "HOME", "AWAY");
             currentDrive = 0;
 
             // Clear play log
@@ -188,8 +189,10 @@
         function simDrive() {
             if (!session || session.isGameOver) return;
 
-            addDriveHeader();
             const drive = session.simDrive(rng);
+
+            // Add drive header with result summary
+            addDriveHeader(null, drive.display);
 
             // Add all plays from the drive to the log
             for (const play of drive.plays) {
@@ -212,7 +215,7 @@
             const game = session.getGame();
             for (let i = 0; i < game.drives.length; i++) {
                 const drive = game.drives[i];
-                addDriveHeader(i + 1, drive.result);
+                addDriveHeader(i + 1, drive.display);
                 for (const play of drive.plays) {
                     addPlayToLog(play);
                 }
@@ -221,101 +224,27 @@
             updateDisplay();
         }
 
-        function addDriveHeader(driveNum, result) {
+        function addDriveHeader(driveNum, displayText) {
             const log = document.getElementById('play-log');
             const num = driveNum || session.driveCount;
-            const res = result || '';
-            log.innerHTML += `<div class="drive-header">Drive #${num} ${res ? '- ' + res : ''}</div>`;
+            const label = displayText || `Drive #${num}`;
+            log.innerHTML += `<div class="drive-header">${label}</div>`;
         }
 
         function addPlayToLog(play) {
             const log = document.getElementById('play-log');
-            const ctx = play.context;
 
-            // Format down and distance
-            let downStr = '';
-            if (ctx.down === 0) {
-                downStr = ctx.next_play_kickoff ? 'Kickoff' :
-                          ctx.next_play_extra_point ? 'Extra Point' : '???';
-            } else {
-                const suffix = ctx.down === 1 ? 'st' : ctx.down === 2 ? 'nd' :
-                               ctx.down === 3 ? 'rd' : 'th';
-                downStr = `${ctx.down}${suffix} & ${ctx.distance}`;
-            }
+            // Skip between-play results
+            if (play.result.type === 'BetweenPlay') return;
 
-            // Format yard line
-            const yl = ctx.yard_line;
-            const yardLineStr = yl === 50 ? '50' :
-                yl < 50 ? `OWN ${yl}` : `OPP ${100 - yl}`;
-
-            // Format time
-            const mins = Math.floor(ctx.half_seconds / 60);
-            const secs = ctx.half_seconds % 60;
-            const timeStr = `Q${ctx.quarter} ${mins}:${secs.toString().padStart(2, '0')}`;
-
-            // Format play result
-            let resultStr = '';
-            const result = play.result;
-            console.log(result);
-            if (result.type === 'Run') {
-                // TODO: Implement this in the lib (net_yards method impl in rust library)
-                const yards = result.data.yards_gained - result.data.return_yards;
-
-                // TODO: Implement this in the lib (display trait impl in rust library)
-                resultStr = `Run for ${yards} yard${yards !== 1 ? 's' : ''}`;
-                if (result.data.touchdown) resultStr += ' TOUCHDOWN!';
-                if (result.data.fumble) resultStr += ' FUMBLE!';
-            } else if (result.type === 'Pass') {
-                // TODO: Implement this in the lib (net_yards method impl in rust library)
-                let yards;
-                if (result.data.complete) {
-                    yards = result.data.pass_dist + result.data.yards_after_catch - (result.data.return_yards + result.data.sack_yards_lost);
-                } else {
-                    yards = result.data.scramble_yards - (result.data.return_yards + result.data.sack_yards_lost);
-                };
-
-                // TODO: Implement this in the lib (display trait impl in rust library)
-                if (result.data.complete) {
-                    resultStr = `Pass complete for ${yards} yard${yards !== 1 ? 's' : ''}`;
-                } else if (result.data.interception) {
-                    resultStr = 'INTERCEPTED!';
-                } else if (result.data.sack) {
-                    resultStr = `Sacked for ${yards} yards`;
-                } else {
-                    resultStr = 'Incomplete pass';
-                }
-                if (result.data.touchdown) resultStr += ' TOUCHDOWN!';
-            } else if (result.type === 'Kickoff') {
-                const retYards = result.data.kick_return_yards;
-
-                // TODO: Implement this in the lib (display trait impl in rust library)
-                if (result.data.touchback) {
-                    resultStr = 'Kickoff, touchback';
-                } else {
-                    resultStr = `Kickoff returned ${retYards} yards`;
-                }
-            } else if (result.type === 'Punt') {
-                // TODO: Implement this in the lib (display trait impl in rust library)
-                resultStr = `Punt for ${result.data.punt_yards} yards`;
-            } else if (result.type === 'FieldGoal' || result.type === 'ExtraPoint') {
-                // TODO: Implement this in the lib (display trait impl in rust library)
-                if (result.data.made) {
-                    resultStr = result.type === 'ExtraPoint' ?
-                        'Extra point GOOD!' : 'Field goal GOOD!';
-                } else {
-                    resultStr = result.type === 'ExtraPoint' ?
-                        'Extra point NO GOOD' : 'Field goal NO GOOD';
-                }
-            } else if (result.type === 'BetweenPlay') {
-                return; // Don't log between-play results
-            }
-
-            const possession = ctx.home_possession ? 'HOME' : 'AWAY';
+            // Use the Rust Display trait outputs directly
+            const description = play.description;
+            const netYards = play.result_computed.net_yards;
 
             log.innerHTML += `
                 <div class="play-entry">
-                    <span class="context">[${timeStr}] ${possession} ${downStr} at ${yardLineStr}</span><br>
-                    <span class="result">${resultStr}</span>
+                    <span class="result">${description}</span>
+                    <span class="yards">(${netYards >= 0 ? '+' : ''}${netYards} yds)</span>
                 </div>
             `;
 
@@ -342,21 +271,25 @@
             document.getElementById('quarter').textContent =
                 `Q${session.quarter} - ${mins}:${secs.toString().padStart(2, '0')}`;
 
-            // Update down/distance
-            let downStr = '';
+            // Use getStatusText() for the down/distance display
+            // (falls back to manual formatting for the scoreboard area)
             if (session.down === 0) {
-                if (session.nextPlayKickoff) downStr = 'Kickoff';
-                else if (session.nextPlayExtraPoint) downStr = 'Extra Point';
-                else downStr = '---';
+                if (session.nextPlayKickoff) {
+                    document.getElementById('down-distance').textContent = 'Kickoff';
+                } else if (session.nextPlayExtraPoint) {
+                    document.getElementById('down-distance').textContent = 'Extra Point';
+                } else {
+                    document.getElementById('down-distance').textContent = '---';
+                }
             } else {
                 const suffix = session.down === 1 ? 'st' : session.down === 2 ? 'nd' :
                                session.down === 3 ? 'rd' : 'th';
                 const yl = session.yardLine;
                 const yardLineStr = yl === 50 ? '50' :
                     yl < 50 ? `Own ${yl}` : `Opp ${100 - yl}`;
-                downStr = `${session.down}${suffix} & ${session.distance} at ${yardLineStr}`;
+                document.getElementById('down-distance').textContent =
+                    `${session.down}${suffix} & ${session.distance} at ${yardLineStr}`;
             }
-            document.getElementById('down-distance').textContent = downStr;
 
             // Disable buttons if game over
             if (session.isGameOver) {

@@ -14,12 +14,12 @@ use crate::team::FootballTeam;
 ///
 /// This wrapper provides JavaScript-accessible constructors and methods
 /// for creating and manipulating football teams.
-#[wasm_bindgen]
+#[wasm_bindgen(js_name = "FootballTeam")]
 pub struct WasmFootballTeam {
     inner: FootballTeam,
 }
 
-#[wasm_bindgen]
+#[wasm_bindgen(js_class = "FootballTeam")]
 impl WasmFootballTeam {
     /// Creates a new team with default values.
     ///
@@ -124,12 +124,12 @@ impl WasmFootballTeam {
 }
 
 /// A WASM-friendly wrapper around `FootballTeamCoach`.
-#[wasm_bindgen]
+#[wasm_bindgen(js_name = "FootballTeamCoach")]
 pub struct WasmFootballTeamCoach {
     inner: FootballTeamCoach,
 }
 
-#[wasm_bindgen]
+#[wasm_bindgen(js_class = "FootballTeamCoach")]
 impl WasmFootballTeamCoach {
     /// Creates a new coach with default values (all attributes at 50).
     #[wasm_bindgen(constructor)]
@@ -174,12 +174,12 @@ impl Default for WasmFootballTeamCoach {
 }
 
 /// A WASM-friendly wrapper around `FootballTeamOffense`.
-#[wasm_bindgen]
+#[wasm_bindgen(js_name = "FootballTeamOffense")]
 pub struct WasmFootballTeamOffense {
     inner: FootballTeamOffense,
 }
 
-#[wasm_bindgen]
+#[wasm_bindgen(js_class = "FootballTeamOffense")]
 impl WasmFootballTeamOffense {
     /// Creates a new offense with default values (all attributes at 50).
     #[wasm_bindgen(constructor)]
@@ -277,12 +277,12 @@ impl Default for WasmFootballTeamOffense {
 }
 
 /// A WASM-friendly wrapper around `FootballTeamDefense`.
-#[wasm_bindgen]
+#[wasm_bindgen(js_name = "FootballTeamDefense")]
 pub struct WasmFootballTeamDefense {
     inner: FootballTeamDefense,
 }
 
-#[wasm_bindgen]
+#[wasm_bindgen(js_class = "FootballTeamDefense")]
 impl WasmFootballTeamDefense {
     /// Creates a new defense with default values (all attributes at 50).
     #[wasm_bindgen(constructor)]
