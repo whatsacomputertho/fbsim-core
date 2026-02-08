@@ -1,2 +1,6 @@
 /target
 .env
+/pkg-node
+/pkg-web
+/pkg
+/docs-js
