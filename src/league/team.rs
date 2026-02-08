@@ -13,6 +13,8 @@ use rocket_okapi::okapi::schemars::JsonSchema;
 /// over the course of many seasons, this struct is mainly just used
 /// as a unique ID for a given team
 #[cfg_attr(feature = "rocket_okapi", derive(JsonSchema))]
+#[cfg_attr(feature = "wasm", derive(tsify_next::Tsify))]
+#[cfg_attr(feature = "wasm", tsify(into_wasm_abi, from_wasm_abi))]
 #[derive(Clone, Eq, PartialEq, Ord, PartialOrd, Debug, Serialize, Deserialize)]
 pub struct LeagueTeam {}
 

@@ -6,15 +6,37 @@ on:
 
 permissions:
   contents: write
+  pages: write
+  id-token: write
 
 jobs:
   release:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Install Dependencies
+        run: |
+          make build-dependencies
+      - name: Build Crate
+        run: |
+          BUILD_ARGS="--verbose" make build
       - name: Release Distribution
         if: github.event.release.prerelease == false
         env:
           CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_TOKEN }}
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
           RELEASE_ARGS="--verbose" make release
+      - name: Install Dev Dependencies
+        run: |
+          npm install
+      - name: Generate JS Documentation
+        run: |
+          npm run docs:generate
+      - name: Upload Pages Artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: docs-js
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

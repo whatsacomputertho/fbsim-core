@@ -1,0 +1,12 @@
+{
+  "$schema": "https://typedoc.org/schema.json",
+  "entryPoints": ["./pkg/web/fbsim_core.d.ts"],
+  "out": "docs-js",
+  "name": "fbsim-core JavaScript & TypeScript API",
+  "excludePrivate": true,
+  "includeVersion": true,
+  "compilerOptions": {
+    "lib": ["ES2015", "DOM"]
+  },
+  "highlightLanguages": ["typescript", "javascript", "rust", "bash", "sh"]
+}

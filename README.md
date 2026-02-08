@@ -4,19 +4,23 @@
 
 > A library for american football simulation
 
-**Docs**: https://docs.rs/fbsim-core/latest/fbsim_core/
+**Rust Docs**: https://docs.rs/fbsim-core/latest/fbsim_core/
 
 **Contributing**: [CONTRIBUTING.md](https://github.com/whatsacomputertho/fbsim-core/blob/main/CONTRIBUTING.md)
 
 ## Overview
 
-Provides utilities for simulating american football games and leagues. It is based on various statistical models derived in repositories
+Provides utilities for simulating american football games and leagues. The core library is written in Rust; it also compiles into a WebAssembly module for use in JavaScript and TypeScript projects. It is based on various statistical models derived in repositories
 - [whatsacomputertho/nfl-pbp-eda](https://github.com/whatsacomputertho/nfl-pbp-eda)
 - [whatsacomputertho/fbdb-boxscore-eda](https://github.com/whatsacomputertho/fbdb-boxscore-eda)
 
-## Play-by-play sim
+## Example
 
-Here is a quick example of simulating a play-by-play game between two teams.
+Below is a quick example of running a play-by-play football simulation using `fbsim-core`. It includes equivalent examples, one in Rust using the `fbsim-core` Rust crate, the other in JavaScript using the `fbsim-core` NPM package.
+
+### Rust
+
+Here is a quick example of simulating a play-by-play game between two teams in Rust.
 
 ```rust
 use fbsim_core::game::context::GameContext;
@@ -38,31 +42,51 @@ println!("{}", game);
 println!("{} Game over", next_context);
 ```
 
-## Final score sim
+### JavaScript & TypeScript
 
-There is also a less in-depth simulator that produces a final score given two teams. Here is a quick example of its usage.
+The same play-by-play simulation is available in JavaScript and TypeScript via WebAssembly.
 
-```rust
-use fbsim_core::game::score::FinalScoreSimulator;
-use fbsim_core::team::FootballTeam;
+```typescript
+import init, {
+  FootballTeam,
+  Game,
+  GameSimulator,
+  Rng,
+  createGameContext,
+} from "@whatsacomputertho/fbsim-core";
 
-// Instantiate the home and away teams
-let home_team = FootballTeam::new();
-let away_team = FootballTeam::new();
+// Initialize the WASM module
+await init();
 
-// Instantiate the rng, simulator, and simulate the game
-let mut rng = rand::thread_rng();
-let sim = FinalScoreSimulator::new();
-let final_score = sim.sim(&home_team, &away_team, &mut rng).unwrap();
+// Create teams with overall offensive & defensive ratings
+const home = new FootballTeam();
+const away = new FootballTeam();
 
-// Print the final score
-println!("{}", final_score);
+// Set up game state
+const rng = new Rng();
+const simulator = new GameSimulator();
+const game = new Game();
+let ctx = createGameContext();
+
+// Simulate play-by-play and print the game log
+while (!game.complete) {
+  ctx = simulator.simPlay(home, away, ctx, game, rng);
+  const play = game.getLatestPlay();
+  console.log(play.description);
+}
+console.log("Game Over");
 ```
 
 ## Installing
 
-To add the package to your project, run the following from your project directory.
+### Rust
 
 ```sh
 cargo add fbsim-core
+```
+
+### JavaScript & TypeScript
+
+```sh
+npm install @whatsacomputertho/fbsim-core
 ```
