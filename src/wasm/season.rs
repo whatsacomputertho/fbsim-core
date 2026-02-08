@@ -1,9 +1,11 @@
-//! WASM wrappers for league season types.
+//! WASM bridge types for league season management.
 //!
-//! Provides JavaScript-friendly wrappers around `LeagueSeason`, exposing
-//! construction, team and conference management, schedule generation,
-//! simulation at every granularity (season/week/matchup/play), playoffs,
-//! and standings queries via wasm-bindgen.
+//! These types provide JavaScript/TypeScript-compatible wrappers around the
+//! core fbsim-core Rust types. They are intended exclusively for JS/TS
+//! consumers via WebAssembly and are not part of the public Rust API.
+//!
+//! Feature-gated behind the `wasm` Cargo feature. Compiled to WebAssembly
+//! via `wasm-pack`.
 
 use wasm_bindgen::prelude::*;
 

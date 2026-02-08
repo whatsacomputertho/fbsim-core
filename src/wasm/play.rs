@@ -1,12 +1,11 @@
-//! Enriched JS-friendly types for play results.
+//! WASM bridge types for enriched play and drive results.
 //!
-//! These types wrap the core `Play`, `Drive`, and `Game` types, adding
-//! computed values from the `PlayResult` trait and human-readable
-//! descriptions from the `Display` trait.
+//! These types provide JavaScript/TypeScript-compatible wrappers around the
+//! core fbsim-core Rust types. They are intended exclusively for JS/TS
+//! consumers via WebAssembly and are not part of the public Rust API.
 //!
-//! They are exported to JavaScript with the clean names `Play`, `Drive`,
-//! and `Game` (the raw Rust types don't need Tsify since they are never
-//! returned directly from WASM functions).
+//! Feature-gated behind the `wasm` Cargo feature. Compiled to WebAssembly
+//! via `wasm-pack`.
 
 use serde::Serialize;
 use tsify_next::Tsify;
@@ -15,7 +14,6 @@ use crate::game::context::GameContext;
 use crate::game::play::result::{PlayResult, PlayTypeResult, ScoreResult};
 use crate::game::play::DriveResult;
 use crate::game::play::Drive as CoreDrive;
-use crate::game::play::Game as CoreGame;
 use crate::game::play::Play as CorePlay;
 
 /// Computed values from the `PlayResult` trait.
@@ -119,23 +117,3 @@ impl From<&CoreDrive> for Drive {
     }
 }
 
-/// An enriched game with computed values and display strings.
-///
-/// Includes enriched `Drive` entries and the game's display output.
-#[derive(Clone, Debug, Serialize, Tsify)]
-#[tsify(into_wasm_abi)]
-pub struct Game {
-    pub drives: Vec<Drive>,
-    pub complete: bool,
-    pub display: String,
-}
-
-impl From<&CoreGame> for Game {
-    fn from(game: &CoreGame) -> Self {
-        Game {
-            drives: game.drives().iter().map(Drive::from).collect(),
-            complete: game.complete(),
-            display: format!("{}", game),
-        }
-    }
-}

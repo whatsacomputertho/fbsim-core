@@ -1,7 +1,11 @@
-//! WASM-compatible random number generator wrapper.
+//! WASM bridge types for random number generation.
 //!
-//! Provides a seedable RNG that works in WASM environments using
-//! `getrandom` with the `js` feature for entropy from `crypto.getRandomValues()`.
+//! These types provide JavaScript/TypeScript-compatible wrappers around the
+//! core fbsim-core Rust types. They are intended exclusively for JS/TS
+//! consumers via WebAssembly and are not part of the public Rust API.
+//!
+//! Feature-gated behind the `wasm` Cargo feature. Compiled to WebAssembly
+//! via `wasm-pack`.
 
 use rand::rngs::SmallRng;
 use rand::{Rng, SeedableRng};

@@ -1,7 +1,11 @@
-//! WASM bindings for fbsim-core
+//! WASM bridge types for fbsim-core.
 //!
-//! This module provides WebAssembly bindings for the fbsim-core library,
-//! enabling use from JavaScript/TypeScript in both browser and Node.js environments.
+//! These types provide JavaScript/TypeScript-compatible wrappers around the
+//! core fbsim-core Rust types. They are intended exclusively for JS/TS
+//! consumers via WebAssembly and are not part of the public Rust API.
+//!
+//! Feature-gated behind the `wasm` Cargo feature. Compiled to WebAssembly
+//! via `wasm-pack`.
 
 mod conference;
 mod game;

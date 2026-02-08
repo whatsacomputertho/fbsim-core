@@ -1,7 +1,11 @@
-//! WASM wrappers for team types.
+//! WASM bridge types for team management.
 //!
-//! Provides JavaScript-friendly wrappers around the team module types,
-//! exposing constructors and methods via wasm-bindgen.
+//! These types provide JavaScript/TypeScript-compatible wrappers around the
+//! core fbsim-core Rust types. They are intended exclusively for JS/TS
+//! consumers via WebAssembly and are not part of the public Rust API.
+//!
+//! Feature-gated behind the `wasm` Cargo feature. Compiled to WebAssembly
+//! via `wasm-pack`.
 
 use wasm_bindgen::prelude::*;
 

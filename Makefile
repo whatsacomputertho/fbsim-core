@@ -24,3 +24,6 @@ sec-dependencies:
 
 sec:
 	cargo audit
+
+docs-js:
+	npm run docs

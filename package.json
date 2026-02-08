@@ -1,7 +1,7 @@
 {
   "name": "@whatsacomputertho/fbsim-core",
   "version": "1.0.0-beta.1",
-  "description": "American football simulation engine (WASM)",
+  "description": "A library for american football simulation",
   "main": "pkg/node/fbsim_core.js",
   "module": "pkg/web/fbsim_core.js",
   "types": "pkg/web/fbsim_core.d.ts",
@@ -55,7 +55,12 @@
     "build:node": "wasm-pack build --target nodejs --out-dir pkg/node --features wasm",
     "test": "wasm-pack test --node --features wasm",
     "clean": "rm -rf pkg-web ./pkg",
-    "prepublishOnly": "npm run build"
+    "prepublishOnly": "npm run build",
+    "docs": "npm run build && node scripts/inject-jsdoc.mjs && npx typedoc",
+    "docs:generate": "node scripts/inject-jsdoc.mjs && npx typedoc"
+  },
+  "devDependencies": {
+    "typedoc": "^0.27.0"
   },
   "sideEffects": false
 }
