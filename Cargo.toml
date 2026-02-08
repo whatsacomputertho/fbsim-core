@@ -27,6 +27,7 @@ statrs = "0.18.0"
 
 # Rocket dependencies (optional)
 rocket_okapi = { version = "0.9.0", features = ["swagger"], optional = true }
+time = { version = "0.3.47", optional = true } # Overrides rocket dependency
 tokio = { version = "1.49.0", optional = true } # Overrides rocket dependency
 tracing-subscriber = { version = "0.3.22", optional = true } # Overrides rocket dependency
 bytes = { version = "1.11.1", optional = true } # Overrides rocket dependency
