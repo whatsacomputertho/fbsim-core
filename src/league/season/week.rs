@@ -11,6 +11,8 @@ use crate::league::season::matchup::LeagueSeasonMatchup;
 ///
 /// A `LeagueSeasonWeek` represents a week of a football season
 #[cfg_attr(feature = "rocket_okapi", derive(JsonSchema))]
+#[cfg_attr(feature = "wasm", derive(tsify_next::Tsify))]
+#[cfg_attr(feature = "wasm", tsify(into_wasm_abi, from_wasm_abi))]
 #[derive(Clone, Eq, PartialEq, Ord, PartialOrd, Debug, Serialize, Deserialize)]
 pub struct LeagueSeasonWeek {
     matchups: Vec<LeagueSeasonMatchup>
