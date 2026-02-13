@@ -1,6 +1,6 @@
 {
   "name": "@whatsacomputertho/fbsim-core",
-  "version": "1.0.0-beta.1",
+  "version": "1.0.0-beta.2",
   "description": "A library for american football simulation",
   "main": "pkg/node/fbsim_core.js",
   "module": "pkg/web/fbsim_core.js",
