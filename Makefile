@@ -14,7 +14,7 @@ test:
 
 release:
 	cargo publish $(RELEASE_ARGS)
-	npm publish
+	npm publish --access public
 
 lint:
 	cargo clippy $(LINT_ARGS)
