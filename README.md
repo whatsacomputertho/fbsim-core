@@ -4,7 +4,9 @@
 
 > A library for american football simulation
 
-**Rust Docs**: https://docs.rs/fbsim-core/latest/fbsim_core/
+**Rust Docs**: [`fbsim-core` Rust crate documentation](https://docs.rs/fbsim-core/latest/fbsim_core/)
+
+**TypeDocs**: [`fbsim-core` TypeScript & JavaScript WASM module documentation](https://whatsacomputertho.github.io/fbsim-core/)
 
 **Contributing**: [CONTRIBUTING.md](https://github.com/whatsacomputertho/fbsim-core/blob/main/CONTRIBUTING.md)
 
